@@ -1,3 +1,5 @@
+// src/pages/TableView.tsx
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
+// Caminhos de importação corrigidos com o alias "@/"
 import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
 
@@ -15,7 +18,7 @@ const TableView = () => {
   const [table, setTable] = useState<any>(null);
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [masterId, setMasterId] = useState<string | null>(null); // NOVO STATE
+  const [masterId, setMasterId] = useState<string | null>(null);
 
   useEffect(() => {
     loadTable();
@@ -47,7 +50,7 @@ const TableView = () => {
 
     setTable(data);
     setIsMaster(data.master_id === user.id);
-    setMasterId(user.id); // ARMAZENA O ID DO USUÁRIO LOGADO
+    setMasterId(user.id);
     setLoading(false);
   };
 
@@ -62,7 +65,7 @@ const TableView = () => {
   return (
     <div className="min-h-screen bg-background">
       <div className="border-b border-border/50 bg-card/50 backdrop-blur">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
               <ArrowLeft className="w-5 h-5" />
@@ -78,9 +81,8 @@ const TableView = () => {
       </div>
 
       <div className="flex h-[calc(100vh-80px)]">
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-6 max-w-6xl mx-auto">
           {isMaster ? (
-            // PASSA O masterId PARA O MasterView
             <MasterView tableId={tableId!} masterId={masterId!} />
           ) : (
             <PlayerView tableId={tableId!} />
