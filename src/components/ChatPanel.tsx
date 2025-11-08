@@ -3,8 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send } from "lucide-react";
+import { Send, Dices } from "lucide-react"; // <- CORREÇÃO: Trocado 'DiceRoll' por 'Dices'
 import { useToast } from "@/hooks/use-toast";
+import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser";
+import { cn } from "@/lib/utils";
 
 interface Message {
   id: string;
@@ -29,7 +31,12 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
 
   useEffect(() => {
     loadMessages();
-    subscribeToMessages();
+    
+    // Corrigido para retornar a função de unsubscribe
+    const channel = subscribeToMessages();
+    return () => {
+      channel.unsubscribe();
+    };
   }, [tableId]);
 
   useEffect(() => {
@@ -43,13 +50,15 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const loadMessages = async () => {
     const { data, error } = await supabase
       .from("chat_messages")
-      .select(`
+      .select(
+        `
         id,
         message,
         message_type,
         created_at,
         user:profiles!chat_messages_user_id_fkey(display_name)
-      `)
+      `,
+      )
       .eq("table_id", tableId)
       .order("created_at", { ascending: true });
 
@@ -75,41 +84,64 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         async (payload) => {
           const { data } = await supabase
             .from("chat_messages")
-            .select(`
+            .select(
+              `
               id,
               message,
               message_type,
               created_at,
               user:profiles!chat_messages_user_id_fkey(display_name)
-            `)
+            `,
+            )
             .eq("id", payload.new.id)
             .single();
 
           if (data) {
             setMessages((prev) => [...prev, data]);
           }
-        }
+        },
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return channel; // Retorna o canal
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim()) return;
+    const messageContent = newMessage.trim();
+    if (!messageContent) return;
 
     setLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    let messageToSend = messageContent;
+    let messageType = "chat";
+
+    // Lógica de rolagem
+    if (messageContent.startsWith("/r ") || messageContent.startsWith("/roll ")) {
+      const command = messageContent.replace(/(\/r|\/roll)\s+/, "");
+      const result = parseDiceRoll(command);
+
+      if (result) {
+        messageToSend = formatRollResult(command, result);
+        messageType = "roll";
+      } else {
+        messageToSend = `Comando de rolagem inválido: ${command}`;
+        messageType = "error"; 
+      }
+    }
 
     const { error } = await supabase.from("chat_messages").insert({
       table_id: tableId,
       user_id: user.id,
-      message: newMessage.trim(),
-      message_type: "chat",
+      message: messageToSend,
+      message_type: messageType,
     });
 
     if (error) {
@@ -143,14 +175,21 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
           {messages.map((msg) => (
             <div
               key={msg.id}
-              className={`p-3 rounded-lg ${
+              className={cn(
+                "p-3 rounded-lg",
                 msg.message_type === "roll"
-                  ? "bg-accent/20 border border-accent/30"
-                  : "bg-muted/50"
-              }`}
+                  ? "bg-accent/20 border border-accent/30 text-accent-foreground"
+                  : "bg-muted/50",
+                msg.message_type === "error" &&
+                  "bg-destructive/20 border border-destructive/30 text-destructive-foreground",
+              )}
             >
               <div className="flex justify-between items-start mb-1">
-                <span className="font-semibold text-sm">{msg.user.display_name}</span>
+                <span className="font-semibold text-sm flex items-center gap-2">
+                  {/* <- CORREÇÃO: Trocado 'DiceRoll' por 'Dices' */}
+                  {msg.message_type === "roll" && <Dices className="w-4 h-4" />}
+                  {msg.user.display_name}
+                </span>
                 <span className="text-xs text-muted-foreground">
                   {new Date(msg.created_at).toLocaleTimeString("pt-BR", {
                     hour: "2-digit",
@@ -158,7 +197,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
                   })}
                 </span>
               </div>
-              <p className="text-sm">{msg.message}</p>
+              <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
             </div>
           ))}
           <div ref={messagesEndRef} />
@@ -168,7 +207,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       <div className="p-4 border-t border-border/50">
         <div className="flex gap-2">
           <Input
-            placeholder="Digite sua mensagem..."
+            placeholder="Digite /r 1d20+5 para rolar..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
