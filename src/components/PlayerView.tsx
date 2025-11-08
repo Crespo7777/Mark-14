@@ -8,73 +8,47 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
-// import { Button } from "@/components/ui/button"; // Botão não é mais necessário
-import { Users, BookOpen } from "lucide-react"; // 'Plus' removido
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Plus, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
 import { CharacterSheetSheet } from "./CharacterSheetSheet";
+import { CreatePlayerCharacterDialog } from "./CreatePlayerCharacterDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface PlayerViewProps {
   tableId: string;
 }
 
-// 1. Tipagem para os dados que chegam
-type SharedCharacter = {
+type MyCharacter = {
   id: string;
   name: string;
   created_at: string;
-  is_shared: boolean;
   player: {
     display_name: string;
   };
-  player_id: string; // ID do dono
-};
-
-type SharedNpc = {
-  id: string;
-  name: string;
-};
-
-type JournalEntry = {
-  id: string;
-  title: string;
-  content: string | null;
+  player_id: string;
 };
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
-  const [myCharacters, setMyCharacters] = useState<SharedCharacter[]>([]);
-  const [sharedNpcs, setSharedNpcs] = useState<SharedNpc[]>([]);
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [userId, setUserId] = useState<string | null>(null); // State para o ID do usuário
+  const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
   const { toast } = useToast();
+  const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(null);
 
   useEffect(() => {
     loadData();
 
-    // Listener do Realtime para o Diário
-    const journalChannel = supabase
-      .channel(`journal-player:${tableId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "journal_entries",
-          filter: `table_id=eq.${tableId}`,
-        },
-        (payload) => {
-          loadData();
-        },
-      )
-      .subscribe();
-
-    // Listener para Fichas (para quando o mestre compartilhar)
     const characterChannel = supabase
       .channel(`character-player:${tableId}`)
       .on(
@@ -85,14 +59,11 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           table: "characters",
           filter: `table_id=eq.${tableId}`,
         },
-        (payload) => {
-          loadData();
-        },
+        (payload) => loadData()
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(journalChannel);
       supabase.removeChannel(characterChannel);
     };
   }, [tableId]);
@@ -102,130 +73,143 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
-    setUserId(user.id); // Armazena o ID do usuário
+    setUserId(user.id);
 
-    // 2. Query ATUALIZADA para Fichas
-    // Pega fichas onde:
-    // (A) O player_id é o meu
-    // (B) OU is_shared é true
-    const [charsRes, npcsRes, journalRes] = await Promise.all([
-      supabase
+    try {
+      const { data, error } = await supabase
         .from("characters")
         .select("*, player:profiles!characters_player_id_fkey(display_name)")
         .eq("table_id", tableId)
-        .or(`player_id.eq.${user.id},is_shared.eq.true`), // <-- LÓGICA ATUALIZADA
+        .eq("player_id", user.id); 
+      
+      if (error) throw error;
+      setMyCharacters((data as any) || []);
+    } catch (error: any) {
+      console.error("Erro ao carregar fichas de personagem:", error.message);
+      toast({
+        title: "Erro ao carregar fichas",
+        description: "Houve um problema ao buscar suas fichas.",
+        variant: "destructive"
+      });
+      setMyCharacters([]);
+    }
+  };
 
-      supabase
-        .from("npcs")
-        .select("id, name")
-        .eq("table_id", tableId)
-        .eq("is_shared", true),
+  const handleDeleteCharacter = async () => {
+    if (!characterToDelete) return;
 
-      supabase
-        .from("journal_entries")
-        .select("id, title, content")
-        .eq("table_id", tableId)
-        .eq("is_shared", true) // RLS já cuida disso, mas é uma boa prática
-        .order("created_at", { ascending: true }),
-    ]);
+    const { error } = await supabase
+      .from("characters")
+      .delete()
+      .eq("id", characterToDelete.id);
 
-    if (charsRes.data) setMyCharacters(charsRes.data as any); // RLS força 'any'
-    if (npcsRes.data) setSharedNpcs(npcsRes.data);
-    if (journalRes.data) setJournalEntries(journalRes.data);
+    if (error) {
+      toast({
+        title: "Erro ao excluir ficha",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Ficha excluída!",
+        description: `A ficha ${characterToDelete.name} foi removida.`,
+      });
+      loadData(); 
+    }
+    setCharacterToDelete(null); 
   };
 
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold mb-2">Painel do Jogador</h2>
-        <p className="text-muted-foreground">
-          Gerencie suas fichas e veja o diário
-        </p>
+        <p className="text-muted-foreground">Gerencie suas fichas de personagem</p>
       </div>
 
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold">Minhas Fichas & Compartilhadas</h3>
-          {/* 3. Botão "Nova Ficha" REMOVIDO */}
+          <h3 className="text-xl font-semibold">Minhas Fichas</h3>
+          <CreatePlayerCharacterDialog
+            tableId={tableId}
+            onCharacterCreated={loadData}
+          >
+            <Button size="sm">
+              <Plus className="w-4 h-4 mr-2" />
+              Nova Ficha
+            </Button>
+          </CreatePlayerCharacterDialog>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
           {myCharacters.length === 0 ? (
             <p className="text-muted-foreground col-span-full text-center py-8">
-              Você ainda não criou nenhum personagem. Peça ao Mestre!
+              Você ainda não criou nenhum personagem. Clique em "Nova Ficha" para começar.
             </p>
           ) : (
             myCharacters.map((char) => (
-              <CharacterSheetSheet key={char.id} characterId={char.id}>
-                <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer">
-                  <CardHeader>
-                    <CardTitle>{char.name}</CardTitle>
-                    {/* 4. Descrição ATUALIZADA para mostrar o dono */}
-                    <CardDescription>
-                      {char.player_id === userId
-                        ? "Sua Ficha"
-                        : `Compartilhada (Dono: ${char.player.display_name})`}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      Clique para {char.player_id === userId ? "editar" : "ver"}
-                    </p>
-                  </CardContent>
-                </Card>
-              </CharacterSheetSheet>
+              <Card key={char.id} className="border-border/50 flex flex-col justify-between">
+                <CharacterSheetSheet characterId={char.id}>
+                  <div className="flex-1 hover:shadow-glow transition-shadow cursor-pointer">
+                    <CardHeader>
+                      <CardTitle>{char.name}</CardTitle>
+                      <CardDescription>
+                        Sua Ficha
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        Clique para editar
+                      </p>
+                    </CardContent>
+                  </div>
+                </CharacterSheetSheet>
+
+                <CardFooter className="p-4 pt-0">
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCharacterToDelete(char);
+                    }}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Excluir Ficha
+                  </Button>
+                </CardFooter>
+              </Card>
             ))
           )}
         </div>
       </div>
 
-      {sharedNpcs.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            NPCs Compartilhados
-          </h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            {sharedNpcs.map((npc) => (
-              <Card
-                key={npc.id}
-                className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer"
-              >
-                <CardHeader>
-                  <CardTitle>{npc.name}</CardTitle>
-                  <CardDescription>Compartilhado pelo mestre</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Clique para visualizar (Em breve)
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {journalEntries.length > 0 && (
-        <div className="space-y-4">
-          <h3 className="text-xl font-semibold flex items-center gap-2">
-            <BookOpen className="w-5 h-5" />
-            Diário da Mesa
-          </h3>
-          <Accordion type="single" collapsible className="w-full">
-            {journalEntries.map((entry) => (
-              <AccordionItem value={entry.id} key={entry.id}>
-                <AccordionTrigger>{entry.title}</AccordionTrigger>
-                <AccordionContent>
-                  <p className="text-sm whitespace-pre-wrap text-muted-foreground">
-                    {entry.content || "Sem conteúdo."}
-                  </p>
-                </AccordionContent>
-              </AccordionItem>
-            ))}
-          </Accordion>
-        </div>
-      )}
+      <AlertDialog
+        open={!!characterToDelete}
+        onOpenChange={(open) => !open && setCharacterToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta ficha?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A ficha "{characterToDelete?.name}" será removida permanentemente.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCharacterToDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "destructive" })}
+              onClick={handleDeleteCharacter}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
     </div>
   );
 };
