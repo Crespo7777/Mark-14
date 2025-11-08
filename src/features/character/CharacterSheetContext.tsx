@@ -1,3 +1,5 @@
+// src/features/character/CharacterSheetContext.tsx
+
 import { createContext, useContext, ReactNode } from "react";
 import { useForm, UseFormReturn } from "react-hook-form";
 import { CharacterSheetData, characterSheetSchema } from "./character.schema";
@@ -6,14 +8,17 @@ import { Database } from "@/integrations/supabase/types";
 
 type Character = Database["public"]["Tables"]["characters"]["Row"];
 
-interface CharacterSheetContextType {
+// 1. EXPORTE O TIPO
+export interface CharacterSheetContextType {
   character: Character;
   form: UseFormReturn<CharacterSheetData>;
   isEditing: boolean;
   setIsEditing: (isEditing: boolean) => void;
 }
 
-const CharacterSheetContext = createContext<CharacterSheetContextType | null>(null);
+// 2. EXPORTE O CONTEXTO
+export const CharacterSheetContext =
+  createContext<CharacterSheetContextType | null>(null);
 
 interface CharacterSheetProviderProps {
   children: ReactNode;
@@ -26,7 +31,7 @@ interface CharacterSheetProviderProps {
 export const CharacterSheetProvider = ({
   children,
   character,
-  onSave, // Manter onSave aqui, pode ser útil para hooks
+  onSave,
   isEditing,
   setIsEditing,
 }: CharacterSheetProviderProps) => {
@@ -44,7 +49,6 @@ export const CharacterSheetProvider = ({
         setIsEditing,
       }}
     >
-      {/* O <Form> foi removido daqui */}
       {children}
     </CharacterSheetContext.Provider>
   );
