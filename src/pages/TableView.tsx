@@ -15,6 +15,7 @@ const TableView = () => {
   const [table, setTable] = useState<any>(null);
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [masterId, setMasterId] = useState<string | null>(null); // NOVO STATE
 
   useEffect(() => {
     loadTable();
@@ -46,6 +47,7 @@ const TableView = () => {
 
     setTable(data);
     setIsMaster(data.master_id === user.id);
+    setMasterId(user.id); // ARMAZENA O ID DO USUÁRIO LOGADO
     setLoading(false);
   };
 
@@ -78,7 +80,8 @@ const TableView = () => {
       <div className="flex h-[calc(100vh-80px)]">
         <div className="flex-1 overflow-y-auto p-6">
           {isMaster ? (
-            <MasterView tableId={tableId!} />
+            // PASSA O masterId PARA O MasterView
+            <MasterView tableId={tableId!} masterId={masterId!} />
           ) : (
             <PlayerView tableId={tableId!} />
           )}
