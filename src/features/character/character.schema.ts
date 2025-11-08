@@ -1,3 +1,5 @@
+// src/features/character/character.schema.ts
+
 import { z } from "zod";
 
 // --- HELPERS (Funções Auxiliares) ---
@@ -12,51 +14,32 @@ export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
 };
 
-
 // --- SCHEMAS BÁSICOS (Sub-partes da Ficha) ---
 
 /**
  * 1. ATRIBUTOS
- * Os 8 atributos principais. Atualizamos os nomes conforme sua lista.
- * Valores padrão 10.
  */
 const attributesSchema = z.object({
-  // Astuto
   cunning: z.number().min(5).max(15).default(10),
-  // Discreto
   discreet: z.number().min(5).max(15).default(10),
-  // Persuasivo
   persuasive: z.number().min(5).max(15).default(10),
-  // Preciso
   precise: z.number().min(5).max(15).default(10),
-  // Rápido
   quick: z.number().min(5).max(15).default(10),
-  // Resoluto
   resolute: z.number().min(5).max(15).default(10),
-  // Vigilante
   vigilant: z.number().min(5).max(15).default(10),
-  // Vigoroso
   vigorous: z.number().min(5).max(15).default(10),
 });
 
 /**
  * 2. VITALIDADE
- * Armazena o máximo e o atual.
- * O 'Limiar de Dor' (Vigoroso / 2) será um valor calculado (automático).
- * A 'Vitalidade Max' (Math.max(10, Vigoroso)) também será calculada.
  */
 const toughnessSchema = z.object({
-  // O 'max' aqui é o bônus de fontes (ex: Habilidades), não o valor final.
-  // O valor final será (Math.max(10, attributes.vigorous) + bonus)
-  bonus: z.number().default(0), 
+  bonus: z.number().default(0),
   current: z.number().default(10),
-  // O valor 'max' será calculado e passado para o 'current' no .refine
 });
 
 /**
  * 3. CORRUPÇÃO
- * Armazena temporária e permanente.
- * O 'Limiar de Corrupção' (Resoluto / 2) será um valor calculado (automático).
  */
 const corruptionSchema = z.object({
   temporary: z.number().default(0),
@@ -64,19 +47,16 @@ const corruptionSchema = z.object({
 });
 
 /**
- * 4. DINHEIRO
- * Armazena as três moedas. A lógica de conversão
- * ficará nos hooks de automação.
+ * 4. DINHEIRO (Já existia, só movemos)
  */
 const moneySchema = z.object({
   taler: z.number().default(0),
-  shekel: z.number().default(0), // Xelim
-  orteg: z.number().default(0),
+  shekel: z.number().default(0),
+  ortega: z.number().default(0),
 });
 
 /**
- * 5. EXPERIÊNCIA
- * Total ganho e total gasto. O "Atual" será calculado (ganho - gasto).
+ * 5. EXPERIÊNCIA (Já existia, só movemos)
  */
 const experienceSchema = z.object({
   total: z.number().default(0),
@@ -85,30 +65,76 @@ const experienceSchema = z.object({
 
 /**
  * 6. ARMAS
- * Uma lista de armas.
  */
-const weaponSchema = z.object({
-  id: z.string().default(() => crypto.randomUUID()), // ID único para o .map()
+export const weaponSchema = z.object({
+  id: z.string().default(() => crypto.randomUUID()),
   name: z.string().default("Nova Arma"),
-  quality: z.string().default(""), // Qualidades (ex: "Flexível, Duas Mãos")
-  damage: z.string().default("1d6"), // Dano (ex: "1d8", "1d10+2")
-  attribute: z.string().default("Vigoroso"), // Atributo-chave
+  quality: z.string().default(""),
+  quality_desc: z.string().default(""),
+  damage: z.string().default("1d6"),
+  attribute: z.string().default("Vigoroso"),
 });
 
 /**
  * 7. ARMADURAS
- * Uma lista de armaduras.
- * 'Defesa Total' (Rápido - Obstrutivo) será calculado.
  */
-const armorSchema = z.object({
+export const armorSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   name: z.string().default("Nova Armadura"),
-  quality: z.string().default(""), // Qualidades (ex: "Reforçada")
-  protection: z.number().default(0), // Proteção
-  obstructive: z.number().default(0), // Obstrutivo
-  equipped: z.boolean().default(true), // Se está equipada
+  quality: z.string().default(""),
+  quality_desc: z.string().default(""),
+  protection: z.string().default("1d4"),
+  obstructive: z.number().default(0),
+  equipped: z.boolean().default(true),
 });
 
+/**
+ * 8. HABILIDADES
+ */
+export const abilitySchema = z.object({
+  id: z.string().default(() => crypto.randomUUID()),
+  name: z.string().default(""),
+  level: z.string().default("Novato"),
+  type: z.string().default("Habilidade"),
+  description: z.string().default(""),
+});
+
+/**
+ * 9. TRAÇOS
+ */
+export const traitSchema = z.object({
+  id: z.string().default(() => crypto.randomUUID()),
+  name: z.string().default(""),
+  type: z.string().default("Traço"),
+  description: z.string().default(""),
+});
+
+/**
+ * 10. INVENTÁRIO (NOVO)
+ */
+export const inventoryItemSchema = z.object({
+  id: z.string().default(() => crypto.randomUUID()),
+  name: z.string().default(""),
+  quantity: z.number().default(1),
+  weight: z.number().default(1), // Vamos usar 'weight' para o peso/obstrutivo
+  description: z.string().default(""),
+});
+
+// --- TIPOS E FUNÇÕES EXPORTADAS ---
+
+export type Weapon = z.infer<typeof weaponSchema>;
+export type Armor = z.infer<typeof armorSchema>;
+export type Ability = z.infer<typeof abilitySchema>;
+export type Trait = z.infer<typeof traitSchema>;
+export type InventoryItem = z.infer<typeof inventoryItemSchema>; // NOVO
+
+// Funções para criar itens padrão
+export const getDefaultWeapon = (): Weapon => weaponSchema.parse({});
+export const getDefaultArmor = (): Armor => armorSchema.parse({});
+export const getDefaultAbility = (): Ability => abilitySchema.parse({});
+export const getDefaultTrait = (): Trait => traitSchema.parse({});
+export const getDefaultInventoryItem = (): InventoryItem => // NOVO
+  inventoryItemSchema.parse({});
 
 // --- O SCHEMA PRINCIPAL (A Ficha Completa) ---
 
@@ -117,7 +143,7 @@ export const characterSheetSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").default("Novo Personagem"),
   race: z.string().default("Humano"),
   occupation: z.string().default("Aventureiro"),
-  
+
   // 2. Atributos
   attributes: attributesSchema.default({}),
 
@@ -130,33 +156,32 @@ export const characterSheetSchema = z.object({
   // 5. Dinheiro
   money: moneySchema.default({}),
 
-  // 7. Experiência
+  // 6. Experiência
   experience: experienceSchema.default({}),
 
-  // 8. Armas
+  // 7. Armas
   weapons: z.array(weaponSchema).default([]),
-  
-  // 9. Armaduras
+
+  // 8. Armaduras
   armors: z.array(armorSchema).default([]),
 
-  // TODO:
-  // skills: z.array(...).default([]),
-  // abilities: z.array(...).default([]),
-  // inventory: z.array(...).default([]),
-})
-// Validação Nível Ficha: Vitalidade Atual não pode ser maior que a Máxima
-// (Vamos adicionar a lógica de 'max' aqui quando criarmos o hook de cálculo)
-// .refine((data) => data.toughness.current <= data.toughness.max, {
-//   message: "Vitalidade atual não pode ser maior que a máxima.",
-//   path: ["toughness", "current"],
-// });
+  // 9. Habilidades
+  abilities: z.array(abilitySchema).default([]),
+
+  // 10. Traços
+  traits: z.array(traitSchema).default([]),
+
+  // 11. Inventário (NOVO)
+  inventory: z.array(inventoryItemSchema).default([]),
+});
 
 // Este é o tipo TypeScript que usaremos em toda a aplicação
 export type CharacterSheetData = z.infer<typeof characterSheetSchema>;
 
 // Função para criar uma ficha padrão
-export const getDefaultCharacterSheetData = (name: string): CharacterSheetData => {
-  // O .parse({}) aplica todos os .default() que definimos
+export const getDefaultCharacterSheetData = (
+  name: string,
+): CharacterSheetData => {
   const defaultData = characterSheetSchema.parse({});
   defaultData.name = name;
   return defaultData;
