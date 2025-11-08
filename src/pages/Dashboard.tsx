@@ -1,12 +1,30 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button"; // Importar buttonVariants
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter, // Importar CardFooter
+} from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Users, LogOut } from "lucide-react";
+import { Plus, Users, LogOut, Trash2 } from "lucide-react"; // Importar Trash2
 import { CreateTableDialog } from "@/components/CreateTableDialog";
 import { JoinTableDialog } from "@/components/JoinTableDialog";
+// Importar componentes do AlertDialog
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Table {
   id: string;
@@ -21,6 +39,8 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<any>(null);
   const [tables, setTables] = useState<Table[]>([]);
   const [loading, setLoading] = useState(true);
+  // 1. Adicionar state para controlar o diálogo de exclusão
+  const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -38,7 +58,6 @@ const Dashboard = () => {
 
     setUser(session.user);
     
-    // Check if profile exists, if not create it
     let { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("*")
@@ -46,7 +65,6 @@ const Dashboard = () => {
       .maybeSingle();
     
     if (!profileData && !profileError) {
-      // Create profile if it doesn't exist
       const { data: newProfile } = await supabase
         .from("profiles")
         .insert({
@@ -65,13 +83,11 @@ const Dashboard = () => {
   };
 
   const loadTables = async (userId: string) => {
-    // Get tables where user is master
     const { data: masterTables } = await supabase
       .from("tables")
       .select("*")
       .eq("master_id", userId);
 
-    // Get tables where user is a member
     const { data: memberData } = await supabase
       .from("table_members")
       .select("table_id")
@@ -88,7 +104,6 @@ const Dashboard = () => {
       memberTables = data || [];
     }
 
-    // Combine and deduplicate
     const allTables = [...(masterTables || []), ...memberTables];
     const uniqueTables = Array.from(
       new Map(allTables.map(t => [t.id, t])).values()
@@ -107,6 +122,33 @@ const Dashboard = () => {
       loadTables(user.id);
     }
   };
+
+  // 2. Adicionar função para excluir a mesa
+  const handleDeleteTable = async () => {
+    if (!tableToDelete) return;
+
+    const { error } = await supabase
+      .from("tables")
+      .delete()
+      .eq("id", tableToDelete.id);
+
+    if (error) {
+      toast({
+        title: "Erro ao excluir mesa",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Mesa excluída!",
+        description: `${tableToDelete.name} foi removida permanentemente.`,
+      });
+      // Atualiza a UI removendo a mesa da lista
+      setTables(tables.filter((t) => t.id !== tableToDelete.id));
+    }
+    setTableToDelete(null); // Fecha o diálogo
+  };
+
 
   if (loading) {
     return (
@@ -171,25 +213,76 @@ const Dashboard = () => {
               tables.map((table) => (
                 <Card
                   key={table.id}
-                  className="cursor-pointer hover:shadow-glow transition-shadow border-border/50"
-                  onClick={() => navigate(`/table/${table.id}`)}
+                  className="border-border/50 flex flex-col justify-between" // Alterado para flex
                 >
-                  <CardHeader>
-                    <CardTitle>{table.name}</CardTitle>
-                    <CardDescription>
-                      {table.description || "Sem descrição"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm text-muted-foreground">
-                      {table.master_id === user?.id ? "Você é o Mestre" : "Jogador"}
-                    </p>
-                  </CardContent>
+                  {/* 3. Agrupado o conteúdo clicável */}
+                  <div
+                    className="cursor-pointer hover:shadow-glow transition-shadow"
+                    onClick={() => navigate(`/table/${table.id}`)}
+                  >
+                    <CardHeader>
+                      <CardTitle>{table.name}</CardTitle>
+                      <CardDescription>
+                        {table.description || "Sem descrição"}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        {table.master_id === user?.id ? "Você é o Mestre" : "Jogador"}
+                      </p>
+                    </CardContent>
+                  </div>
+                  
+                  {/* 4. Adicionado CardFooter com o botão de excluir (só para o mestre) */}
+                  {table.master_id === user?.id && (
+                    <CardFooter className="p-4 pt-0">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="w-full"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Previne a navegação
+                          setTableToDelete(table);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Excluir Mesa
+                      </Button>
+                    </CardFooter>
+                  )}
                 </Card>
               ))
             )}
           </div>
         </div>
+
+        {/* 5. Adicionado o Diálogo de Confirmação de Exclusão */}
+        <AlertDialog
+          open={!!tableToDelete}
+          onOpenChange={(open) => !open && setTableToDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Você tem certeza absoluta?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso excluirá permanentemente a mesa{" "}
+                <span className="font-bold text-destructive">{tableToDelete?.name}</span> e
+                todas as suas fichas, NPCs e entradas de diário. Esta ação
+                não pode ser desfeita.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className={buttonVariants({ variant: "destructive" })}
+                onClick={handleDeleteTable}
+              >
+                Excluir
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
       </div>
     </div>
   );
