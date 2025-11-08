@@ -1,9 +1,11 @@
+// src/components/ChatPanel.tsx
+
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Dices } from "lucide-react"; // <- CORREÇÃO: Trocado 'DiceRoll' por 'Dices'
+import { Send, Dices } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser";
 import { cn } from "@/lib/utils";
@@ -31,11 +33,14 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
 
   useEffect(() => {
     loadMessages();
-    
+
     // Corrigido para retornar a função de unsubscribe
     const channel = subscribeToMessages();
     return () => {
-      channel.unsubscribe();
+      // Verifica se o canal e a função unsubscribe existem antes de chamar
+      if (channel && typeof channel.unsubscribe === "function") {
+        channel.unsubscribe();
+      }
     };
   }, [tableId]);
 
@@ -82,6 +87,12 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
           filter: `table_id=eq.${tableId}`,
         },
         async (payload) => {
+          // Validação simples para garantir que payload.new.id existe
+          if (!payload.new || !payload.new.id) {
+            console.warn("Payload de chat recebido sem ID:", payload);
+            return;
+          }
+
           const { data } = await supabase
             .from("chat_messages")
             .select(
@@ -133,7 +144,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         messageType = "roll";
       } else {
         messageToSend = `Comando de rolagem inválido: ${command}`;
-        messageType = "error"; 
+        messageType = "error";
       }
     }
 
@@ -178,16 +189,17 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
               className={cn(
                 "p-3 rounded-lg",
                 msg.message_type === "roll"
-                  ? "bg-accent/20 border border-accent/30 text-accent-foreground"
+                  ? "bg-accent/20 border border-accent/30" // ATUALIZADO: Removido 'text-accent-foreground'
                   : "bg-muted/50",
                 msg.message_type === "error" &&
                   "bg-destructive/20 border border-destructive/30 text-destructive-foreground",
               )}
             >
               <div className="flex justify-between items-start mb-1">
-                <span className="font-semibold text-sm flex items-center gap-2">
-                  {/* <- CORREÇÃO: Trocado 'DiceRoll' por 'Dices' */}
-                  {msg.message_type === "roll" && <Dices className="w-4 h-4" />}
+                <span className="font-semibold text-sm flex items-center gap-2 text-foreground">
+                  {msg.message_type === "roll" && (
+                    <Dices className="w-4 h-4 text-accent" /> // Cor do ícone
+                  )}
                   {msg.user.display_name}
                 </span>
                 <span className="text-xs text-muted-foreground">
@@ -197,7 +209,12 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
                   })}
                 </span>
               </div>
-              <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+              
+              {/* ATUALIZADO: Renderiza o HTML da mensagem */}
+              <div
+                className="text-sm whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: msg.message }}
+              />
             </div>
           ))}
           <div ref={messagesEndRef} />
