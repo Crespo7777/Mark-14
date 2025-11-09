@@ -74,7 +74,6 @@ export const parseDiceRoll = (command: string): DiceRoll | null => {
  * @returns Uma string formatada (ex: "Rolou 2d6+3... [5, 2] + 3 = 10")
  */
 export const formatRollResult = (command: string, result: DiceRoll): string => {
-  // ATUALIZADO: Adiciona classes do Tailwind para alto contraste
   const rollsStr = `[<span class="text-primary-foreground">${result.rolls.join(
     ", ",
   )}</span>]`;
@@ -90,7 +89,7 @@ export const formatRollResult = (command: string, result: DiceRoll): string => {
   return `Rolou ${command}...\n${rollsStr}${modStr} = <span class="text-primary-foreground font-bold text-lg">${result.total}</span>`;
 };
 
-// --- NOVAS FUNÇÕES PARA TESTE DE ATRIBUTO ---
+// --- FUNÇÕES DE TESTE DE ATRIBUTO ---
 
 /**
  * Resultado de um teste de atributo de Symbaroum
@@ -119,16 +118,11 @@ export const rollAttributeTest = (options: {
   const mainRoll = rollDie(20);
   const advantageRoll = withAdvantage ? rollDie(4) : null;
 
-  // Em Symbaroum, o modificador se aplica ao *Atributo* (Alvo),
-  // mas a Vantagem (+1d4) se aplica à *Rolagem*.
   const target = attributeValue + modifier;
   const totalRoll = mainRoll + (advantageRoll || 0);
 
-  // Regras de sucesso: rolar *igual ou menor* que o alvo.
   const isSuccess = totalRoll <= target;
-  // 1 é sempre um sucesso crítico (independentemente do alvo).
   const isCrit = mainRoll === 1;
-  // 20 é sempre uma falha (independentemente do alvo).
   const isFumble = mainRoll === 20;
 
   return {
@@ -143,12 +137,9 @@ export const rollAttributeTest = (options: {
   };
 };
 
-/**
- * Formata um resultado de teste de atributo para o chat.
- */
-export const formatAttributeTest = (
-  characterName: string,
-  attributeName: string,
+// --- (Função Auxiliar de Formatação de Teste) ---
+const formatTestResult = (
+  title: string,
   result: AttributeRollResult,
 ): string => {
   const {
@@ -162,12 +153,11 @@ export const formatAttributeTest = (
     isFumble,
   } = result;
 
-  // ATUALIZADO: Define classes de cor com base nos tokens do Tailwind
   let outcomeColorClass = "";
-  if (isCrit) outcomeColorClass = "text-accent"; // Dourado
-  else if (isFumble) outcomeColorClass = "text-destructive font-bold"; // Vermelho
-  else if (isSuccess) outcomeColorClass = "text-primary"; // Verde
-  else outcomeColorClass = "text-destructive"; // Vermelho
+  if (isCrit) outcomeColorClass = "text-accent";
+  else if (isFumble) outcomeColorClass = "text-destructive font-bold";
+  else if (isSuccess) outcomeColorClass = "text-primary";
+  else outcomeColorClass = "text-destructive";
 
   let rollStr = `<span class="font-bold text-primary-foreground">${mainRoll}</span> (d20)`;
   if (advantageRoll) {
@@ -178,7 +168,6 @@ export const formatAttributeTest = (
   if (modifier > 0) modStr = `+${modifier}`;
   if (modifier < 0) modStr = `${modifier}`;
 
-  // Corrigido: `class` estava sem aspas
   const targetStr = `(Alvo: ${target}${
     modStr
       ? ` [<span class="text-foreground">${
@@ -197,8 +186,117 @@ export const formatAttributeTest = (
   else
     outcome = `❌ <span class="${outcomeColorClass} font-bold">Falha</span>`;
 
-  return `${characterName} fez um teste de <span class="text-primary-foreground font-bold">${attributeName}</span>...
+  return `${title}
 Rolagem: ${rollStr} = <span class="text-primary-foreground font-bold text-lg">${totalRoll}</span>
 ${targetStr}
 Resultado: ${outcome}`;
+};
+
+/**
+ * Formata um resultado de teste de atributo para o chat.
+ */
+export const formatAttributeTest = (
+  characterName: string,
+  attributeName: string,
+  result: AttributeRollResult,
+): string => {
+  const title = `${characterName} fez um teste de <span class="text-primary-foreground font-bold">${attributeName}</span>...`;
+  return formatTestResult(title, result);
+};
+
+/**
+ * Formata um resultado de teste de Habilidade para o chat.
+ */
+export const formatAbilityTest = (
+  characterName: string,
+  abilityName: string,
+  attributeName: string,
+  result: AttributeRollResult,
+  corruptionCost: number,
+): string => {
+  const title = `${characterName} usou <span class="text-primary-foreground font-bold">${abilityName}</span> (Teste de ${attributeName})...`;
+  const baseMessage = formatTestResult(title, result);
+  
+  const corruptionStr =
+    corruptionCost > 0
+      ? `\n<span class="text-purple-400">(+${corruptionCost} Corrupção Temporária)</span>`
+      : "";
+
+  return `${baseMessage}${corruptionStr}`;
+};
+
+// --- NOVAS FUNÇÕES DE ROLAGEM DE COMBATE ---
+
+/**
+ * Formata um teste de ATAQUE de Arma para o chat.
+ */
+export const formatAttackRoll = (
+  characterName: string,
+  weaponName: string,
+  attributeName: string,
+  result: AttributeRollResult,
+): string => {
+  const title = `${characterName} ataca com <span class="text-primary-foreground font-bold">${weaponName}</span> (Teste de ${attributeName})...`;
+  return formatTestResult(title, result);
+};
+
+/**
+ * Formata um teste de DEFESA para o chat.
+ */
+export const formatDefenseRoll = (
+  characterName: string,
+  result: AttributeRollResult,
+): string => {
+  const title = `${characterName} faz um teste de <span class="text-primary-foreground font-bold">Defesa</span>...`;
+  return formatTestResult(title, result);
+};
+
+/**
+ * Formata uma rolagem de DANO de Arma para o chat.
+ */
+export const formatDamageRoll = (
+  characterName: string,
+  weaponName: string,
+  baseRoll: DiceRoll,
+  advantageRoll: DiceRoll | null,
+  modifier: number,
+  totalDamage: number,
+): string => {
+  let damageStr = `<span class="text-primary-foreground">[${baseRoll.rolls.join(
+    ", ",
+  )}]</span> (Dano)`;
+
+  if (advantageRoll) {
+    damageStr += ` + <span class="text-primary-foreground">[${advantageRoll.rolls.join(
+      ", ",
+    )}]</span> (Vantagem)`;
+  }
+
+  if (modifier > 0) {
+    damageStr += ` + <span class="text-primary-foreground">${modifier}</span> (Mod)`;
+  } else if (modifier < 0) {
+    damageStr += ` - <span class="text-primary-foreground">${Math.abs(
+      modifier,
+    )}</span> (Mod)`;
+  }
+
+  return `${characterName} rola o dano de <span class="text-primary-foreground font-bold">${weaponName}</span>...
+${damageStr}
+Total: <span class="text-primary-foreground font-bold text-lg">${totalDamage}</span> Dano`;
+};
+
+/**
+ * Formata uma rolagem de PROTEÇÃO de Armadura para o chat.
+ */
+export const formatProtectionRoll = (
+  characterName: string,
+  armorName: string,
+  protectionRoll: DiceRoll,
+): string => {
+  const rollStr = `<span class="text-primary-foreground">[${protectionRoll.rolls.join(
+    ", ",
+  )}]</span>`;
+
+  return `${characterName} rola <span class="text-primary-foreground font-bold">${armorName}</span> para Proteção...
+Rolagem: ${rollStr} = <span class="text-primary-foreground font-bold text-lg">${protectionRoll.total}</span> Proteção`;
 };
