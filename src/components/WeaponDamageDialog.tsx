@@ -17,13 +17,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dices } from "lucide-react";
-import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
+// import { useCharacterSheet } from "@/features/character/CharacterSheetContext"; // <-- REMOVIDO
 
 interface WeaponDamageDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weaponName: string;
   damageString: string; // Ex: "1d8"
+  // --- ADICIONADO ---
+  characterName: string;
+  tableId: string;
+  // --- FIM ---
 }
 
 export const WeaponDamageDialog = ({
@@ -31,12 +35,15 @@ export const WeaponDamageDialog = ({
   onOpenChange,
   weaponName,
   damageString,
+  // --- ADICIONADO ---
+  characterName,
+  tableId,
 }: WeaponDamageDialogProps) => {
   const [withAdvantage, setWithAdvantage] = useState(false);
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { character } = useCharacterSheet(); // Para pegar o nome e tableId
+  // const { character } = useCharacterSheet(); // <-- REMOVIDO
 
   const handleRoll = async () => {
     setLoading(true);
@@ -49,7 +56,6 @@ export const WeaponDamageDialog = ({
       return;
     }
 
-    // 1. Rolar o dano base (ex: "1d8")
     const baseRoll = parseDiceRoll(damageString);
     if (!baseRoll) {
       toast({ title: "Erro", description: `Dado de dano inválido: ${damageString}`, variant: "destructive" });
@@ -57,24 +63,20 @@ export const WeaponDamageDialog = ({
       return;
     }
 
-    // 2. Rolar a Vantagem/Crítico (1d4) se marcado
     const advantageRoll = withAdvantage ? parseDiceRoll("1d4") : null;
 
-    // 3. Calcular total
     const totalDamage =
       baseRoll.total +
       (advantageRoll ? advantageRoll.total : 0) +
       modifier;
 
-    // 4. Formatar a notificação local (toast)
     toast({
       title: `Dano com ${weaponName}`,
       description: `Total: ${totalDamage} de Dano`,
     });
 
-    // 5. Formatar a mensagem do chat
     const chatMessage = formatDamageRoll(
-      character.name,
+      characterName, // <-- USA PROP
       weaponName,
       baseRoll,
       advantageRoll,
@@ -82,16 +84,15 @@ export const WeaponDamageDialog = ({
       totalDamage,
     );
 
-    // 6. Enviar mensagem para o chat
     await supabase.from("chat_messages").insert({
-      table_id: character.table_id,
+      table_id: tableId, // <-- USA PROP
       user_id: user.id,
       message: chatMessage,
       message_type: "roll",
     });
 
     setLoading(false);
-    onOpenChange(false); // Fechar o diálogo
+    onOpenChange(false);
   };
 
   return (
