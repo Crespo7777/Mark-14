@@ -1,6 +1,6 @@
 // src/features/npc/NpcSheet.tsx
 
-import { useState } from "react";
+import { useState } from "react"; // Removido
 import { Database } from "@/integrations/supabase/types";
 import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
 import {
@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Edit, Save, X } from "lucide-react";
+import { Save, X, RotateCcw } from "lucide-react"; // Trocamos Edit por RotateCcw
 import { Form } from "@/components/ui/form";
 
 // REUTILIZAMOS AS ABAS DA FICHA DE PERSONAGEM
@@ -39,8 +39,11 @@ const NpcSheetInner = ({
   onClose: () => void;
   onSave: (data: CharacterSheetData) => Promise<void>;
 }) => {
-  const { form, isEditing, setIsEditing, npc } = useNpcSheet();
+  // ATUALIZADO: isEditing e setIsEditing removidos
+  const { form, npc } = useNpcSheet();
   const { toast } = useToast();
+
+  const { isDirty, isSubmitting } = form.formState;
 
   const [name, race, occupation] = form.watch([
     "name",
@@ -50,6 +53,7 @@ const NpcSheetInner = ({
 
   const onSubmit = async (data: CharacterSheetData) => {
     await onSave(data);
+    form.reset(data); // Marca o formulário como "não sujo"
   };
 
   const onInvalid = (errors: any) => {
@@ -61,9 +65,9 @@ const NpcSheetInner = ({
     });
   };
 
-  const onCancel = () => {
+  // ATUALIZADO: onCancel agora é onRevert
+  const onRevert = () => {
     form.reset(npc.data as CharacterSheetData);
-    setIsEditing(false);
   };
 
   return (
@@ -75,43 +79,37 @@ const NpcSheetInner = ({
             {race} | {occupation}
           </p>
         </div>
+        
+        {/* --- LÓGICA DE BOTÕES ATUALIZADA --- */}
         <div className="flex gap-2">
-          {isEditing ? (
+          {isDirty && !isSubmitting && (
             <>
-              <Button size="sm" variant="outline" onClick={onCancel}>
-                <X className="w-4 h-4 mr-2" />
-                Cancelar
+              <Button size="sm" variant="outline" onClick={onRevert}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reverter
               </Button>
               <Button
                 size="sm"
                 onClick={form.handleSubmit(onSubmit, onInvalid)}
-                disabled={form.formState.isSubmitting}
               >
-                {form.formState.isSubmitting ? (
-                  "Salvando..."
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" /> Salvar
-                  </>
-                )}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsEditing(true)}
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Editar
-              </Button>
-              <Button size="sm" variant="outline" onClick={onClose}>
-                Fechar
+                <Save className="w-4 h-4 mr-2" />
+                Salvar
               </Button>
             </>
           )}
+
+          {isSubmitting && (
+            <Button size="sm" disabled>
+              Salvando...
+            </Button>
+          )}
+
+          <Button size="sm" variant="outline" onClick={onClose}>
+            <X className="w-4 h-4 mr-2" />
+            Fechar
+          </Button>
         </div>
+        {/* --- FIM DA LÓGICA DE BOTÕES --- */}
       </div>
 
       <Form {...form}>
@@ -129,8 +127,9 @@ const NpcSheetInner = ({
               <TabsTrigger value="equipment">Equipamento</TabsTrigger>
               <TabsTrigger value="backpack">Mochila</TabsTrigger>
             </TabsList>
+            {/* ATUALIZADO: fieldset só desabilitado durante o envio */}
             <fieldset
-              disabled={!isEditing || form.formState.isSubmitting}
+              disabled={form.formState.isSubmitting}
               className="p-4 pt-0 space-y-4"
             >
               <TabsContent value="details">
@@ -165,9 +164,10 @@ const NpcSheetInner = ({
 // Componente "Pai"
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
+  // ATUALIZADO: Remover estado de 'isEditing'
+  // const [isEditing, setIsEditing] = useState(false); // Removido
 
-  // *** CORREÇÃO DA LÓGICA DE PARSE ***
+  // *** LÓGICA DE PARSE (Permanece a mesma) ***
   const defaults = getDefaultCharacterSheetData(initialNpc.name);
   const mergedData = {
     ...defaults,
@@ -181,9 +181,8 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   if (!parsedData.success) {
     console.warn("Aviso ao parsear dados da Ficha (NpcSheet):", parsedData.error.errors);
   }
-  
   initialNpc.data = parsedData.success ? parsedData.data : mergedData;
-  // *** FIM DA CORREÇÃO ***
+  // *** FIM DA LÓGICA DE PARSE ***
 
   const handleSave = async (data: CharacterSheetData) => {
     const { error } = await supabase
@@ -202,16 +201,15 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
         title: "NPC Salvo!",
         description: `${data.name} foi atualizado.`,
       });
-      setIsEditing(false);
+      // ATUALIZADO: Não precisamos mais de setIsEditing(false)
       initialNpc.name = data.name;
     }
   };
 
   return (
+    // ATUALIZADO: Remover props 'isEditing' e 'setIsEditing'
     <NpcSheetProvider
       npc={initialNpc}
-      isEditing={isEditing}
-      setIsEditing={setIsEditing}
     >
       <NpcSheetInner onClose={onClose} onSave={handleSave} />
     </NpcSheetProvider>
