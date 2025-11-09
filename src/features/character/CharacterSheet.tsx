@@ -1,6 +1,6 @@
 // src/features/character/CharacterSheet.tsx
 
-import { useState } from "react";
+import { useState } from "react"; // useState não é mais usado aqui, mas pode ser necessário em breve
 import { Database } from "@/integrations/supabase/types";
 import {
   CharacterSheetProvider,
@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Edit, Save, X } from "lucide-react";
+import { Save, X, RotateCcw } from "lucide-react"; // Trocamos Edit por RotateCcw (Reverter)
 import { Form } from "@/components/ui/form";
 
 import { DetailsTab } from "./tabs/DetailsTab";
@@ -41,8 +41,12 @@ const CharacterSheetInner = ({
   onClose: () => void;
   onSave: (data: CharacterSheetData) => Promise<void>;
 }) => {
-  const { form, isEditing, setIsEditing, character } = useCharacterSheet();
+  // ATUALIZADO: isEditing e setIsEditing removidos
+  const { form, character } = useCharacterSheet();
   const { toast } = useToast();
+
+  // Observa o estado 'dirty' (se o formulário tem mudanças não salvas)
+  const { isDirty, isSubmitting } = form.formState;
 
   const [name, race, occupation] = form.watch([
     "name",
@@ -52,6 +56,8 @@ const CharacterSheetInner = ({
 
   const onSubmit = async (data: CharacterSheetData) => {
     await onSave(data);
+    // Reseta o formulário para o novo estado salvo, marcando como "não sujo"
+    form.reset(data);
   };
 
   const onInvalid = (errors: any) => {
@@ -63,9 +69,10 @@ const CharacterSheetInner = ({
     });
   };
 
-  const onCancel = () => {
+  // ATUALIZADO: onCancel agora é onRevert
+  const onRevert = () => {
+    // Reseta o formulário para os dados originais (como estava quando abriu)
     form.reset(character.data as CharacterSheetData);
-    setIsEditing(false);
   };
 
   return (
@@ -77,43 +84,40 @@ const CharacterSheetInner = ({
             {race} | {occupation}
           </p>
         </div>
+
+        {/* --- LÓGICA DE BOTÕES ATUALIZADA --- */}
         <div className="flex gap-2">
-          {isEditing ? (
+          {/* Só mostra Salvar e Reverter se houver mudanças */}
+          {isDirty && !isSubmitting && (
             <>
-              <Button size="sm" variant="outline" onClick={onCancel}>
-                <X className="w-4 h-4 mr-2" />
-                Cancelar
+              <Button size="sm" variant="outline" onClick={onRevert}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reverter
               </Button>
               <Button
                 size="sm"
                 onClick={form.handleSubmit(onSubmit, onInvalid)}
-                disabled={form.formState.isSubmitting}
               >
-                {form.formState.isSubmitting ? (
-                  "Salvando..."
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 mr-2" /> Salvar
-                  </>
-                )}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setIsEditing(true)}
-              >
-                <Edit className="w-4 h-4 mr-2" />
-                Editar
-              </Button>
-              <Button size="sm" variant="outline" onClick={onClose}>
-                Fechar
+                <Save className="w-4 h-4 mr-2" />
+                Salvar
               </Button>
             </>
           )}
+
+          {/* Mostra "Salvando..." durante o envio */}
+          {isSubmitting && (
+            <Button size="sm" disabled>
+              Salvando...
+            </Button>
+          )}
+
+          {/* Botão Fechar sempre visível */}
+          <Button size="sm" variant="outline" onClick={onClose}>
+            <X className="w-4 h-4 mr-2" />
+            Fechar
+          </Button>
         </div>
+        {/* --- FIM DA LÓGICA DE BOTÕES --- */}
       </div>
 
       <Form {...form}>
@@ -132,8 +136,9 @@ const CharacterSheetInner = ({
               <TabsTrigger value="backpack">Mochila</TabsTrigger>
             </TabsList>
 
+            {/* ATUALIZADO: fieldset só desabilitado durante o envio */}
             <fieldset
-              disabled={!isEditing || form.formState.isSubmitting}
+              disabled={form.formState.isSubmitting}
               className="p-4 pt-0 space-y-4"
             >
               <TabsContent value="details">
@@ -171,34 +176,24 @@ export const CharacterSheet = ({
   onClose,
 }: CharacterSheetProps) => {
   const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
+  // ATUALIZADO: Remover estado de 'isEditing'
+  // const [isEditing, setIsEditing] = useState(false); // Removido
 
   // *** CORREÇÃO DA LÓGICA DE PARSE ***
-  // 1. Obter os valores padrão
+  // (Esta parte permanece a mesma)
   const defaults = getDefaultCharacterSheetData(initialCharacter.name);
-  
-  // 2. Mesclar os padrões com os dados do DB (dados do DB têm prioridade)
-  // Usamos 'initialCharacter.data' que é o JSONB
   const mergedData = {
     ...defaults,
     ...(initialCharacter.data as any),
   };
-
-  // 3. Garantir que os campos de Nível 1 (name, race, occupation)
-  // usem os dados do JSONB se existirem, ou o nome da coluna principal.
   mergedData.name = (initialCharacter.data as any)?.name || initialCharacter.name || defaults.name;
   mergedData.race = (initialCharacter.data as any)?.race || defaults.race;
   mergedData.occupation = (initialCharacter.data as any)?.occupation || defaults.occupation;
 
-  // 4. Validar os dados mesclados.
   const parsedData = characterSheetSchema.safeParse(mergedData);
   if (!parsedData.success) {
-    // Este log agora é esperado se o DB tiver dados antigos, mas não deve quebrar a UI
     console.warn("Aviso ao parsear dados da Ficha (CharacterSheet).", parsedData.error.errors);
   }
-
-  // 5. Usar os dados mesclados (se a validação falhar) ou os dados validados (se for sucesso)
-  // E o mais importante: COLOCAR NO 'initialCharacter.data' ANTES DE PASSAR PARA O PROVIDER
   initialCharacter.data = parsedData.success ? parsedData.data : mergedData;
   // *** FIM DA CORREÇÃO ***
 
@@ -219,17 +214,16 @@ export const CharacterSheet = ({
         title: "Ficha Salva!",
         description: `${data.name} foi atualizado.`,
       });
-      setIsEditing(false);
+      // ATUALIZADO: Não precisamos mais de setIsEditing(false)
       initialCharacter.name = data.name;
     }
   };
 
   return (
+    // ATUALIZADO: Remover props 'isEditing' e 'setIsEditing'
     <CharacterSheetProvider
-      character={initialCharacter} // Agora 'initialCharacter.data' está pré-processado
+      character={initialCharacter}
       onSave={handleSave}
-      isEditing={isEditing}
-      setIsEditing={setIsEditing}
     >
       <CharacterSheetInner onClose={onClose} onSave={handleSave} />
     </CharacterSheetProvider>
