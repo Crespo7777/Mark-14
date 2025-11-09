@@ -39,11 +39,21 @@ import {
 import { getDefaultInventoryItem } from "../character.schema";
 import { Separator } from "@/components/ui/separator";
 
-// Sub-componente para gerenciar o dinheiro
+// --- NOVOS IMPORTS ---
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+// --- FIM DOS NOVOS IMPORTS ---
+
+
+// Sub-componente para gerenciar o dinheiro (sem alterações)
 const MoneyManager = () => {
   const {
     form: { setValue, getValues },
-    // isEditing, // Removido
   } = useCharacterSheet();
   const [amount, setAmount] = useState(1);
   const [currency, setCurrency] = useState<"taler" | "shekel" | "ortega">(
@@ -68,14 +78,12 @@ const MoneyManager = () => {
       totalOrtegas += amountInOrtegas;
     }
 
-    if (totalOrtegas < 0) totalOrtegas = 0; // Não pode ficar negativo
+    if (totalOrtegas < 0) totalOrtegas = 0; 
 
-    // Converter de volta para T/S/O
     const newTaler = Math.floor(totalOrtegas / 100);
     const newShekel = Math.floor((totalOrtegas % 100) / 10);
     const newOrtega = totalOrtegas % 10;
 
-    // Atualiza o formulário
     setValue("money.taler", newTaler, { shouldDirty: true });
     setValue("money.shekel", newShekel, { shouldDirty: true });
     setValue("money.ortega", newOrtega, { shouldDirty: true });
@@ -89,12 +97,10 @@ const MoneyManager = () => {
           className="w-20 h-9"
           value={amount}
           onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)}
-          // disabled={!isEditing} // Removido
         />
         <Select
           value={currency}
           onValueChange={(v) => setCurrency(v as any)}
-          // disabled={!isEditing} // Removido
         >
           <SelectTrigger className="w-32 h-9">
             <SelectValue />
@@ -112,7 +118,6 @@ const MoneyManager = () => {
           size="sm"
           className="flex-1"
           onClick={() => handleAdjustMoney("add")}
-          // disabled={!isEditing} // Removido
         >
           Adicionar
         </Button>
@@ -122,7 +127,6 @@ const MoneyManager = () => {
           variant="outline"
           className="flex-1"
           onClick={() => handleAdjustMoney("spend")}
-          // disabled={!isEditing} // Removido
         >
           Gastar
         </Button>
@@ -132,7 +136,7 @@ const MoneyManager = () => {
 };
 
 export const BackpackTab = () => {
-  const { form /*, isEditing*/ } = useCharacterSheet(); // isEditing removido
+  const { form } = useCharacterSheet();
   const {
     currentWeight,
     encumbranceThreshold,
@@ -151,19 +155,17 @@ export const BackpackTab = () => {
     name: "inventory",
   });
 
-  // *** CORREÇÃO AQUI ***
-  // 1. Usar form.watch() para os campos de dinheiro
   const [taler, shekel, ortega] = form.watch([
     "money.taler",
     "money.shekel",
     "money.ortega",
   ]);
   
-  // 2. Calcular o total com base nos valores assistidos
   const totalOrtegas = (taler * 100) + (shekel * 10) + ortega;
 
   return (
     <div className="space-y-6">
+      {/* 3 Colunas Superiores (sem alteração) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coluna 1: Dinheiro */}
         <Card>
@@ -171,7 +173,6 @@ export const BackpackTab = () => {
             <CardTitle className="flex items-center gap-2">
               <Coins /> Dinheiro
             </CardTitle>
-            {/* 3. O total agora é reativo */}
             <CardDescription>
               Total: {totalOrtegas.toLocaleString("pt-BR")} Ortegas
             </CardDescription>
@@ -193,7 +194,6 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -215,7 +215,6 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -237,7 +236,6 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -270,7 +268,6 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -289,7 +286,6 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -338,7 +334,7 @@ export const BackpackTab = () => {
         </Card>
       </div>
 
-      {/* Linha 2: Inventário */}
+      {/* Linha 2: Inventário (MODIFICADO) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -348,114 +344,136 @@ export const BackpackTab = () => {
             type="button"
             size="sm"
             onClick={() => appendItem(getDefaultInventoryItem())}
-            // disabled={!isEditing} // Removido
           >
             <Plus className="w-4 h-4 mr-2" /> Adicionar Item
           </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           {inventoryFields.length === 0 && (
             <p className="text-muted-foreground text-center py-12">
               Mochila vazia.
             </p>
           )}
-          {inventoryFields.map((field, index) => (
-            <div
-              key={field.id}
-              className="p-3 rounded-md border bg-muted/20 space-y-3"
-            >
-              <div className="flex justify-between items-center">
-                <h4 className="font-semibold">
-                  {form.watch(`inventory.${index}.name`) || "Novo Item"}
-                </h4>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => removeItem(index)}
-                  // disabled={!isEditing} // Removido
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name={`inventory.${index}.name`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome do Item</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Tocha"
-                          {...field}
-                          // readOnly={!isEditing} // Removido
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name={`inventory.${index}.quantity`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Quantidade</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          {...field}
-                          onChange={(e) =>
-                            field.onChange(parseInt(e.target.value) || 0)
-                          }
-                          // readOnly={!isEditing} // Removido
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name={`inventory.${index}.weight`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Peso (Obstrutivo)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          {...field}
-                          onChange={(e) =>
-                            field.onChange(parseInt(e.target.value) || 0)
-                          }
-                          // readOnly={!isEditing} // Removido
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
+          {/* --- INÍCIO DA MUDANÇA PARA ACORDEÃO --- */}
+          <Accordion type="multiple" className="space-y-4">
+            {inventoryFields.map((field, index) => (
+              <AccordionItem
+                key={field.id}
+                value={field.id}
+                className="p-3 rounded-md border bg-muted/20"
+              >
+                <AccordionTrigger className="p-0 hover:no-underline">
+                  <div className="flex justify-between items-center w-full">
+                    
+                    {/* Informações Principais */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
+                      <h4 className="font-semibold text-base text-primary-foreground truncate">
+                        {form.watch(`inventory.${index}.name`) || "Novo Item"}
+                      </h4>
+                      <div className="flex gap-1.5 flex-wrap">
+                        <Badge variant="secondary" className="px-1.5 py-0.5">
+                          Qtd: {form.watch(`inventory.${index}.quantity`) || 0}
+                        </Badge>
+                        <Badge variant="outline" className="px-1.5 py-0.5">
+                          Peso: {form.watch(`inventory.${index}.weight`) || 0}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    {/* Botão de Excluir */}
+                    <div className="flex pl-2" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeItem(index)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
 
-              <FormField
-                control={form.control}
-                name={`inventory.${index}.description`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descrição</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Descrição do item..."
-                        {...field}
-                        // readOnly={!isEditing} // Removido
-                        className="min-h-[60px] text-sm"
+                  </div>
+                </AccordionTrigger>
+                
+                {/* Conteúdo (Campos de Edição) */}
+                <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`inventory.${index}.name`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome do Item</FormLabel>
+                            <FormControl>
+                              <Input placeholder="Tocha" {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
                       />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
-          ))}
+                      <FormField
+                        control={form.control}
+                        name={`inventory.${index}.quantity`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Quantidade</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                {...field}
+                                onChange={(e) =>
+                                  field.onChange(parseInt(e.target.value) || 0)
+                                }
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`inventory.${index}.weight`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Peso (Obstrutivo)</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                {...field}
+                                onChange={(e) =>
+                                  field.onChange(parseInt(e.target.value) || 0)
+                                }
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name={`inventory.${index}.description`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Descrição</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Descrição do item..."
+                              {...field}
+                              className="min-h-[60px] text-sm"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+          {/* --- FIM DA MUDANÇA PARA ACORDEÃO --- */}
+          
         </CardContent>
       </Card>
     </div>
