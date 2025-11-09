@@ -43,7 +43,7 @@ import { Separator } from "@/components/ui/separator";
 const MoneyManager = () => {
   const {
     form: { setValue, getValues },
-    isEditing,
+    // isEditing, // Removido
   } = useCharacterSheet();
   const [amount, setAmount] = useState(1);
   const [currency, setCurrency] = useState<"taler" | "shekel" | "ortega">(
@@ -89,12 +89,12 @@ const MoneyManager = () => {
           className="w-20 h-9"
           value={amount}
           onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)}
-          disabled={!isEditing}
+          // disabled={!isEditing} // Removido
         />
         <Select
           value={currency}
           onValueChange={(v) => setCurrency(v as any)}
-          disabled={!isEditing}
+          // disabled={!isEditing} // Removido
         >
           <SelectTrigger className="w-32 h-9">
             <SelectValue />
@@ -112,7 +112,7 @@ const MoneyManager = () => {
           size="sm"
           className="flex-1"
           onClick={() => handleAdjustMoney("add")}
-          disabled={!isEditing}
+          // disabled={!isEditing} // Removido
         >
           Adicionar
         </Button>
@@ -122,7 +122,7 @@ const MoneyManager = () => {
           variant="outline"
           className="flex-1"
           onClick={() => handleAdjustMoney("spend")}
-          disabled={!isEditing}
+          // disabled={!isEditing} // Removido
         >
           Gastar
         </Button>
@@ -132,7 +132,7 @@ const MoneyManager = () => {
 };
 
 export const BackpackTab = () => {
-  const { form, isEditing } = useCharacterSheet();
+  const { form /*, isEditing*/ } = useCharacterSheet(); // isEditing removido
   const {
     currentWeight,
     encumbranceThreshold,
@@ -193,7 +193,7 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -215,7 +215,7 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -237,7 +237,7 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -270,7 +270,7 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -289,7 +289,7 @@ export const BackpackTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value) || 0)
                       }
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -348,7 +348,7 @@ export const BackpackTab = () => {
             type="button"
             size="sm"
             onClick={() => appendItem(getDefaultInventoryItem())}
-            disabled={!isEditing}
+            // disabled={!isEditing} // Removido
           >
             <Plus className="w-4 h-4 mr-2" /> Adicionar Item
           </Button>
@@ -374,7 +374,7 @@ export const BackpackTab = () => {
                   variant="ghost"
                   className="text-destructive hover:text-destructive"
                   onClick={() => removeItem(index)}
-                  disabled={!isEditing}
+                  // disabled={!isEditing} // Removido
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -391,7 +391,7 @@ export const BackpackTab = () => {
                         <Input
                           placeholder="Tocha"
                           {...field}
-                          readOnly={!isEditing}
+                          // readOnly={!isEditing} // Removido
                         />
                       </FormControl>
                     </FormItem>
@@ -410,7 +410,7 @@ export const BackpackTab = () => {
                           onChange={(e) =>
                             field.onChange(parseInt(e.target.value) || 0)
                           }
-                          readOnly={!isEditing}
+                          // readOnly={!isEditing} // Removido
                         />
                       </FormControl>
                     </FormItem>
@@ -429,7 +429,7 @@ export const BackpackTab = () => {
                           onChange={(e) =>
                             field.onChange(parseInt(e.target.value) || 0)
                           }
-                          readOnly={!isEditing}
+                          // readOnly={!isEditing} // Removido
                         />
                       </FormControl>
                     </FormItem>
@@ -447,7 +447,7 @@ export const BackpackTab = () => {
                       <Textarea
                         placeholder="Descrição do item..."
                         {...field}
-                        readOnly={!isEditing}
+                        // readOnly={!isEditing} // Removido
                         className="min-h-[60px] text-sm"
                       />
                     </FormControl>
