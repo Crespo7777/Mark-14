@@ -19,8 +19,8 @@ type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 interface NpcSheetContextType {
   npc: Npc;
   form: UseFormReturn<CharacterSheetData>;
-  isEditing: boolean;
-  setIsEditing: (isEditing: boolean) => void;
+  // isEditing: boolean; // Removido
+  // setIsEditing: (isEditing: boolean) => void; // Removido
 }
 
 const NpcSheetContext = createContext<NpcSheetContextType | null>(null);
@@ -28,16 +28,16 @@ const NpcSheetContext = createContext<NpcSheetContextType | null>(null);
 interface NpcSheetProviderProps {
   children: ReactNode;
   npc: Npc;
-  isEditing: boolean;
-  setIsEditing: (isEditing: boolean) => void;
+  // isEditing: boolean; // Removido
+  // setIsEditing: (isEditing: boolean) => void; // Removido
 }
 
 export const NpcSheetProvider = ({
   children,
   npc,
-  isEditing,
-  setIsEditing,
-}: NpcSheetProviderProps) => {
+}: // isEditing, // Removido
+// setIsEditing, // Removido
+NpcSheetProviderProps) => {
   const form = useForm<CharacterSheetData>({
     resolver: zodResolver(characterSheetSchema),
     defaultValues: npc.data as CharacterSheetData,
@@ -47,8 +47,8 @@ export const NpcSheetProvider = ({
   const npcContextValue: NpcSheetContextType = {
     npc,
     form,
-    isEditing,
-    setIsEditing,
+    // isEditing, // Removido
+    // setIsEditing, // Removido
   };
 
   // 3. Criar um valor "falso" para o Contexto de Personagem
@@ -57,8 +57,8 @@ export const NpcSheetProvider = ({
   const characterContextValue: CharacterSheetContextType = {
     character: npc as any, // "Engana" o contexto
     form,
-    isEditing,
-    setIsEditing,
+    // isEditing, // Removido
+    // setIsEditing, // Removido
   };
 
   return (
