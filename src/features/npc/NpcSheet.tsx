@@ -1,28 +1,30 @@
 // src/features/npc/NpcSheet.tsx
 
-import { useState } from "react"; // Removido
 import { Database } from "@/integrations/supabase/types";
-import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
-import {
-  CharacterSheetData,
-  characterSheetSchema,
-  getDefaultCharacterSheetData,
-} from "@/features/character/character.schema";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Save, X, RotateCcw } from "lucide-react"; // Trocamos Edit por RotateCcw
+import { Save, X, RotateCcw } from "lucide-react";
 import { Form } from "@/components/ui/form";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 
-// REUTILIZAMOS AS ABAS DA FICHA DE PERSONAGEM
-import { DetailsTab } from "@/features/character/tabs/DetailsTab";
-import { AttributesTab } from "@/features/character/tabs/AttributesTab";
-import { CombatTab } from "@/features/character/tabs/CombatTab";
-import { SkillsTab } from "@/features/character/tabs/SkillsTab";
-import { EquipmentTab } from "@/features/character/tabs/EquipmentTab";
-import { TraitsTab } from "@/features/character/tabs/TraitsTab";
-import { BackpackTab } from "@/features/character/tabs/BackpackTab";
+// --- NOVOS IMPORTS (FOCO NO NPC) ---
+import {
+  NpcSheetData,
+  npcSheetSchema,
+  getDefaultNpcSheetData,
+} from "./npc.schema";
+import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
+// --- FIM DOS NOVOS IMPORTS ---
+
+// --- ABAS QUE ESTÃO PRONTAS ---
+import { NpcCombatTab } from "./tabs/NpcCombatTab";
+import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
+import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
+import { NpcSkillsTab } from "./tabs/NpcSkillsTab";
+import { NpcTraitsTab } from "./tabs/NpcTraitsTab";
+import { NpcEquipmentTab } from "./tabs/NpcEquipmentTab"; // <-- ADICIONADO
+// --- FIM DAS ABAS PRONTAS ---
 
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 
@@ -31,33 +33,30 @@ interface NpcSheetProps {
   onClose: () => void;
 }
 
-// Componente "Interno"
+// Componente "Interno" - Agora consome o useNpcSheet
 const NpcSheetInner = ({
   onClose,
   onSave,
 }: {
   onClose: () => void;
-  onSave: (data: CharacterSheetData) => Promise<void>;
+  onSave: (data: NpcSheetData) => Promise<void>;
 }) => {
-  // ATUALIZADO: isEditing e setIsEditing removidos
   const { form, npc } = useNpcSheet();
   const { toast } = useToast();
-
   const { isDirty, isSubmitting } = form.formState;
-
   const [name, race, occupation] = form.watch([
     "name",
     "race",
     "occupation",
   ]);
 
-  const onSubmit = async (data: CharacterSheetData) => {
+  const onSubmit = async (data: NpcSheetData) => {
     await onSave(data);
-    form.reset(data); // Marca o formulário como "não sujo"
+    form.reset(data); 
   };
 
   const onInvalid = (errors: any) => {
-    console.error("Erros de validação:", errors);
+    console.error("Erros de validação do NPC:", errors);
     toast({
       title: "Erro de Validação",
       description: "Verifique os campos em vermelho.",
@@ -65,9 +64,8 @@ const NpcSheetInner = ({
     });
   };
 
-  // ATUALIZADO: onCancel agora é onRevert
   const onRevert = () => {
-    form.reset(npc.data as CharacterSheetData);
+    form.reset(npc.data as NpcSheetData);
   };
 
   return (
@@ -80,7 +78,6 @@ const NpcSheetInner = ({
           </p>
         </div>
         
-        {/* --- LÓGICA DE BOTÕES ATUALIZADA --- */}
         <div className="flex gap-2">
           {isDirty && !isSubmitting && (
             <>
@@ -109,7 +106,6 @@ const NpcSheetInner = ({
             Fechar
           </Button>
         </div>
-        {/* --- FIM DA LÓGICA DE BOTÕES --- */}
       </div>
 
       <Form {...form}>
@@ -117,7 +113,7 @@ const NpcSheetInner = ({
           onSubmit={form.handleSubmit(onSubmit, onInvalid)}
           className="flex-1 overflow-y-auto"
         >
-          <Tabs defaultValue="details" className="w-full">
+          <Tabs defaultValue="details" className="w-full"> 
             <TabsList className="m-4 ml-4">
               <TabsTrigger value="details">Detalhes</TabsTrigger>
               <TabsTrigger value="attributes">Atributos</TabsTrigger>
@@ -125,33 +121,29 @@ const NpcSheetInner = ({
               <TabsTrigger value="skills">Habilidades</TabsTrigger>
               <TabsTrigger value="traits">Traços</TabsTrigger>
               <TabsTrigger value="equipment">Equipamento</TabsTrigger>
-              <TabsTrigger value="backpack">Mochila</TabsTrigger>
             </TabsList>
-            {/* ATUALIZADO: fieldset só desabilitado durante o envio */}
+            
             <fieldset
               disabled={form.formState.isSubmitting}
               className="p-4 pt-0 space-y-4"
             >
               <TabsContent value="details">
-                <DetailsTab />
+                <NpcDetailsTab />
               </TabsContent>
               <TabsContent value="attributes">
-                <AttributesTab />
+                 <NpcAttributesTab />
               </TabsContent>
               <TabsContent value="combat">
-                <CombatTab />
+                <NpcCombatTab />
               </TabsContent>
               <TabsContent value="skills">
-                <SkillsTab />
+                 <NpcSkillsTab />
               </TabsContent>
               <TabsContent value="traits">
-                <TraitsTab />
+                 <NpcTraitsTab />
               </TabsContent>
               <TabsContent value="equipment">
-                <EquipmentTab />
-              </TabsContent>
-              <TabsContent value="backpack">
-                <BackpackTab />
+                 <NpcEquipmentTab /> {/* <-- ATUALIZADO */}
               </TabsContent>
             </fieldset>
           </Tabs>
@@ -164,27 +156,37 @@ const NpcSheetInner = ({
 // Componente "Pai"
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const { toast } = useToast();
-  // ATUALIZADO: Remover estado de 'isEditing'
-  // const [isEditing, setIsEditing] = useState(false); // Removido
 
-  // *** LÓGICA DE PARSE (Permanece a mesma) ***
-  const defaults = getDefaultCharacterSheetData(initialNpc.name);
+  const defaults = getDefaultNpcSheetData(initialNpc.name);
+  
   const mergedData = {
     ...defaults,
     ...(initialNpc.data as any),
+    attributes: {
+      ...defaults.attributes,
+      ...((initialNpc.data as any)?.attributes || {}),
+    },
+    combat: {
+      ...defaults.combat,
+      ...((initialNpc.data as any)?.combat || {}),
+    },
+    armors: (initialNpc.data as any)?.armors || defaults.armors, 
   };
+
   mergedData.name = (initialNpc.data as any)?.name || initialNpc.name || defaults.name;
   mergedData.race = (initialNpc.data as any)?.race || defaults.race;
   mergedData.occupation = (initialNpc.data as any)?.occupation || defaults.occupation;
   
-  const parsedData = characterSheetSchema.safeParse(mergedData);
+  const parsedData = npcSheetSchema.safeParse(mergedData);
+  
   if (!parsedData.success) {
-    console.warn("Aviso ao parsear dados da Ficha (NpcSheet):", parsedData.error.errors);
+    console.warn("Aviso ao parsear dados da Ficha (NpcSheet). Aplicando dados mesclados/padrão:", parsedData.error.errors);
   }
+  
   initialNpc.data = parsedData.success ? parsedData.data : mergedData;
-  // *** FIM DA LÓGICA DE PARSE ***
 
-  const handleSave = async (data: CharacterSheetData) => {
+
+  const handleSave = async (data: NpcSheetData) => {
     const { error } = await supabase
       .from("npcs")
       .update({ data: data, name: data.name })
@@ -201,16 +203,12 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
         title: "NPC Salvo!",
         description: `${data.name} foi atualizado.`,
       });
-      // ATUALIZADO: Não precisamos mais de setIsEditing(false)
       initialNpc.name = data.name;
     }
   };
 
   return (
-    // ATUALIZADO: Remover props 'isEditing' e 'setIsEditing'
-    <NpcSheetProvider
-      npc={initialNpc}
-    >
+    <NpcSheetProvider npc={initialNpc}>
       <NpcSheetInner onClose={onClose} onSave={handleSave} />
     </NpcSheetProvider>
   );
