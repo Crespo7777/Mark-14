@@ -6,7 +6,8 @@ import {
   weaponSchema,
   abilitySchema,
   traitSchema,
-  simpleUUID, // Importando o simpleUUID que criamos
+  inventoryItemSchema, // 1. IMPORTAR O SCHEMA DE ITEM
+  simpleUUID,
 } from "@/features/character/character.schema";
 
 // ---
@@ -28,7 +29,6 @@ export const npcArmorSchema = z.object({
   protection: z.string().default("0"), // Campo de texto para valor fixo
   quality: z.string().default(""),
 });
-// --- FIM DA ADIÇÃO ---
 
 // ---
 // 3. O SCHEMA PRINCIPAL DO NPC (ATUALIZADO)
@@ -49,9 +49,10 @@ export const npcSheetSchema = z.object({
   weapons: z.array(weaponSchema).default([]),
   abilities: z.array(abilitySchema).default([]),
   traits: z.array(traitSchema).default([]),
-  
-  // --- ADICIONADO ---
   armors: z.array(npcArmorSchema).default([]),
+  
+  // --- 2. ADICIONADO INVENTÁRIO ---
+  inventory: z.array(inventoryItemSchema).default([]),
   // --- FIM DA ADIÇÃO ---
 });
 
@@ -61,10 +62,10 @@ export const npcSheetSchema = z.object({
 
 // Tipos
 export type NpcSheetData = z.infer<typeof npcSheetSchema>;
-export type NpcArmor = z.infer<typeof npcArmorSchema>; // Tipo exportado
+export type NpcArmor = z.infer<typeof npcArmorSchema>;
 
 // Funções Default
-export const getDefaultNpcArmor = (): NpcArmor => npcArmorSchema.parse({}); // Função exportada
+export const getDefaultNpcArmor = (): NpcArmor => npcArmorSchema.parse({});
 export const getDefaultNpcSheetData = (name: string): NpcSheetData => {
   const defaultData = npcSheetSchema.parse({});
   defaultData.name = name;
