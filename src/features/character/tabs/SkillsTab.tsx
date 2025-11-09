@@ -1,7 +1,7 @@
 // src/features/character/tabs/SkillsTab.tsx
 
-import { useState } from "react"; // Importar useState
-import { useCharacterSheet } from "../CharacterSheetContext";
+import { useState } from "react";
+import { useCharacterSheet } from "../CharacterSheetContext"; // <-- Usa o hook de Personagem
 import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,14 +22,24 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Zap, Dices } from "lucide-react";
 import {
-  Ability, // Importar o tipo
+  Ability,
   getDefaultAbility,
 } from "../character.schema";
-import { attributesList } from "../character.constants"; // Importar lista de atributos
-import { AbilityRollDialog } from "@/components/AbilityRollDialog"; // Importar novo diálogo
-import { Separator } from "@/components/ui/separator"; // Importar Separator
+import { attributesList } from "../character.constants";
+import { AbilityRollDialog } from "@/components/AbilityRollDialog"; // <-- Usa o diálogo de Personagem
+import { Separator } from "@/components/ui/separator";
 
-// Tipo para os dados da rolagem
+// --- NOVOS IMPORTS ---
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+// --- FIM DOS NOVOS IMPORTS ---
+
+
 type AbilityRollData = {
   abilityName: string;
   attributeName: string;
@@ -38,7 +48,7 @@ type AbilityRollData = {
 };
 
 export const SkillsTab = () => {
-  const { form, character } = useCharacterSheet();
+  const { form, character } = useCharacterSheet(); // <-- Usa o hook de Personagem
   const [selectedAbilityRoll, setSelectedAbilityRoll] =
     useState<AbilityRollData | null>(null);
 
@@ -51,26 +61,23 @@ export const SkillsTab = () => {
     name: "abilities",
   });
 
-  // Função para abrir o diálogo de rolagem
   const handleRollClick = (index: number) => {
     const ability = form.getValues(`abilities.${index}`);
     const allAttributes = form.getValues("attributes");
     
-    // Encontra o atributo selecionado na lista
     const selectedAttr = attributesList.find(
       (attr) => attr.key === ability.associatedAttribute,
     );
 
-    // Pega o valor do atributo (ex: 13) ou 0 se "Nenhum"
     const attributeValue = selectedAttr
       ? allAttributes[selectedAttr.key as keyof typeof allAttributes]
       : 0;
 
     setSelectedAbilityRoll({
       abilityName: ability.name || "Habilidade",
-      attributeName: selectedAttr?.label || "Nenhum", // Passa o "label" (ex: "Resoluto")
+      attributeName: selectedAttr?.label || "Nenhum",
       attributeValue: attributeValue,
-      corruptionCost: ability.corruptionCost || 0,
+      corruptionCost: ability.corruptionCost || 0, // <-- Mantém a Corrupção
     });
   };
 
@@ -89,189 +96,224 @@ export const SkillsTab = () => {
             <Plus className="w-4 h-4 mr-2" /> Adicionar
           </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent>
           {abilityFields.length === 0 && (
             <p className="text-muted-foreground text-center py-12">
               Nenhuma habilidade adicionada.
             </p>
           )}
-          {abilityFields.map((field, index) => (
-            <div
-              key={field.id}
-              className="p-3 rounded-md border bg-muted/20 space-y-4" // Aumentado space-y
-            >
-              <div className="flex justify-between items-center">
-                <h4 className="font-semibold">
-                  {form.watch(`abilities.${index}.name`) || "Nova Habilidade"}
-                </h4>
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => removeAbility(index)}
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
 
-              {/* Grid atualizado para 3 colunas */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name={`abilities.${index}.name`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nome</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="Nome da Habilidade / Poder"
-                          {...field}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name={`abilities.${index}.level`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nível</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
+          {/* --- INÍCIO DA MUDANÇA PARA ACORDEÃO --- */}
+          <Accordion type="multiple" className="space-y-4">
+            {abilityFields.map((field, index) => (
+              <AccordionItem
+                key={field.id}
+                value={field.id}
+                // Aplicamos o estilo do card antigo ao AccordionItem
+                className="p-3 rounded-md border bg-muted/20" 
+              >
+                {/* O Trigger é o cabeçalho visível */}
+                <AccordionTrigger className="p-0 hover:no-underline">
+                  <div className="flex justify-between items-center w-full">
+                    
+                    {/* Informações Principais */}
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
+                      <h4 className="font-semibold text-base text-primary-foreground truncate">
+                        {form.watch(`abilities.${index}.name`) || "Nova Habilidade"}
+                      </h4>
+                      {/* Badges para Nível, Atributo e Custo */}
+                      <div className="flex gap-1.5 flex-wrap">
+                        <Badge variant="secondary" className="px-1.5 py-0.5">
+                          {form.watch(`abilities.${index}.level`)}
+                        </Badge>
+                        <Badge variant="outline" className="px-1.5 py-0.5">
+                          {attributesList.find(
+                            (a) => a.key === form.watch(`abilities.${index}.associatedAttribute`)
+                          )?.label || "N/A"}
+                        </Badge>
+                        {/* Custo de Corrupção é mantido aqui */}
+                        {form.watch(`abilities.${index}.corruptionCost`) > 0 && (
+                           <Badge variant="destructive" className="px-1.5 py-0.5">
+                             Custo: {form.watch(`abilities.${index}.corruptionCost`)}
+                           </Badge>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Botões de Ação */}
+                    <div className="flex gap-1 pl-2" onClick={(e) => e.stopPropagation()}> 
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => handleRollClick(index)}
+                        disabled={
+                          form.watch(`abilities.${index}.associatedAttribute`) === "Nenhum"
+                        }
                       >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o nível" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Novato">Novato</SelectItem>
-                          <SelectItem value="Adepto">Adepto</SelectItem>
-                          <SelectItem value="Mestre">Mestre</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name={`abilities.${index}.type`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tipo</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
+                        <Dices className="w-4 h-4" />
+                        <span className="hidden sm:inline ml-2">Rolar</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeAbility(index)}
                       >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o tipo" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Habilidade">Habilidade</SelectItem>
-                          <SelectItem value="Poder">Poder</SelectItem>
-                          <SelectItem value="Ritual">Ritual</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-              </div>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
 
-              {/* --- NOVOS CAMPOS --- */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <FormField
-                  control={form.control}
-                  name={`abilities.${index}.associatedAttribute`}
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>Atributo Associado (para rolagem)</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione o atributo..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Nenhum">Nenhum</SelectItem>
-                          <Separator />
-                          {attributesList.map((attr) => (
-                            <SelectItem key={attr.key} value={attr.key}>
-                              {attr.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name={`abilities.${index}.corruptionCost`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Custo Corrupção</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          placeholder="0"
-                          {...field}
-                          onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 0)
-                          }
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-              </div>
-              {/* --- FIM DOS NOVOS CAMPOS --- */}
-
-              <FormField
-                control={form.control}
-                name={`abilities.${index}.description`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Descrição (Regras)</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Descreva a habilidade, seus efeitos, custo de corrupção, etc..."
-                        {...field}
-                        className="min-h-[80px] text-sm"
+                  </div>
+                </AccordionTrigger>
+                
+                {/* O Content são os campos de edição e descrição */}
+                <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`abilities.${index}.name`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nome</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Nome da Habilidade / Poder"
+                                {...field}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
                       />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
+                      <FormField
+                        control={form.control}
+                        name={`abilities.${index}.level`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nível</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o nível" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Novato">Novato</SelectItem>
+                                <SelectItem value="Adepto">Adepto</SelectItem>
+                                <SelectItem value="Mestre">Mestre</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`abilities.${index}.type`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tipo</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o tipo" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Habilidade">Habilidade</SelectItem>
+                                <SelectItem value="Poder">Poder</SelectItem>
+                                <SelectItem value="Ritual">Ritual</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
 
-              {/* --- BOTÃO DE ROLAR --- */}
-              <div className="flex justify-end pt-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleRollClick(index)}
-                  disabled={
-                    form.watch(`abilities.${index}.associatedAttribute`) === "Nenhum"
-                  }
-                >
-                  <Dices className="w-4 h-4 mr-2" />
-                  Rolar Teste
-                </Button>
-              </div>
-            </div>
-          ))}
+                    {/* Campos de Atributo e Corrupção */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`abilities.${index}.associatedAttribute`}
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <FormLabel>Atributo Associado (para rolagem)</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione o atributo..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Nenhum">Nenhum</SelectItem>
+                                <Separator />
+                                {attributesList.map((attr) => (
+                                  <SelectItem key={attr.key} value={attr.key}>
+                                    {attr.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`abilities.${index}.corruptionCost`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Custo Corrupção</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                placeholder="0"
+                                {...field}
+                                onChange={(e) =>
+                                  field.onChange(parseInt(e.target.value, 10) || 0)
+                                }
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <FormField
+                      control={form.control}
+                      name={`abilities.${index}.description`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Descrição (Regras)</FormLabel>
+                          <FormControl>
+                            <Textarea
+                              placeholder="Descreva a habilidade, seus efeitos, custo de corrupção, etc..."
+                              {...field}
+                              className="min-h-[80px] text-sm"
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+          {/* --- FIM DA MUDANÇA PARA ACORDEÃO --- */}
+          
         </CardContent>
       </Card>
 
-      {/* Renderiza o diálogo de rolagem */}
+      {/* O Diálogo de Rolagem permanece o mesmo (usando o AbilityRollDialog do Personagem) */}
       {selectedAbilityRoll && (
         <AbilityRollDialog
           open={!!selectedAbilityRoll}
