@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/form";
 
 export const DetailsTab = () => {
-  const { form, isEditing } = useCharacterSheet();
+  // ATUALIZADO: isEditing removido
+  const { form /*, isEditing*/ } = useCharacterSheet();
 
   return (
     <Card>
@@ -30,7 +31,7 @@ export const DetailsTab = () => {
                 <Input
                   placeholder="Nome do Personagem"
                   {...field}
-                  readOnly={!isEditing}
+                  // readOnly={!isEditing} // Removido
                 />
               </FormControl>
               <FormMessage />
@@ -45,7 +46,11 @@ export const DetailsTab = () => {
               <FormItem>
                 <FormLabel>Raça</FormLabel>
                 <FormControl>
-                  <Input placeholder="Humano" {...field} readOnly={!isEditing} />
+                  <Input 
+                    placeholder="Humano" 
+                    {...field} 
+                    // readOnly={!isEditing} // Removido
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -61,7 +66,7 @@ export const DetailsTab = () => {
                   <Input
                     placeholder="Aventureiro"
                     {...field}
-                    readOnly={!isEditing}
+                    // readOnly={!isEditing} // Removido
                   />
                 </FormControl>
                 <FormMessage />
