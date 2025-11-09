@@ -19,12 +19,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Sparkles } from "lucide-react"; // Ícone diferente
+import { Plus, Trash2, Sparkles } from "lucide-react";
 import { getDefaultTrait } from "../character.schema";
 
+// --- NOVOS IMPORTS ---
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+// --- FIM DOS NOVOS IMPORTS ---
+
 export const TraitsTab = () => {
-  // ATUALIZADO: isEditing removido
-  const { form /*, isEditing*/ } = useCharacterSheet();
+  const { form } = useCharacterSheet();
 
   // Gerenciador de Array para Traços
   const {
@@ -46,101 +55,123 @@ export const TraitsTab = () => {
           type="button"
           size="sm"
           onClick={() => appendTrait(getDefaultTrait())}
-          // disabled={!isEditing} // Removido
         >
           <Plus className="w-4 h-4 mr-2" /> Adicionar Traço
         </Button>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent>
         {traitFields.length === 0 && (
           <p className="text-muted-foreground text-center py-12">
             Nenhum traço, dádiva ou fardo adicionado.
           </p>
         )}
-        {traitFields.map((field, index) => (
-          <div
-            key={field.id}
-            className="p-3 rounded-md border bg-muted/20 space-y-3"
-          >
-            <div className="flex justify-between items-center">
-              <h4 className="font-semibold">
-                {form.watch(`traits.${index}.name`) || "Novo Traço"}
-              </h4>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="text-destructive hover:text-destructive"
-                onClick={() => removeTrait(index)}
-                // disabled={!isEditing} // Removido
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
+        
+        {/* --- INÍCIO DA MUDANÇA PARA ACORDEÃO --- */}
+        <Accordion type="multiple" className="space-y-4">
+          {traitFields.map((field, index) => (
+            <AccordionItem
+              key={field.id}
+              value={field.id}
+              className="p-3 rounded-md border bg-muted/20"
+            >
+              {/* O Trigger é o cabeçalho visível */}
+              <AccordionTrigger className="p-0 hover:no-underline">
+                <div className="flex justify-between items-center w-full">
+                  
+                  {/* Informações Principais */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
+                    <h4 className="font-semibold text-base text-primary-foreground truncate">
+                      {form.watch(`traits.${index}.name`) || "Novo Traço"}
+                    </h4>
+                    <Badge variant="secondary" className="px-1.5 py-0.5">
+                      {form.watch(`traits.${index}.type`)}
+                    </Badge>
+                  </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name={`traits.${index}.name`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nome</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Nome do Traço / Dádiva / Fardo"
-                        {...field}
-                        // readOnly={!isEditing} // Removido
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name={`traits.${index}.type`}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tipo</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                      // disabled={!isEditing} // Removido
+                  {/* Botão de Ação (Excluir) */}
+                  <div className="flex pl-2" onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeTrait(index)}
                     >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione o tipo" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Traço">Traço</SelectItem>
-                        <SelectItem value="Dádiva">Dádiva</SelectItem>
-                        <SelectItem value="Fardo">Fardo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </FormItem>
-                )}
-              />
-            </div>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
 
-            <FormField
-              control={form.control}
-              name={`traits.${index}.description`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Descrição (Regras)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Descreva o traço, seus efeitos, etc..."
-                      {...field}
-                      // readOnly={!isEditing} // Removido
-                      className="min-h-[80px] text-sm"
+                </div>
+              </AccordionTrigger>
+
+              {/* O Content são os campos de edição e descrição */}
+              <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name={`traits.${index}.name`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nome</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Nome do Traço / Dádiva / Fardo"
+                              {...field}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
                     />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-          </div>
-        ))}
+                    <FormField
+                      control={form.control}
+                      name={`traits.${index}.type`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Tipo</FormLabel>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione o tipo" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="Traço">Traço</SelectItem>
+                              <SelectItem value="Dádiva">Dádiva</SelectItem>
+                              <SelectItem value="Fardo">Fardo</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name={`traits.${index}.description`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Descrição (Regras)</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Descreva o traço, seus efeitos, etc..."
+                            {...field}
+                            className="min-h-[80px] text-sm"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
+        {/* --- FIM DA MUDANÇA PARA ACORDEÃO --- */}
+        
       </CardContent>
     </Card>
   );
