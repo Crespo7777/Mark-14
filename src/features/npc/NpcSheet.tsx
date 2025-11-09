@@ -17,14 +17,15 @@ import {
 import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
 // --- FIM DOS NOVOS IMPORTS ---
 
-// --- ABAS QUE ESTÃO PRONTAS ---
+// --- TODAS AS ABAS DO NPC ---
 import { NpcCombatTab } from "./tabs/NpcCombatTab";
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
 import { NpcSkillsTab } from "./tabs/NpcSkillsTab";
 import { NpcTraitsTab } from "./tabs/NpcTraitsTab";
-import { NpcEquipmentTab } from "./tabs/NpcEquipmentTab"; // <-- ADICIONADO
-// --- FIM DAS ABAS PRONTAS ---
+import { NpcEquipmentTab } from "./tabs/NpcEquipmentTab";
+import { NpcBackpackTab } from "./tabs/NpcBackpackTab"; // <-- ADICIONADO
+// --- FIM DAS ABAS ---
 
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 
@@ -33,7 +34,7 @@ interface NpcSheetProps {
   onClose: () => void;
 }
 
-// Componente "Interno" - Agora consome o useNpcSheet
+// Componente "Interno"
 const NpcSheetInner = ({
   onClose,
   onSave,
@@ -121,6 +122,7 @@ const NpcSheetInner = ({
               <TabsTrigger value="skills">Habilidades</TabsTrigger>
               <TabsTrigger value="traits">Traços</TabsTrigger>
               <TabsTrigger value="equipment">Equipamento</TabsTrigger>
+              <TabsTrigger value="backpack">Mochila</TabsTrigger> {/* <-- ADICIONADO */}
             </TabsList>
             
             <fieldset
@@ -143,7 +145,10 @@ const NpcSheetInner = ({
                  <NpcTraitsTab />
               </TabsContent>
               <TabsContent value="equipment">
-                 <NpcEquipmentTab /> {/* <-- ATUALIZADO */}
+                 <NpcEquipmentTab />
+              </TabsContent>
+              <TabsContent value="backpack">
+                 <NpcBackpackTab /> {/* <-- ADICIONADO */}
               </TabsContent>
             </fieldset>
           </Tabs>
@@ -157,11 +162,13 @@ const NpcSheetInner = ({
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const { toast } = useToast();
 
+  // *** ATUALIZADO: Lógica de Parse para o NOVO Schema de NPC ***
   const defaults = getDefaultNpcSheetData(initialNpc.name);
   
   const mergedData = {
     ...defaults,
     ...(initialNpc.data as any),
+    // Garante que os schemas aninhados existam
     attributes: {
       ...defaults.attributes,
       ...((initialNpc.data as any)?.attributes || {}),
@@ -171,6 +178,7 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
       ...((initialNpc.data as any)?.combat || {}),
     },
     armors: (initialNpc.data as any)?.armors || defaults.armors, 
+    inventory: (initialNpc.data as any)?.inventory || defaults.inventory, // <-- ADICIONADO
   };
 
   mergedData.name = (initialNpc.data as any)?.name || initialNpc.name || defaults.name;
@@ -184,6 +192,7 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   }
   
   initialNpc.data = parsedData.success ? parsedData.data : mergedData;
+  // *** FIM DA LÓGICA DE PARSE ***
 
 
   const handleSave = async (data: NpcSheetData) => {
