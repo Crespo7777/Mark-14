@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dices } from "lucide-react";
-import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
+// import { useCharacterSheet } from "@/features/character/CharacterSheetContext"; // <-- REMOVIDO
 
 interface WeaponAttackDialogProps {
   open: boolean;
@@ -28,6 +28,10 @@ interface WeaponAttackDialogProps {
   weaponName: string;
   attributeName: string;
   attributeValue: number;
+  // --- ADICIONADO ---
+  characterName: string; 
+  tableId: string;
+  // --- FIM ---
 }
 
 export const WeaponAttackDialog = ({
@@ -36,12 +40,15 @@ export const WeaponAttackDialog = ({
   weaponName,
   attributeName,
   attributeValue,
+  // --- ADICIONADO ---
+  characterName,
+  tableId,
 }: WeaponAttackDialogProps) => {
   const [withAdvantage, setWithAdvantage] = useState(false);
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { character } = useCharacterSheet(); // Para pegar o nome e tableId
+  // const { character } = useCharacterSheet(); // <-- REMOVIDO
 
   const handleRoll = async () => {
     setLoading(true);
@@ -54,14 +61,12 @@ export const WeaponAttackDialog = ({
       return;
     }
 
-    // 1. Executar a lógica de rolagem
     const result = rollAttributeTest({
       attributeValue,
       modifier,
       withAdvantage,
     });
 
-    // 2. Formatar a notificação local (toast)
     const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${result.target}) - ${
       result.isCrit ? "Crítico!" : result.isFumble ? "Falha Crítica!" : result.isSuccess ? "Sucesso!" : "Falha"
     }`;
@@ -71,24 +76,22 @@ export const WeaponAttackDialog = ({
       description: localToastDescription,
     });
 
-    // 3. Formatar a mensagem do chat
     const chatMessage = formatAttackRoll(
-      character.name,
+      characterName, // <-- USA PROP
       weaponName,
       attributeName,
       result,
     );
 
-    // 4. Enviar mensagem para o chat
     await supabase.from("chat_messages").insert({
-      table_id: character.table_id,
+      table_id: tableId, // <-- USA PROP
       user_id: user.id,
       message: chatMessage,
       message_type: "roll",
     });
 
     setLoading(false);
-    onOpenChange(false); // Fechar o diálogo
+    onOpenChange(false);
   };
 
   return (
