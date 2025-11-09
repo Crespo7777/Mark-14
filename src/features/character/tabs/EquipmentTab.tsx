@@ -1,6 +1,6 @@
 // src/features/character/tabs/EquipmentTab.tsx
 
-import { useState } from "react"; // Importar useState
+import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -20,26 +20,24 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"; // Importar Select
-import { Plus, Trash2, Shield, Sword, Dices } from "lucide-react"; // Importar Dices
+} from "@/components/ui/select";
+import { Plus, Trash2, Shield, Sword, Dices } from "lucide-react";
 import {
   getDefaultWeapon,
   getDefaultArmor,
-  Weapon, // Importar tipo
-  Armor, // Importar tipo
+  Weapon,
+  Armor,
 } from "../character.schema";
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
-import { attributesList } from "../character.constants"; // Importar lista de atributos
-import { Separator } from "@/components/ui/separator"; // Importar Separator
-import { supabase } from "@/integrations/supabase/client"; // Importar supabase
-import { useToast } from "@/hooks/use-toast"; // Importar useToast
-import { parseDiceRoll, formatProtectionRoll } from "@/lib/dice-parser"; // Importar parser e formatador
-// Importar os novos diálogos
+import { attributesList } from "../character.constants";
+import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { parseDiceRoll, formatProtectionRoll } from "@/lib/dice-parser";
 import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
 import { WeaponDamageDialog } from "@/components/WeaponDamageDialog";
 import { DefenseRollDialog } from "@/components/DefenseRollDialog";
 
-// Tipos para os estados dos diálogos
 type AttackRollData = {
   weaponName: string;
   attributeName: string;
@@ -55,7 +53,6 @@ export const EquipmentTab = () => {
   const { totalDefense, quick } = useCharacterCalculations();
   const { toast } = useToast();
 
-  // Estados para controlar quais diálogos estão abertos
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(
     null,
   );
@@ -64,7 +61,6 @@ export const EquipmentTab = () => {
   );
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
 
-  // Gerenciador de Array para Armas
   const {
     fields: weaponFields,
     append: appendWeapon,
@@ -74,7 +70,6 @@ export const EquipmentTab = () => {
     name: "weapons",
   });
 
-  // Gerenciador de Array para Armaduras
   const {
     fields: armorFields,
     append: appendArmor,
@@ -84,9 +79,6 @@ export const EquipmentTab = () => {
     name: "armors",
   });
 
-  // --- NOVAS FUNÇÕES DE ROLAGEM ---
-
-  // 1. Abrir diálogo de Ataque
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -95,7 +87,6 @@ export const EquipmentTab = () => {
       (attr) => attr.key === weapon.attackAttribute,
     );
     
-    // Se "Nenhum" ou não encontrado, o valor é 0 (ou pode ser um padrão, como 10)
     const attributeValue = selectedAttr
       ? allAttributes[selectedAttr.key as keyof typeof allAttributes]
       : 0;
@@ -116,7 +107,6 @@ export const EquipmentTab = () => {
     });
   };
 
-  // 2. Abrir diálogo de Dano
   const handleDamageClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     if (!weapon.damage) {
@@ -129,7 +119,6 @@ export const EquipmentTab = () => {
     });
   };
 
-  // 3. Rolar Proteção (Não precisa de diálogo)
   const handleProtectionRoll = async (index: number) => {
     const armor = form.getValues(`armors.${index}`);
     const protectionRoll = parseDiceRoll(armor.protection || "0");
@@ -146,13 +135,11 @@ export const EquipmentTab = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    // Toast local
     toast({
       title: `Proteção de ${armor.name}`,
       description: `Total: ${protectionRoll.total} Proteção`,
     });
 
-    // Mensagem do Chat
     const chatMessage = formatProtectionRoll(
       character.name,
       armor.name,
@@ -170,7 +157,7 @@ export const EquipmentTab = () => {
   return (
     <>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Coluna de Armas (MODIFICADA) */}
+        {/* Coluna de Armas */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -222,7 +209,6 @@ export const EquipmentTab = () => {
                   )}
                 />
 
-                {/* --- CAMPOS DE ATAQUE E DANO ATUALIZADOS --- */}
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -263,8 +249,6 @@ export const EquipmentTab = () => {
                     )}
                   />
                 </div>
-                {/* --- FIM DOS CAMPOS ATUALIZADOS --- */}
-
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -309,7 +293,6 @@ export const EquipmentTab = () => {
                   )}
                 />
 
-                {/* --- BOTÕES DE ROLAGEM --- */}
                 <Separator />
                 <div className="flex gap-2 justify-end">
                   <Button
@@ -334,7 +317,7 @@ export const EquipmentTab = () => {
           </CardContent>
         </Card>
 
-        {/* Coluna de Armaduras (MODIFICADA) */}
+        {/* Coluna de Armaduras */}
         <Card>
           <CardHeader>
             <div className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -350,7 +333,6 @@ export const EquipmentTab = () => {
               </Button>
             </div>
             
-            {/* --- BOTÃO DE DEFESA --- */}
             <div className="pt-4 space-y-2">
               <span className="text-3xl font-bold">
                 Defesa Total: {totalDefense}
@@ -368,8 +350,6 @@ export const EquipmentTab = () => {
                 Rolar Defesa (vs {totalDefense})
               </Button>
             </div>
-            {/* --- FIM DO BOTÃO DE DEFESA --- */}
-
           </CardHeader>
           <CardContent className="space-y-4">
             {armorFields.length === 0 && (
@@ -486,7 +466,6 @@ export const EquipmentTab = () => {
                     </FormItem>
                   )}
                 />
-                {/* --- BOTÃO DE ROLAR PROTEÇÃO --- */}
                 <Separator />
                 <Button
                   type="button"
@@ -505,11 +484,15 @@ export const EquipmentTab = () => {
         </Card>
       </div>
 
-      {/* --- RENDERIZAÇÃO DOS DIÁLOGOS --- */}
+      {/* --- RENDERIZAÇÃO DOS DIÁLOGOS (ATUALIZADO) --- */}
       {attackRollData && (
         <WeaponAttackDialog
           open={!!attackRollData}
           onOpenChange={(open) => !open && setAttackRollData(null)}
+          // --- ADICIONADO ---
+          characterName={character.name}
+          tableId={character.table_id}
+          // --- FIM ---
           {...attackRollData}
         />
       )}
@@ -517,6 +500,10 @@ export const EquipmentTab = () => {
         <WeaponDamageDialog
           open={!!damageRollData}
           onOpenChange={(open) => !open && setDamageRollData(null)}
+          // --- ADICIONADO ---
+          characterName={character.name}
+          tableId={character.table_id}
+          // --- FIM ---
           {...damageRollData}
         />
       )}
@@ -524,6 +511,8 @@ export const EquipmentTab = () => {
         open={isDefenseRollOpen}
         onOpenChange={setIsDefenseRollOpen}
         defenseValue={totalDefense}
+        characterName={character.name}
+        tableId={character.table_id}
       />
     </>
   );
