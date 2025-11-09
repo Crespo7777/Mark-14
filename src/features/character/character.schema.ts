@@ -47,7 +47,7 @@ const corruptionSchema = z.object({
 });
 
 /**
- * 4. DINHEIRO (Já existia, só movemos)
+ * 4. DINHEIRO
  */
 const moneySchema = z.object({
   taler: z.number().default(0),
@@ -56,7 +56,7 @@ const moneySchema = z.object({
 });
 
 /**
- * 5. EXPERIÊNCIA (Já existia, só movemos)
+ * 5. EXPERIÊNCIA
  */
 const experienceSchema = z.object({
   total: z.number().default(0),
@@ -64,7 +64,7 @@ const experienceSchema = z.object({
 });
 
 /**
- * 6. ARMAS
+ * 6. ARMAS (ATUALIZADO)
  */
 export const weaponSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
@@ -72,7 +72,10 @@ export const weaponSchema = z.object({
   quality: z.string().default(""),
   quality_desc: z.string().default(""),
   damage: z.string().default("1d6"),
-  attribute: z.string().default("Vigoroso"),
+  attribute: z.string().default("Vigoroso"), // Para Dano
+  // --- NOVO CAMPO ---
+  attackAttribute: z.string().default("precise"), // Para Ataque (ex: "precise" ou "vigorous")
+  // --- FIM DO NOVO CAMPO ---
 });
 
 /**
@@ -97,6 +100,8 @@ export const abilitySchema = z.object({
   level: z.string().default("Novato"),
   type: z.string().default("Habilidade"),
   description: z.string().default(""),
+  associatedAttribute: z.string().default("Nenhum"),
+  corruptionCost: z.number().default(0),
 });
 
 /**
@@ -110,13 +115,13 @@ export const traitSchema = z.object({
 });
 
 /**
- * 10. INVENTÁRIO (NOVO)
+ * 10. INVENTÁRIO
  */
 export const inventoryItemSchema = z.object({
   id: z.string().default(() => crypto.randomUUID()),
   name: z.string().default(""),
   quantity: z.number().default(1),
-  weight: z.number().default(1), // Vamos usar 'weight' para o peso/obstrutivo
+  weight: z.number().default(1),
   description: z.string().default(""),
 });
 
@@ -126,14 +131,14 @@ export type Weapon = z.infer<typeof weaponSchema>;
 export type Armor = z.infer<typeof armorSchema>;
 export type Ability = z.infer<typeof abilitySchema>;
 export type Trait = z.infer<typeof traitSchema>;
-export type InventoryItem = z.infer<typeof inventoryItemSchema>; // NOVO
+export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 
 // Funções para criar itens padrão
 export const getDefaultWeapon = (): Weapon => weaponSchema.parse({});
 export const getDefaultArmor = (): Armor => armorSchema.parse({});
 export const getDefaultAbility = (): Ability => abilitySchema.parse({});
 export const getDefaultTrait = (): Trait => traitSchema.parse({});
-export const getDefaultInventoryItem = (): InventoryItem => // NOVO
+export const getDefaultInventoryItem = (): InventoryItem =>
   inventoryItemSchema.parse({});
 
 // --- O SCHEMA PRINCIPAL (A Ficha Completa) ---
@@ -171,7 +176,7 @@ export const characterSheetSchema = z.object({
   // 10. Traços
   traits: z.array(traitSchema).default([]),
 
-  // 11. Inventário (NOVO)
+  // 11. Inventário
   inventory: z.array(inventoryItemSchema).default([]),
 });
 
