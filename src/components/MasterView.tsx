@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, FileText, Trash2, BookOpen, Edit } from "lucide-react";
+import { Plus, Users, FileText, Trash2, BookOpen, Edit, UserX } from "lucide-react"; // Adicionado UserX
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -33,6 +33,7 @@ import { CharacterSheetSheet } from "./CharacterSheetSheet";
 import { CreateNpcDialog } from "./CreateNpcDialog";
 import { NpcSheetSheet } from "@/features/npc/NpcSheetSheet";
 import { Database } from "@/integrations/supabase/types";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"; // Importar Avatar
 
 // Definir tipos para o State
 type Character = Database["public"]["Tables"]["characters"]["Row"] & {
@@ -40,7 +41,7 @@ type Character = Database["public"]["Tables"]["characters"]["Row"] & {
 };
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 type Member = Database["public"]["Tables"]["table_members"]["Row"] & {
-  user: { display_name: string };
+  user: { id: string; display_name: string }; // Garantir que user.id esteja no tipo
 };
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"];
 
@@ -58,15 +59,12 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
 
   const [activeTab, setActiveTab] = useState("characters");
   const [playerFilter, setPlayerFilter] = useState<string | null>(null);
-  const [playerToRemove, setPlayerToRemove] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  const [playerToRemove, setPlayerToRemove] = useState<Member | null>(null); // MUDADO: para o tipo Member
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [npcToDelete, setNpcToDelete] = useState<Npc | null>(null);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(
     null,
-  ); // NOVO STATE
+  );
 
   useEffect(() => {
     loadData();
@@ -85,9 +83,16 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "characters" }, // Ouvir mudanças em Fichas
+        { event: "*", schema: "public", table: "characters" },
         (payload) => loadData(),
       )
+      // --- ADICIONADO: Ouvir mudanças em table_members ---
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "table_members" },
+        (payload) => loadData(),
+      )
+      // --- FIM DA ADIÇÃO ---
       .subscribe();
 
     return () => {
@@ -104,8 +109,10 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       supabase.from("npcs").select("*").eq("table_id", tableId),
       supabase
         .from("table_members")
-        .select("*, user:profiles!table_members_user_id_fkey(display_name)")
+        // --- ATUALIZADO: Selecionar o ID do usuário também ---
+        .select("*, user:profiles!table_members_user_id_fkey(id, display_name)")
         .eq("table_id", tableId),
+      // --- FIM DA ATUALIZAÇÃO ---
       supabase
         .from("journal_entries")
         .select("*")
@@ -121,28 +128,48 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
 
   const handleRemovePlayer = async () => {
     if (!playerToRemove) return;
-    const { error } = await supabase
+    
+    // 1. Remover o jogador da mesa
+    const { error: memberError } = await supabase
       .from("table_members")
       .delete()
       .eq("id", playerToRemove.id);
 
-    if (error) {
+    if (memberError) {
       toast({
         title: "Erro ao remover jogador",
-        description: error.message,
+        description: memberError.message,
+        variant: "destructive",
+      });
+      setPlayerToRemove(null);
+      return;
+    }
+    
+    // 2. (Opcional, mas recomendado) Deletar as fichas do jogador
+    const { error: charError } = await supabase
+      .from("characters")
+      .delete()
+      .eq("table_id", tableId)
+      .eq("player_id", playerToRemove.user.id); // Deleta fichas pelo user_id
+
+    if (charError) {
+       toast({
+        title: "Erro ao limpar fichas",
+        description: `O jogador foi removido, mas houve um erro ao deletar suas fichas: ${charError.message}`,
         variant: "destructive",
       });
     } else {
       toast({
         title: "Jogador removido",
-        description: `${playerToRemove.name} foi removido da mesa.`,
+        description: `${playerToRemove.user.display_name} foi removido da mesa e suas fichas foram limpas.`,
       });
-      loadData();
-      setPlayerToRemove(null);
     }
+
+    loadData(); // Recarrega todos os dados
+    setPlayerToRemove(null);
   };
 
-  // --- FUNÇÕES DE COMPARTILHAMENTO ---
+  // ... (Funções de Share e Delete de NPC/Journal/Character permanecem iguais) ...
   const handleShareJournal = async (entryId: string, is_shared: boolean) => {
     const { error } = await supabase
       .from("journal_entries")
@@ -156,7 +183,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       );
     }
   };
-
   const handleShareNpc = async (npcId: string, is_shared: boolean) => {
     const { error } = await supabase
       .from("npcs")
@@ -170,8 +196,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       );
     }
   };
-
-  // NOVA FUNÇÃO: Compartilhar Ficha de Personagem
   const handleShareCharacter = async (charId: string, is_shared: boolean) => {
     const { error } = await supabase
       .from("characters")
@@ -185,8 +209,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       );
     }
   };
-
-  // --- FUNÇÕES DE DELETAR ---
   const handleDeleteNpc = async () => {
     if (!npcToDelete) return;
     const { error } = await supabase
@@ -200,7 +222,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       loadData();
     }
   };
-
   const handleDeleteJournalEntry = async () => {
     if (!entryToDelete) return;
     const { error } = await supabase
@@ -214,8 +235,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       loadData();
     }
   };
-
-  // NOVA FUNÇÃO: Deletar Ficha de Personagem
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
     const { error } = await supabase
@@ -229,6 +248,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       loadData();
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -250,7 +270,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           <TabsTrigger value="journal">Diário</TabsTrigger>
         </TabsList>
 
-        {/* SEÇÃO DE PERSONAGENS ATUALIZADA */}
+        {/* SEÇÃO DE PERSONAGENS (Sem alteração) */}
         <TabsContent value="characters" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Fichas dos Jogadores</h3>
@@ -295,7 +315,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                             : "Visível apenas para o dono e mestre"}
                         </p>
                       </CardContent>
-                      {/* Footer adicionado ao Card de Personagem */}
                       <CardFooter className="flex justify-between items-center">
                         <div
                           className="flex items-center gap-2"
@@ -330,7 +349,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           </div>
         </TabsContent>
 
-        {/* SEÇÃO DE NPCS (Como estava antes) */}
+        {/* SEÇÃO DE NPCS (Sem alteração) */}
         <TabsContent value="npcs" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">NPCs da Mesa</h3>
@@ -397,25 +416,148 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           </div>
         </TabsContent>
 
-        {/* ... (Seção de Jogadores) ... */}
+        {/* --- SEÇÃO DE JOGADORES (ATUALIZADA) --- */}
         <TabsContent value="players" className="space-y-4">
           <h3 className="text-xl font-semibold mb-4">Jogadores na Mesa</h3>
-          {/* ... (map de 'members') ... */}
+          {members.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              Nenhum jogador entrou na sua mesa ainda.
+            </p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {members.map((member) => (
+                <Card key={member.id} className="border-border/50">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                    <div className="flex items-center gap-3">
+                      <Avatar>
+                        <AvatarFallback>
+                          {member.user.display_name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <CardTitle className="text-lg">
+                        {member.user.display_name}
+                      </CardTitle>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => setPlayerToRemove(member)}
+                    >
+                      <UserX className="w-4 h-4" />
+                      <span className="sr-only">Remover jogador</span>
+                    </Button>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
+        {/* --- FIM DA SEÇÃO DE JOGADORES --- */}
 
-        {/* ... (Seção do Diário) ... */}
+
+        {/* SEÇÃO DO DIÁRIO (Sem alteração) */}
         <TabsContent value="journal" className="space-y-4">
-          <h3 className="text-xl font-semibold mb-4">Diário do Mestre</h3>
-          {/* ... (map de 'journalEntries') ... */}
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-semibold">Diário do Mestre</h3>
+            <JournalEntryDialog tableId={tableId} onEntrySaved={loadData}>
+              <Button size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                Nova Entrada
+              </Button>
+            </JournalEntryDialog>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2">
+            {journalEntries.length === 0 ? (
+              <p className="text-muted-foreground col-span-full text-center py-8">
+                Nenhuma entrada no diário.
+              </p>
+            ) : (
+              journalEntries.map((entry) => (
+                <Card key={entry.id} className="border-border/50 flex flex-col">
+                  <CardHeader>
+                    <CardTitle>{entry.title}</CardTitle>
+                    <CardDescription>
+                      {entry.is_shared
+                        ? "Compartilhado com jogadores"
+                        : "Apenas mestre"}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="flex-1">
+                    <p className="text-sm text-muted-foreground line-clamp-3">
+                      {entry.content || "Clique para editar"}
+                    </p>
+                  </CardContent>
+                  <CardFooter className="flex justify-between items-center">
+                      <div
+                        className="flex items-center gap-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Switch
+                          id={`share-journal-${entry.id}`}
+                          checked={entry.is_shared ?? false}
+                          onCheckedChange={(checked) =>
+                            handleShareJournal(entry.id, checked)
+                          }
+                        />
+                        <Label htmlFor={`share-journal-${entry.id}`}>
+                          Compartilhar
+                        </Label>
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <JournalEntryDialog
+                          tableId={tableId}
+                          onEntrySaved={loadData}
+                          entry={entry}
+                        >
+                          <Button variant="outline" size="icon">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                        </JournalEntryDialog>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => setEntryToDelete(entry)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardFooter>
+                </Card>
+              ))
+            )}
+          </div>
         </TabsContent>
       </Tabs>
 
-      {/* ... (AlertDialog para Remover Jogador) ... */}
+      {/* --- DIÁLOGO DE REMOVER JOGADOR (ATUALIZADO) --- */}
       <AlertDialog
         open={!!playerToRemove}
         onOpenChange={(open) => !open && setPlayerToRemove(null)}
       >
-        {/* ... (Conteúdo) ... */}
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover Jogador?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você tem certeza que quer remover{" "}
+              <span className="font-bold text-destructive">
+                {playerToRemove?.user.display_name}
+              </span>{" "}
+              da mesa? Todas as fichas de personagem associadas a este jogador
+              nesta mesa também serão excluídas. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemovePlayer}
+              className={buttonVariants({ variant: "destructive" })}
+            >
+              Remover Jogador
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
 
       {/* ... (AlertDialog para Deletar Entrada do Diário) ... */}
@@ -423,7 +565,24 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         open={!!entryToDelete}
         onOpenChange={(open) => !open && setEntryToDelete(null)}
       >
-        {/* ... (Conteúdo) ... */}
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir esta Entrada?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A entrada "{entryToDelete?.title}" será removida permanentemente.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteJournalEntry}
+              className={buttonVariants({ variant: "destructive" })}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
 
       {/* ... (AlertDialog para Deletar NPC) ... */}
@@ -431,10 +590,27 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         open={!!npcToDelete}
         onOpenChange={(open) => !open && setNpcToDelete(null)}
       >
-        {/* ... (Conteúdo) ... */}
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir este NPC?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O NPC "{npcToDelete?.name}" será removido permanentemente.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteNpc}
+              className={buttonVariants({ variant: "destructive" })}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
       </AlertDialog>
 
-      {/* NOVO: AlertDialog para Deletar Ficha de Personagem */}
+      {/* ... (AlertDialog para Deletar Ficha de Personagem) ... */}
       <AlertDialog
         open={!!characterToDelete}
         onOpenChange={(open) => !open && setCharacterToDelete(null)}
