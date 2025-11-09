@@ -23,11 +23,11 @@ import { Heart, Shield } from "lucide-react";
 const DamageHealControl = ({
   label,
   onApply,
-  disabled,
+  // disabled, // Removido
 }: {
   label: string;
   onApply: (amount: number) => void;
-  disabled: boolean;
+  disabled: boolean; // Mantido na props por segurança, mas não o usamos mais
 }) => {
   const [amount, setAmount] = useState(1);
   return (
@@ -37,14 +37,14 @@ const DamageHealControl = ({
         className="w-16 h-9 text-center" // Reduzido para w-16
         value={amount}
         onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)}
-        disabled={disabled}
+        // disabled={disabled} // Removido
       />
       <Button
         type="button"
         size="sm"
         variant="outline"
         onClick={() => onApply(amount)}
-        disabled={disabled}
+        // disabled={disabled} // Removido
       >
         {label}
       </Button>
@@ -56,7 +56,8 @@ const DamageHealControl = ({
  * A aba de Combate, focada em Vitalidade e Corrupção.
  */
 export const CombatTab = () => {
-  const { form, isEditing } = useCharacterSheet();
+  // ATUALIZADO: isEditing removido
+  const { form /*, isEditing*/ } = useCharacterSheet();
   const { toughnessMax, painThreshold, corruptionThreshold } =
     useCharacterCalculations();
   const currentToughness = form.watch("toughness.current");
@@ -101,7 +102,7 @@ export const CombatTab = () => {
                       const val = parseInt(e.target.value, 10) || 0;
                       field.onChange(Math.min(toughnessMax, Math.max(0, val)));
                     }}
-                    readOnly={!isEditing}
+                    // readOnly={!isEditing} // Removido
                   />
                 </FormControl>
                 <Progress
@@ -135,7 +136,7 @@ export const CombatTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value, 10) || 0)
                       }
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
@@ -148,12 +149,12 @@ export const CombatTab = () => {
             <DamageHealControl
               label="Causar Dano"
               onApply={handleDamage}
-              disabled={!isEditing}
+              disabled={false} // Removido !isEditing
             />
             <DamageHealControl
               label="Curar"
               onApply={handleHeal}
-              disabled={!isEditing}
+              disabled={false} // Removido !isEditing
             />
           </div>
         </CardContent>
@@ -182,7 +183,7 @@ export const CombatTab = () => {
                     onChange={(e) =>
                       field.onChange(parseInt(e.target.value, 10) || 0)
                     }
-                    readOnly={!isEditing}
+                    // readOnly={!isEditing} // Removido
                   />
                 </FormControl>
                 <FormMessage />
@@ -214,7 +215,7 @@ export const CombatTab = () => {
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value, 10) || 0)
                       }
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                     />
                   </FormControl>
                 </FormItem>
