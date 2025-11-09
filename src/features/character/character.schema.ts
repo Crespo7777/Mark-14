@@ -2,13 +2,22 @@
 
 import { z } from "zod";
 
+// ---
+// CORREÇÃO: Adicionado "export" para que outros schemas (como o do NPC) possam usar
+// ---
+export const simpleUUID = () => {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+// --- FIM DA CORREÇÃO ---
+
+
 // --- HELPERS (Funções Auxiliares) ---
 
 /**
  * Regra de Symbaroum: Todas as divisões são arredondadas PARA CIMA.
- * @param value O valor a ser dividido
- * @param divisor O divisor
- * @returns O resultado arredondado para cima.
  */
 export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
@@ -19,7 +28,7 @@ export const roundUpDiv = (value: number, divisor: number) => {
 /**
  * 1. ATRIBUTOS
  */
-const attributesSchema = z.object({
+export const attributesSchema = z.object({
   cunning: z.number().min(5).max(15).default(10),
   discreet: z.number().min(5).max(15).default(10),
   persuasive: z.number().min(5).max(15).default(10),
@@ -33,7 +42,7 @@ const attributesSchema = z.object({
 /**
  * 2. VITALIDADE
  */
-const toughnessSchema = z.object({
+export const toughnessSchema = z.object({
   bonus: z.number().default(0),
   current: z.number().default(10),
 });
@@ -41,7 +50,7 @@ const toughnessSchema = z.object({
 /**
  * 3. CORRUPÇÃO
  */
-const corruptionSchema = z.object({
+export const corruptionSchema = z.object({
   temporary: z.number().default(0),
   permanent: z.number().default(0),
 });
@@ -49,7 +58,7 @@ const corruptionSchema = z.object({
 /**
  * 4. DINHEIRO
  */
-const moneySchema = z.object({
+export const moneySchema = z.object({
   taler: z.number().default(0),
   shekel: z.number().default(0),
   ortega: z.number().default(0),
@@ -58,31 +67,29 @@ const moneySchema = z.object({
 /**
  * 5. EXPERIÊNCIA
  */
-const experienceSchema = z.object({
+export const experienceSchema = z.object({
   total: z.number().default(0),
   spent: z.number().default(0),
 });
 
 /**
- * 6. ARMAS (ATUALIZADO)
+ * 6. ARMAS
  */
 export const weaponSchema = z.object({
-  id: z.string().default(() => crypto.randomUUID()),
+  id: z.string().default(() => simpleUUID()),
   name: z.string().default("Nova Arma"),
   quality: z.string().default(""),
   quality_desc: z.string().default(""),
   damage: z.string().default("1d6"),
-  attribute: z.string().default("Vigoroso"), // Para Dano
-  // --- NOVO CAMPO ---
-  attackAttribute: z.string().default("precise"), // Para Ataque (ex: "precise" ou "vigorous")
-  // --- FIM DO NOVO CAMPO ---
+  attribute: z.string().default("Vigoroso"),
+  attackAttribute: z.string().default("precise"),
 });
 
 /**
  * 7. ARMADURAS
  */
 export const armorSchema = z.object({
-  id: z.string().default(() => crypto.randomUUID()),
+  id: z.string().default(() => simpleUUID()),
   name: z.string().default("Nova Armadura"),
   quality: z.string().default(""),
   quality_desc: z.string().default(""),
@@ -95,7 +102,7 @@ export const armorSchema = z.object({
  * 8. HABILIDADES
  */
 export const abilitySchema = z.object({
-  id: z.string().default(() => crypto.randomUUID()),
+  id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
   level: z.string().default("Novato"),
   type: z.string().default("Habilidade"),
@@ -108,7 +115,7 @@ export const abilitySchema = z.object({
  * 9. TRAÇOS
  */
 export const traitSchema = z.object({
-  id: z.string().default(() => crypto.randomUUID()),
+  id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
   type: z.string().default("Traço"),
   description: z.string().default(""),
@@ -118,7 +125,7 @@ export const traitSchema = z.object({
  * 10. INVENTÁRIO
  */
 export const inventoryItemSchema = z.object({
-  id: z.string().default(() => crypto.randomUUID()),
+  id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
   quantity: z.number().default(1),
   weight: z.number().default(1),
@@ -144,39 +151,18 @@ export const getDefaultInventoryItem = (): InventoryItem =>
 // --- O SCHEMA PRINCIPAL (A Ficha Completa) ---
 
 export const characterSheetSchema = z.object({
-  // 1. Detalhes Básicos
   name: z.string().min(1, "Nome é obrigatório").default("Novo Personagem"),
   race: z.string().default("Humano"),
   occupation: z.string().default("Aventureiro"),
-
-  // 2. Atributos
   attributes: attributesSchema.default({}),
-
-  // 3. Vitalidade
   toughness: toughnessSchema.default({}),
-
-  // 4. Corrupção
   corruption: corruptionSchema.default({}),
-
-  // 5. Dinheiro
   money: moneySchema.default({}),
-
-  // 6. Experiência
   experience: experienceSchema.default({}),
-
-  // 7. Armas
   weapons: z.array(weaponSchema).default([]),
-
-  // 8. Armaduras
   armors: z.array(armorSchema).default([]),
-
-  // 9. Habilidades
   abilities: z.array(abilitySchema).default([]),
-
-  // 10. Traços
   traits: z.array(traitSchema).default([]),
-
-  // 11. Inventário
   inventory: z.array(inventoryItemSchema).default([]),
 });
 
