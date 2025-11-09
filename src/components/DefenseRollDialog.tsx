@@ -19,23 +19,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dices } from "lucide-react";
-import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
+// import { useCharacterSheet } from "@/features/character/CharacterSheetContext"; // <-- REMOVIDO
 
 interface DefenseRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defenseValue: number;
+  // --- ADICIONADO ---
+  characterName: string;
+  tableId: string;
+  // --- FIM ---
 }
 
 export const DefenseRollDialog = ({
   open,
   onOpenChange,
   defenseValue,
+  // --- ADICIONADO ---
+  characterName,
+  tableId,
 }: DefenseRollDialogProps) => {
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { character } = useCharacterSheet(); // Para pegar o nome e tableId
+  // const { character } = useCharacterSheet(); // <-- REMOVIDO
 
   const handleRoll = async () => {
     setLoading(true);
@@ -65,15 +72,15 @@ export const DefenseRollDialog = ({
       description: localToastDescription,
     });
 
-    // 3. Formatar a mensagem do chat
+    // 3. Formatar a mensagem do chat (USANDO PROPS)
     const chatMessage = formatDefenseRoll(
-      character.name,
+      characterName,
       result,
     );
 
-    // 4. Enviar mensagem para o chat
+    // 4. Enviar mensagem para o chat (USANDO PROPS)
     await supabase.from("chat_messages").insert({
-      table_id: character.table_id,
+      table_id: tableId,
       user_id: user.id,
       message: chatMessage,
       message_type: "roll",
