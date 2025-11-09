@@ -8,15 +8,15 @@ import { Database } from "@/integrations/supabase/types";
 
 type Character = Database["public"]["Tables"]["characters"]["Row"];
 
-// 1. EXPORTE O TIPO
+// 1. ATUALIZAR O TIPO (remover isEditing)
 export interface CharacterSheetContextType {
   character: Character;
   form: UseFormReturn<CharacterSheetData>;
-  isEditing: boolean;
-  setIsEditing: (isEditing: boolean) => void;
+  // isEditing: boolean; // Removido
+  // setIsEditing: (isEditing: boolean) => void; // Removido
 }
 
-// 2. EXPORTE O CONTEXTO
+// 2. ATUALIZAR O CONTEXTO
 export const CharacterSheetContext =
   createContext<CharacterSheetContextType | null>(null);
 
@@ -24,17 +24,16 @@ interface CharacterSheetProviderProps {
   children: ReactNode;
   character: Character;
   onSave: (data: CharacterSheetData) => Promise<void>;
-  isEditing: boolean;
-  setIsEditing: (isEditing: boolean) => void;
+  // isEditing: boolean; // Removido
+  // setIsEditing: (isEditing: boolean) => void; // Removido
 }
 
 export const CharacterSheetProvider = ({
   children,
   character,
-  onSave,
-  isEditing,
-  setIsEditing,
-}: CharacterSheetProviderProps) => {
+  onSave, // onSave ainda é necessário para o CharacterSheetInner
+}: // ...isEditing e setIsEditing removidos das props
+CharacterSheetProviderProps) => {
   const form = useForm<CharacterSheetData>({
     resolver: zodResolver(characterSheetSchema),
     defaultValues: character.data as CharacterSheetData,
@@ -45,8 +44,8 @@ export const CharacterSheetProvider = ({
       value={{
         character,
         form,
-        isEditing,
-        setIsEditing,
+        // isEditing, // Removido
+        // setIsEditing, // Removido
       }}
     >
       {children}
