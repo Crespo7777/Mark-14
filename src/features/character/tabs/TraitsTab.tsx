@@ -23,7 +23,8 @@ import { Plus, Trash2, Sparkles } from "lucide-react"; // Ícone diferente
 import { getDefaultTrait } from "../character.schema";
 
 export const TraitsTab = () => {
-  const { form, isEditing } = useCharacterSheet();
+  // ATUALIZADO: isEditing removido
+  const { form /*, isEditing*/ } = useCharacterSheet();
 
   // Gerenciador de Array para Traços
   const {
@@ -45,7 +46,7 @@ export const TraitsTab = () => {
           type="button"
           size="sm"
           onClick={() => appendTrait(getDefaultTrait())}
-          disabled={!isEditing}
+          // disabled={!isEditing} // Removido
         >
           <Plus className="w-4 h-4 mr-2" /> Adicionar Traço
         </Button>
@@ -71,7 +72,7 @@ export const TraitsTab = () => {
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
                 onClick={() => removeTrait(index)}
-                disabled={!isEditing}
+                // disabled={!isEditing} // Removido
               >
                 <Trash2 className="w-4 h-4" />
               </Button>
@@ -88,7 +89,7 @@ export const TraitsTab = () => {
                       <Input
                         placeholder="Nome do Traço / Dádiva / Fardo"
                         {...field}
-                        readOnly={!isEditing}
+                        // readOnly={!isEditing} // Removido
                       />
                     </FormControl>
                   </FormItem>
@@ -103,7 +104,7 @@ export const TraitsTab = () => {
                     <Select
                       onValueChange={field.onChange}
                       value={field.value}
-                      disabled={!isEditing}
+                      // disabled={!isEditing} // Removido
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -131,7 +132,7 @@ export const TraitsTab = () => {
                     <Textarea
                       placeholder="Descreva o traço, seus efeitos, etc..."
                       {...field}
-                      readOnly={!isEditing}
+                      // readOnly={!isEditing} // Removido
                       className="min-h-[80px] text-sm"
                     />
                   </FormControl>
