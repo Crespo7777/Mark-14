@@ -1,3 +1,5 @@
+// src/components/JournalEntryDialog.tsx
+
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,13 +15,15 @@ interface JournalEntryDialogProps {
   tableId: string;
   onEntrySaved: () => void;
   entry?: any; // Passar a entrada existente para edição
+  isPlayerNote?: boolean; // <-- NOVA PROP
 }
 
 export const JournalEntryDialog = ({ 
   children, 
   tableId, 
   onEntrySaved, 
-  entry 
+  entry,
+  isPlayerNote = false, // <-- Valor padrão
 }: JournalEntryDialogProps) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -31,13 +35,11 @@ export const JournalEntryDialog = ({
   const isEditing = !!entry;
 
   useEffect(() => {
-    // Preenche o formulário se estiver no modo de edição
     if (isEditing && open) {
       setTitle(entry.title);
       setContent(entry.content || "");
       setIsShared(entry.is_shared);
     } else {
-      // Reseta ao abrir para "Criar"
       setTitle("");
       setContent("");
       setIsShared(false);
@@ -51,14 +53,24 @@ export const JournalEntryDialog = ({
     }
     setLoading(true);
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      toast({ title: "Erro", description: "Usuário não encontrado.", variant: "destructive" });
+      return;
+    }
+
     if (isEditing) {
       // Atualizar entrada existente
+      // A RLS
+      // garante que o jogador só pode editar a sua própria, e o mestre pode editar todas.
       const { error } = await supabase
         .from("journal_entries")
         .update({
           title: title.trim(),
           content: content.trim() || null,
-          is_shared: isShared,
+          // Se for um jogador editando, ele não pode mudar o 'is_shared'
+          is_shared: isPlayerNote ? entry.is_shared : isShared,
         })
         .eq("id", entry.id);
 
@@ -71,14 +83,33 @@ export const JournalEntryDialog = ({
       }
     } else {
       // Criar nova entrada
-      const { error } = await supabase
-        .from("journal_entries")
-        .insert({
+      
+      // --- LÓGICA ATUALIZADA ---
+      let entryData;
+      if (isPlayerNote) {
+        // Se é um jogador criando, força is_shared=false e define o player_id
+        entryData = {
+          table_id: tableId,
+          title: title.trim(),
+          content: content.trim() || null,
+          is_shared: false,
+          player_id: user.id, // Define o dono da nota
+        };
+      } else {
+        // Se é o mestre criando, player_id é NULL
+        entryData = {
           table_id: tableId,
           title: title.trim(),
           content: content.trim() || null,
           is_shared: isShared,
-        });
+          player_id: null,
+        };
+      }
+      // --- FIM DA LÓGICA ATUALIZADA ---
+
+      const { error } = await supabase
+        .from("journal_entries")
+        .insert(entryData);
 
       if (error) {
         toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
@@ -98,7 +129,9 @@ export const JournalEntryDialog = ({
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Entrada" : "Nova Entrada no Diário"}</DialogTitle>
           <DialogDescription>
-            {isEditing ? "Edite os detalhes desta entrada." : "Crie uma nova entrada para o diário da mesa."}
+            {isPlayerNote
+              ? "Crie uma anotação privada. Apenas você e o Mestre podem vê-la."
+              : "Crie uma nova entrada para o diário da mesa."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -122,10 +155,16 @@ export const JournalEntryDialog = ({
             />
             <p className="text-xs text-muted-foreground">Você pode usar Markdown para formatação.</p>
           </div>
-          <div className="flex items-center space-x-2">
-            <Switch id="is-shared" checked={isShared} onCheckedChange={setIsShared} />
-            <Label htmlFor="is-shared">Compartilhar com jogadores</Label>
-          </div>
+          
+          {/* --- LÓGICA ATUALIZADA: Esconder o Switch se for um jogador --- */}
+          {!isPlayerNote && (
+            <div className="flex items-center space-x-2">
+              <Switch id="is-shared" checked={isShared} onCheckedChange={setIsShared} />
+              <Label htmlFor="is-shared">Compartilhar com jogadores</Label>
+            </div>
+          )}
+          {/* --- FIM DA LÓGICA --- */}
+
           <Button onClick={handleSave} disabled={loading} className="w-full">
             {loading ? "Salvando..." : "Salvar Entrada"}
           </Button>
