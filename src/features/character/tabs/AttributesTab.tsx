@@ -1,6 +1,6 @@
 // src/features/character/tabs/AttributesTab.tsx
 
-import { useState } from "react"; // Importar useState
+import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,21 +11,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { cn } from "@/lib/utils"; // Importar cn
-import { AttributeRollDialog } from "@/components/AttributeRollDialog"; // Importar o novo diálogo
-
-// --- CORREÇÃO (Nomes e Ordem) ---
-const attributesList: { key: string; label: string }[] = [
-  { key: "cunning", label: "Astuto" },
-  { key: "quick", label: "Rápido" },
-  { key: "discreet", label: "Discreto" },
-  { key: "resolute", label: "Resoluto" },
-  { key: "persuasive", label: "Persuasivo" },
-  { key: "vigilant", label: "Vigilante" },
-  { key: "precise", label: "Preciso" },
-  { key: "vigorous", label: "Vigoroso" },
-];
-// --- FIM DA CORREÇÃO ---
+import { cn } from "@/lib/utils";
+import { AttributeRollDialog } from "@/components/AttributeRollDialog";
+import { attributesList } from "../character.constants"; // ATUALIZADO: Importar de constantes
 
 type SelectedAttribute = {
   name: string;
@@ -33,7 +21,7 @@ type SelectedAttribute = {
 };
 
 export const AttributesTab = () => {
-  const { form, isEditing, character } = useCharacterSheet();
+  const { form, character } = useCharacterSheet();
   const [selectedAttr, setSelectedAttr] = useState<SelectedAttribute | null>(
     null,
   );
@@ -41,9 +29,7 @@ export const AttributesTab = () => {
   const handleAttributeClick = (
     attr: { name: string; value: number },
   ) => {
-    if (!isEditing) {
-      setSelectedAttr(attr);
-    }
+    setSelectedAttr(attr);
   };
 
   return (
@@ -62,8 +48,7 @@ export const AttributesTab = () => {
                 <div
                   className={cn(
                     "space-y-2 rounded-lg p-2 transition-colors",
-                    !isEditing &&
-                      "cursor-pointer hover:bg-muted/50",
+                    "cursor-pointer hover:bg-muted/50",
                   )}
                   onClick={() =>
                     handleAttributeClick({
@@ -73,7 +58,7 @@ export const AttributesTab = () => {
                   }
                 >
                   <FormItem>
-                    <FormLabel className={cn("text-lg", !isEditing && "cursor-pointer")}>
+                    <FormLabel className={cn("text-lg", "cursor-pointer")}>
                       {attr.label}
                     </FormLabel>
                     <FormControl>
@@ -84,9 +69,7 @@ export const AttributesTab = () => {
                         onChange={(e) =>
                           field.onChange(parseInt(e.target.value, 10) || 0)
                         }
-                        readOnly={!isEditing}
-                        // Impedir que o clique no input abra o modal
-                        onClick={(e) => isEditing && e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                       />
                     </FormControl>
                     <FormMessage />
@@ -98,7 +81,6 @@ export const AttributesTab = () => {
         </CardContent>
       </Card>
 
-      {/* Renderizar o Diálogo aqui */}
       <AttributeRollDialog
         open={!!selectedAttr}
         onOpenChange={(open) => {
