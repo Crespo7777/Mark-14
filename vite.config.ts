@@ -13,12 +13,9 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   
-  // --- INÍCIO DA CORREÇÃO ---
-  // Força o Vite a não pré-otimizar o 'lucide-react'.
-  // Isto resolve o erro 'does not provide an export named TreasureChest'.
-  optimizeDeps: {
-    exclude: ['lucide-react'],
-  },
+  // --- CORREÇÃO ---
+  // A regra 'optimizeDeps' foi removida,
+  // pois não vamos mais usar a importação de ícones que causava o problema.
   // --- FIM DA CORREÇÃO ---
 
   resolve: {
