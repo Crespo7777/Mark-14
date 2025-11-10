@@ -14,7 +14,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getDefaultCharacterSheetData } from "@/features/character/character.schema";
+
+// --- 1. IMPORTAÇÕES CORRIGIDAS ---
+// Importar o schema e o default data do NPC, não do Character
+import {
+  getDefaultNpcSheetData,
+  npcSheetSchema,
+} from "@/features/npc/npc.schema";
+// --- FIM DA CORREÇÃO ---
 
 interface CreateNpcDialogProps {
   children: React.ReactNode;
@@ -29,8 +36,8 @@ export const CreateNpcDialog = ({
 }: CreateNpcDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [race, setRace] = useState(""); // NOVO
-  const [occupation, setOccupation] = useState(""); // NOVO
+  const [race, setRace] = useState("");
+  const [occupation, setOccupation] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -46,16 +53,33 @@ export const CreateNpcDialog = ({
 
     setLoading(true);
 
-    // Gerar dados padrão da ficha
-    const defaultData = getDefaultCharacterSheetData(name.trim());
+    // --- 2. LÓGICA DE CRIAÇÃO CORRIGIDA ---
+    // Usar a função correta para gerar os dados padrão do NPC
+    const defaultData = getDefaultNpcSheetData(name.trim());
+
     // Sobrescrever com os campos do formulário se preenchidos
     if (race.trim()) defaultData.race = race.trim();
     if (occupation.trim()) defaultData.occupation = occupation.trim();
 
+    // Validação final com o schema do NPC (opcional, mas recomendado)
+    const parsedData = npcSheetSchema.safeParse(defaultData);
+
+    if (!parsedData.success) {
+      console.error("Erro de validação ao criar NPC:", parsedData.error);
+      toast({
+        title: "Erro de Schema",
+        description: "Os dados padrão do NPC falharam na validação.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+    // --- FIM DA CORREÇÃO ---
+
     const { error } = await supabase.from("npcs").insert({
       name: name.trim(),
       table_id: tableId,
-      data: defaultData,
+      data: parsedData.data, // Salva os dados validados
       is_shared: false,
     });
 
@@ -94,7 +118,6 @@ export const CreateNpcDialog = ({
             />
           </div>
 
-          {/* NOVOS CAMPOS DE RAÇA E OCUPAÇÃO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="npc-race">Raça</Label>
