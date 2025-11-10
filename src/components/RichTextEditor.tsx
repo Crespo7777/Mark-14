@@ -14,74 +14,16 @@ import {
   Heading2,
   Heading3,
   Quote,
-  Smile, // 1. Importar o ícone para o botão
+  // Smile (ícone) foi removido
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
 
-// --- 2. IMPORTAR AS NOVAS DEPENDÊNCIAS ---
-import { iconList } from "@/lib/icons";
-import { JournalIconExtension } from "./TiptapIconExtension";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Button } from "./ui/button";
-import { useState } from "react";
-// --- FIM DAS IMPORTAÇÕES ---
+// --- TODAS AS IMPORTAÇÕES DE ÍCONE FORAM REMOVIDAS ---
 
-// --- 3. NOVO COMPONENTE: SELETOR DE ÍCONES ---
-const IconPicker = ({ editor }: { editor: Editor }) => {
-  const [open, setOpen] = useState(false);
+// --- COMPONENTE IconPicker FOI REMOVIDO ---
 
-  const handleIconSelect = (iconName: string) => {
-    // Insere um espaço antes e depois do ícone para fluir melhor
-    editor.chain().focus().insertContent(" ").insertJournalIcon({ name: iconName }).insertContent(" ").run();
-    setOpen(false);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost">
-          <Smile className="w-4 h-4" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0">
-        <Command>
-          <CommandInput placeholder="Procurar ícone..." />
-          <CommandList>
-            <CommandEmpty>Nenhum ícone encontrado.</CommandEmpty>
-            <CommandGroup>
-              {iconList.map((icon) => (
-                <CommandItem
-                  key={icon.name}
-                  onSelect={() => handleIconSelect(icon.name)}
-                  className="flex items-center gap-2 cursor-pointer"
-                >
-                  {icon.icon}
-                  <span>{icon.label}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-};
-// --- FIM DO NOVO COMPONENTE ---
-
-// --- Barra de Ferramentas (Atualizada) ---
+// --- Barra de Ferramentas (Simplificada) ---
 const Toolbar = ({ editor }: { editor: Editor | null }) => {
   if (!editor) {
     return null;
@@ -168,10 +110,7 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
         <Code className="w-4 h-4" />
       </Toggle>
 
-      {/* --- 4. ADICIONAR O SELETOR DE ÍCONES À BARRA --- */}
-      <Separator orientation="vertical" className="h-8 w-[1px] mx-1" />
-      <IconPicker editor={editor} />
-      {/* --- FIM DA ADIÇÃO --- */}
+      {/* --- O SELETOR DE ÍCONE FOI REMOVIDO DAQUI --- */}
     </div>
   );
 };
@@ -193,9 +132,7 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
       Placeholder.configure({
         placeholder: placeholder || "Comece a escrever...",
       }),
-      // --- 5. ADICIONAR A NOSSA EXTENSÃO DE ÍCONE ---
-      JournalIconExtension,
-      // --- FIM DA ADIÇÃO ---
+      // --- A EXTENSÃO DE ÍCONE FOI REMOVIDA DAQUI ---
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -210,7 +147,6 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
   });
 
   // Corrigir o problema de o conteúdo não atualizar quando o 'value' muda por fora
-  // (ex: ao trocar de 'Editar' para 'Novo')
   if (editor && editor.getHTML() !== value && value.trim() === '') {
     editor.commands.setContent(value, false);
   }
