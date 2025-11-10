@@ -1,37 +1,26 @@
 // src/components/JournalRenderer.tsx
 
 import React from "react";
-import parse, { domToReact, Element, DOMNode } from "html-react-parser";
-import { DynamicIcon } from "@/lib/icons";
+// Imports de 'html-react-parser' e 'DynamicIcon' removidos
 
 interface JournalRendererProps {
   content: string | null | undefined;
+  className?: string; // Mantido para o line-clamp
 }
 
-const options = {
-  replace: (domNode: DOMNode) => {
-    // Verifica se o nó é um elemento (tag)
-    if (domNode instanceof Element && domNode.attribs) {
-      // Procura pela nossa tag personalizada
-      if (domNode.name === "journal-icon") {
-        const iconName = domNode.attribs["data-name"];
-        return <DynamicIcon name={iconName} />;
-      }
-    }
-    // Caso contrário, não faz nada (deixa o parser padrão lidar)
-    return domToReact(domNode.children as DOMNode[], options);
-  },
-};
+// Lógica de 'options' e 'parse' removida
 
-export const JournalRenderer = ({ content }: JournalRendererProps) => {
+export const JournalRenderer = ({ content, className }: JournalRendererProps) => {
   if (!content) {
     return <p className="text-muted-foreground italic">Nada escrito ainda.</p>;
   }
 
   // Usa a classe 'prose' para aplicar a estilização do Tailwind
+  // e renderiza o HTML diretamente, sem analisar ícones.
   return (
-    <div className="prose prose-sm prose-invert max-w-none">
-      {parse(content, options)}
-    </div>
+    <div
+      className={`prose prose-sm prose-invert max-w-none ${className || ''}`}
+      dangerouslySetInnerHTML={{ __html: content }}
+    />
   );
 };
