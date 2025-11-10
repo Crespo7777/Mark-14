@@ -1,12 +1,11 @@
 // src/components/AttributeRollDialog.tsx
 
-import { useState } from "react"; // <-- CORRIGIDO AQUI
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   rollAttributeTest,
   formatAttributeTest,
-  AttributeRollResult,
 } from "@/lib/dice-parser";
 import {
   Dialog,
@@ -21,7 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dices } from "lucide-react";
+import { Separator } from "@/components/ui/separator"; 
+import { useTableContext } from "@/features/table/TableContext"; 
 
+// --- 1. PROPS REVERTIDAS ---
 interface AttributeRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -29,7 +31,9 @@ interface AttributeRollDialogProps {
   attributeValue: number;
   characterName: string;
   tableId: string;
+  // 'obstructivePenalty' REMOVIDO
 }
+// --- FIM DA REVERSÃO ---
 
 export const AttributeRollDialog = ({
   open,
@@ -43,49 +47,69 @@ export const AttributeRollDialog = ({
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { isMaster, masterId, userId, tableId: contextTableId } = useTableContext();
+  const [isHidden, setIsHidden] = useState(false);
+  
+  // --- 2. 'applyObstructive' REMOVIDO ---
 
   const handleRoll = async () => {
     setLoading(true);
 
-    // 1. Obter o ID do usuário logado (quem está rolando)
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setLoading(false);
       return;
     }
 
-    // 2. Executar a lógica de rolagem
+    // --- 3. LÓGICA DE 'finalModifier' REMOVIDA ---
     const result = rollAttributeTest({
       attributeValue,
-      modifier,
+      modifier: modifier, // Voltamos a usar o modificador simples
       withAdvantage,
     });
+    // --- FIM DA REVERSÃO ---
 
-    // 3. Formatar a notificação local (toast)
-    const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${result.target}) - ${
-      result.isCrit ? "Crítico!" : result.isFumble ? "Falha Crítica!" : result.isSuccess ? "Sucesso!" : "Falha"
-    }`;
+    if (!isHidden || isMaster) {
+      const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${result.target}) - ${
+        result.isCrit ? "Crítico!" : result.isFumble ? "Falha Crítica!" : result.isSuccess ? "Sucesso!" : "Falha"
+      }`;
+      toast({
+        title: `Teste de ${attributeName}`,
+        description: localToastDescription,
+      });
+    }
 
-    toast({
-      title: `Teste de ${attributeName}`,
-      description: localToastDescription,
-    });
-
-    // 4. Formatar a mensagem do chat
     const chatMessage = formatAttributeTest(characterName, attributeName, result);
-
-    // 5. Enviar mensagem para o chat
-    await supabase.from("chat_messages").insert({
-      table_id: tableId,
-      user_id: user.id,
-      message: chatMessage,
-      message_type: "roll",
-    });
+    
+    if (isHidden && isMaster) {
+      await supabase.from("chat_messages").insert({
+        table_id: contextTableId,
+        user_id: user.id,
+        message: `${characterName} rolou ${attributeName} em segredo.`,
+        message_type: "info",
+        recipient_id: null,
+      });
+      await supabase.from("chat_messages").insert({
+        table_id: contextTableId,
+        user_id: user.id,
+        message: `[SECRETO] ${chatMessage}`,
+        message_type: "roll",
+        recipient_id: masterId,
+      });
+    } else {
+      await supabase.from("chat_messages").insert({
+        table_id: contextTableId,
+        user_id: user.id,
+        message: chatMessage,
+        message_type: "roll",
+        recipient_id: null,
+      });
+    }
 
     setLoading(false);
-    onOpenChange(false); // Fechar o diálogo
+    onOpenChange(false);
+    setIsHidden(false); 
+    // 'setApplyObstructive(false)' REMOVIDO
   };
 
   return (
@@ -106,6 +130,9 @@ export const AttributeRollDialog = ({
             />
             <Label htmlFor="advantage">Vantagem (+1d4 na rolagem)</Label>
           </div>
+
+          {/* --- 4. CHECKBOX DE DESVANTAGEM REMOVIDO --- */}
+          
           <div className="space-y-2">
             <Label htmlFor="modifier">Modificador (no alvo)</Label>
             <Input
@@ -116,6 +143,23 @@ export const AttributeRollDialog = ({
               placeholder="Ex: -2 ou +1"
             />
           </div>
+
+          {isMaster && (
+            <>
+              <Separator className="my-4" />
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="hidden-roll"
+                  checked={isHidden}
+                  onCheckedChange={(checked) => setIsHidden(checked as boolean)}
+                />
+                <Label htmlFor="hidden-roll" className="text-purple-400">
+                  Rolar Escondido (Apenas Mestre)
+                </Label>
+              </div>
+            </>
+          )}
+
         </div>
         <DialogFooter>
           <Button
