@@ -11,7 +11,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Plus, Trash2, BookOpen, Edit } from "lucide-react"; 
+import { Plus, Trash2, BookOpen, Edit, Users } from "lucide-react"; // --- 1. Importar 'Users'
 import { useToast } from "@/hooks/use-toast";
 import { CharacterSheetSheet } from "./CharacterSheetSheet";
 import { CreatePlayerCharacterDialog } from "./CreatePlayerCharacterDialog";
@@ -28,10 +28,10 @@ import {
 import { Database } from "@/integrations/supabase/types"; 
 import { JournalEntryDialog } from "./JournalEntryDialog"; 
 import { Separator } from "@/components/ui/separator"; 
-
-// --- 1. IMPORTAR O NOVO RENDERIZADOR ---
 import { JournalRenderer } from "./JournalRenderer";
-// --- FIM DA IMPORTAÇÃO ---
+
+// --- 2. Importar o NpcSheetSheet ---
+import { NpcSheetSheet } from "@/features/npc/NpcSheetSheet"; 
 
 interface PlayerViewProps {
   tableId: string;
@@ -47,7 +47,10 @@ type MyCharacter = {
   player_id: string;
 };
 
+// --- 3. Definir o tipo para NPC e Journal ---
+type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"];
+// --- FIM DA ADIÇÃO ---
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([]);
@@ -56,8 +59,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(
     null,
   );
+  
+  // --- 4. Novos estados para NPCs e Diário ---
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [sharedNpcs, setSharedNpcs] = useState<Npc[]>([]); // <-- NOVO ESTADO
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
+  // --- FIM DA ADIÇÃO ---
 
   useEffect(() => {
     loadData();
@@ -84,6 +91,18 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         },
         (payload) => loadData(),
       )
+      // --- 5. Adicionar listener para NPCs ---
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "npcs",
+          filter: `table_id=eq.${tableId}`,
+        },
+        (payload) => loadData(), // Recarrega tudo se um NPC mudar
+      )
+      // --- FIM DA ADIÇÃO ---
       .subscribe();
 
     return () => {
@@ -91,6 +110,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     };
   }, [tableId]);
 
+  // --- 6. Atualizar loadData para buscar NPCs ---
   const loadData = async () => {
     const {
       data: { user },
@@ -99,18 +119,29 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     setUserId(user.id);
 
     try {
-      const [charsRes, journalRes] = await Promise.all([
+      const [charsRes, journalRes, npcsRes] = await Promise.all([
+        // 1. Minhas Fichas
         supabase
           .from("characters")
           .select("*, player:profiles!characters_player_id_fkey(display_name)")
           .eq("table_id", tableId)
           .eq("player_id", user.id),
         
+        // 2. Diário (Público do Mestre + Meu Privado)
         supabase
           .from("journal_entries")
           .select("*")
           .eq("table_id", tableId)
+          .or(`is_shared=eq.true,player_id=eq.${user.id}`) // Apenas compartilhados OU meus
           .order("created_at", { ascending: false }),
+
+        // 3. NPCs (Apenas compartilhados)
+        supabase
+          .from("npcs")
+          .select("*")
+          .eq("table_id", tableId)
+          .eq("is_shared", true) // <-- SÓ BUSCA OS COMPARTILHADOS
+          .order("name", { ascending: true }),
       ]);
 
       if (charsRes.error) throw charsRes.error;
@@ -118,18 +149,23 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
 
       if (journalRes.error) throw journalRes.error;
       setJournalEntries(journalRes.data || []);
+      
+      if (npcsRes.error) throw npcsRes.error;
+      setSharedNpcs(npcsRes.data || []); // <-- Define o estado dos NPCs
 
     } catch (error: any) {
       console.error("Erro ao carregar dados do jogador:", error.message);
       toast({
         title: "Erro ao carregar dados",
-        description: "Houve um problema ao buscar suas fichas ou diário.",
+        description: "Houve um problema ao buscar seus dados.",
         variant: "destructive",
       });
       setMyCharacters([]);
       setJournalEntries([]);
+      setSharedNpcs([]); // Limpa em caso de erro
     }
   };
+  // --- FIM DA ATUALIZAÇÃO ---
 
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
@@ -239,14 +275,52 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
 
       <Separator />
 
-      {/* --- SEÇÃO: MEU DIÁRIO (ATUALIZADA) --- */}
+      {/* --- 7. NOVA SEÇÃO: NPCs COMPARTILHADOS --- */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold">Meu Diário</h3>
+          <h3 className="text-xl font-semibold">NPCs Compartilhados</h3>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {sharedNpcs.length === 0 ? (
+            <p className="text-muted-foreground col-span-full text-center py-8">
+              O Mestre ainda não compartilhou nenhum NPC.
+            </p>
+          ) : (
+            sharedNpcs.map((npc) => (
+              // O NpcSheetSheet cuida de abrir a ficha correta
+              <NpcSheetSheet key={npc.id} npcId={npc.id}>
+                <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Users className="w-5 h-5" /> {npc.name}
+                    </CardTitle>
+                    <CardDescription>
+                      NPC compartilhado pelo Mestre
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      Clique para ver e rolar dados
+                    </p>
+                  </CardContent>
+                </Card>
+              </NpcSheetSheet>
+            ))
+          )}
+        </div>
+      </div>
+      {/* --- FIM DA NOVA SEÇÃO --- */}
+
+
+      <Separator />
+
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-xl font-semibold">Diário & Anotações</h3>
           <JournalEntryDialog
             tableId={tableId}
             onEntrySaved={loadData}
-            isPlayerNote={true} // <-- Diz ao diálogo que é um jogador
+            isPlayerNote={true}
           >
             <Button size="sm">
               <Plus className="w-4 h-4 mr-2" />
@@ -274,9 +348,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1">
-                    {/* --- 2. ATUALIZAÇÃO DO RENDER --- */}
-                    <JournalRenderer content={entry.content} className="line-clamp-3" />
-                    {/* --- FIM DA ATUALIZAÇÃO --- */}
+                    <JournalRenderer content={entry.content} />
                   </CardContent>
                   {isMyNote && (
                     <CardFooter className="flex justify-end items-center gap-2">
@@ -305,8 +377,8 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           )}
         </div>
       </div>
-      {/* --- FIM DA SEÇÃO --- */}
 
+      {/* ... (AlertDialogs para deletar personagem e diário permanecem os mesmos) ... */}
       <AlertDialog
         open={!!characterToDelete}
         onOpenChange={(open) => !open && setCharacterToDelete(null)}
