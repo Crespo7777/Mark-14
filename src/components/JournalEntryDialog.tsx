@@ -1,50 +1,74 @@
 // src/components/JournalEntryDialog.tsx
 
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+
+// --- 1. IMPORTAR O NOVO EDITOR ---
+import { RichTextEditor } from "./RichTextEditor";
+// --- FIM DA IMPORTAÇÃO ---
+
+// Remover import de 'Upload', 'useRef', 'Textarea'
 
 interface JournalEntryDialogProps {
   children: React.ReactNode;
   tableId: string;
   onEntrySaved: () => void;
-  entry?: any; // Passar a entrada existente para edição
-  isPlayerNote?: boolean; // <-- NOVA PROP
+  entry?: any;
+  isPlayerNote?: boolean;
 }
 
-export const JournalEntryDialog = ({ 
-  children, 
-  tableId, 
-  onEntrySaved, 
+export const JournalEntryDialog = ({
+  children,
+  tableId,
+  onEntrySaved,
   entry,
-  isPlayerNote = false, // <-- Valor padrão
+  isPlayerNote = false,
 }: JournalEntryDialogProps) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
+  const [content, setContent] = useState(""); // Este 'content' agora será HTML
   const [isShared, setIsShared] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { toast } = useToast();
+  
+  // --- 2. REMOVER ESTADOS E REFS DE UPLOAD ---
+  // const [isUploading, setIsUploading] = useState(false);
+  // const fileInputRef = useRef<HTMLInputElement>(null);
+  // const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // --- FIM DA REMOÇÃO ---
 
+  const { toast } = useToast();
   const isEditing = !!entry;
 
   useEffect(() => {
-    if (isEditing && open) {
-      setTitle(entry.title);
-      setContent(entry.content || "");
-      setIsShared(entry.is_shared);
-    } else {
-      setTitle("");
-      setContent("");
-      setIsShared(false);
+    if (open) {
+      if (isEditing) {
+        setTitle(entry.title);
+        setContent(entry.content || "");
+        setIsShared(entry.is_shared);
+      } else {
+        setTitle("");
+        setContent("");
+        setIsShared(false);
+      }
     }
   }, [entry, isEditing, open]);
+
+  // --- 3. REMOVER TODAS AS FUNÇÕES DE IMAGEM ---
+  // handleImageUpload, uploadImage, handlePaste FORAM REMOVIDAS
+  // --- FIM DA REMOÇÃO ---
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -60,16 +84,16 @@ export const JournalEntryDialog = ({
       return;
     }
 
+    // O 'content' agora é HTML gerado pelo Tiptap
+    // Se estiver vazio, salva como nulo
+    const contentToSave = (content && content.trim() !== "<p></p>") ? content.trim() : null;
+
     if (isEditing) {
-      // Atualizar entrada existente
-      // A RLS
-      // garante que o jogador só pode editar a sua própria, e o mestre pode editar todas.
       const { error } = await supabase
         .from("journal_entries")
         .update({
           title: title.trim(),
-          content: content.trim() || null,
-          // Se for um jogador editando, ele não pode mudar o 'is_shared'
+          content: contentToSave, // Salva o HTML
           is_shared: isPlayerNote ? entry.is_shared : isShared,
         })
         .eq("id", entry.id);
@@ -82,30 +106,24 @@ export const JournalEntryDialog = ({
         setOpen(false);
       }
     } else {
-      // Criar nova entrada
-      
-      // --- LÓGICA ATUALIZADA ---
       let entryData;
       if (isPlayerNote) {
-        // Se é um jogador criando, força is_shared=false e define o player_id
         entryData = {
           table_id: tableId,
           title: title.trim(),
-          content: content.trim() || null,
+          content: contentToSave, // Salva o HTML
           is_shared: false,
-          player_id: user.id, // Define o dono da nota
+          player_id: user.id,
         };
       } else {
-        // Se é o mestre criando, player_id é NULL
         entryData = {
           table_id: tableId,
           title: title.trim(),
-          content: content.trim() || null,
+          content: contentToSave, // Salva o HTML
           is_shared: isShared,
           player_id: null,
         };
       }
-      // --- FIM DA LÓGICA ATUALIZADA ---
 
       const { error } = await supabase
         .from("journal_entries")
@@ -125,7 +143,8 @@ export const JournalEntryDialog = ({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="max-h-[80vh] overflow-y-auto">
+      {/* Ajustado para um tamanho melhor para um editor de texto */}
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Entrada" : "Nova Entrada no Diário"}</DialogTitle>
           <DialogDescription>
@@ -134,7 +153,8 @@ export const JournalEntryDialog = ({
               : "Crie uma nova entrada para o diário da mesa."}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        
+        <div className="space-y-4 flex-1 overflow-y-auto pr-2 -mr-2">
           <div className="space-y-2">
             <Label htmlFor="entry-title">Título</Label>
             <Input
@@ -145,30 +165,42 @@ export const JournalEntryDialog = ({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="entry-content">Conteúdo</Label>
-            <Textarea
-              id="entry-content"
-              placeholder="Descreva aqui os eventos, regras da casa, NPCs importantes..."
+            <Label>Conteúdo</Label>
+            
+            {/* --- 4. SUBSTITUIR TEXTAREA PELO EDITOR --- */}
+            <RichTextEditor
               value={content}
-              onChange={(e) => setContent(e.target.value)}
-              rows={10}
+              onChange={setContent}
+              placeholder="Descreva aqui os eventos, regras da casa..."
             />
-            <p className="text-xs text-muted-foreground">Você pode usar Markdown para formatação.</p>
+            {/* --- FIM DA SUBSTITUIÇÃO --- */}
+            
           </div>
-          
-          {/* --- LÓGICA ATUALIZADA: Esconder o Switch se for um jogador --- */}
-          {!isPlayerNote && (
-            <div className="flex items-center space-x-2">
-              <Switch id="is-shared" checked={isShared} onCheckedChange={setIsShared} />
-              <Label htmlFor="is-shared">Compartilhar com jogadores</Label>
-            </div>
-          )}
-          {/* --- FIM DA LÓGICA --- */}
-
-          <Button onClick={handleSave} disabled={loading} className="w-full">
-            {loading ? "Salvando..." : "Salvar Entrada"}
-          </Button>
         </div>
+        
+        {/* --- 5. RODAPÉ SIMPLIFICADO (SEM UPLOAD) --- */}
+        <div className="pt-4 mt-2 border-t border-border/50">
+          <div className="flex justify-between items-center">
+            
+            <div className="flex gap-4 items-center">
+              {!isPlayerNote && (
+                <div className="flex items-center space-x-2">
+                  <Switch id="is-shared" checked={isShared} onCheckedChange={setIsShared} />
+                  <Label htmlFor="is-shared">Compartilhar</Label>
+                </div>
+              )}
+            </div>
+            
+            <Button 
+              onClick={handleSave} 
+              disabled={loading} // Não precisa mais verificar 'isUploading'
+              className="w-40"
+            >
+              {loading ? "Salvando..." : "Salvar Entrada"}
+            </Button>
+          </div>
+        </div>
+        {/* --- FIM DA ATUALIZAÇÃO --- */}
       </DialogContent>
     </Dialog>
   );
