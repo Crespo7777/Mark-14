@@ -1,3 +1,4 @@
+/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -59,6 +60,38 @@ All colors MUST be HSL.
     font-weight: 600;
     letter-spacing: -0.02em;
   }
+
+  /* --- 1. ESTILOS DO EDITOR DE TEXTO E ÍCONES --- */
+  
+  /* Estiliza o conteúdo renderizado (no MasterView/PlayerView) */
+  .prose {
+    @apply text-foreground;
+  }
+  .prose :where(img):not(:where([class~="not-prose"] *)) {
+    @apply rounded-md border border-border/50;
+  }
+  .prose :where(h1, h2, h3):not(:where([class~="not-prose"] *)) {
+    @apply text-primary-foreground;
+  }
+  .prose :where(strong):not(:where([class~="not-prose"] *)) {
+    @apply text-foreground;
+  }
+  .prose :where(a):not(:where([class~="not-prose"] *)) {
+    @apply text-accent;
+  }
+  .prose :where(blockquote):not(:where([class~="not-prose"] *)) {
+    @apply border-l-accent;
+  }
+  .prose :where(code):not(:where([class~="not-prose"] *)) {
+    @apply text-secondary-foreground;
+  }
+  
+  /* Estiliza o nosso ícone personalizado (tanto no editor como no renderizador) */
+  .prose journal-icon,
+  journal-icon {
+    @apply inline-block align-text-bottom mx-1 text-accent;
+  }
+  /* --- FIM DA ADIÇÃO --- */
 }
 
 @layer utilities {
