@@ -8,24 +8,24 @@ import { Form } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 
-// --- NOVOS IMPORTS (FOCO NO NPC) ---
 import {
   NpcSheetData,
   npcSheetSchema,
   getDefaultNpcSheetData,
 } from "./npc.schema";
 import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
-// --- FIM DOS NOVOS IMPORTS ---
 
-// --- TODAS AS ABAS DO NPC ---
+// --- 1. Importar o Contexto da Mesa ---
+import { useTableContext } from "@/features/table/TableContext";
+// --- FIM DA IMPORTAÇÃO ---
+
 import { NpcCombatTab } from "./tabs/NpcCombatTab";
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
 import { NpcSkillsTab } from "./tabs/NpcSkillsTab";
 import { NpcTraitsTab } from "./tabs/NpcTraitsTab";
 import { NpcEquipmentTab } from "./tabs/NpcEquipmentTab";
-import { NpcBackpackTab } from "./tabs/NpcBackpackTab"; // <-- ADICIONADO
-// --- FIM DAS ABAS ---
+import { NpcBackpackTab } from "./tabs/NpcBackpackTab";
 
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 
@@ -50,6 +50,10 @@ const NpcSheetInner = ({
     "race",
     "occupation",
   ]);
+
+  // --- 2. Pegar o 'isMaster' do Contexto ---
+  const { isMaster } = useTableContext();
+  // --- FIM DA ADIÇÃO ---
 
   const onSubmit = async (data: NpcSheetData) => {
     await onSave(data);
@@ -80,7 +84,8 @@ const NpcSheetInner = ({
         </div>
         
         <div className="flex gap-2">
-          {isDirty && !isSubmitting && (
+          {/* --- 3. ESCONDER BOTÕES SE NÃO FOR O MESTRE --- */}
+          {isMaster && isDirty && !isSubmitting && (
             <>
               <Button size="sm" variant="outline" onClick={onRevert}>
                 <RotateCcw className="w-4 h-4 mr-2" />
@@ -96,11 +101,12 @@ const NpcSheetInner = ({
             </>
           )}
 
-          {isSubmitting && (
+          {isMaster && isSubmitting && (
             <Button size="sm" disabled>
               Salvando...
             </Button>
           )}
+          {/* --- FIM DA ATUALIZAÇÃO --- */}
 
           <Button size="sm" variant="outline" onClick={onClose}>
             <X className="w-4 h-4 mr-2" />
@@ -122,13 +128,20 @@ const NpcSheetInner = ({
               <TabsTrigger value="skills">Habilidades</TabsTrigger>
               <TabsTrigger value="traits">Traços</TabsTrigger>
               <TabsTrigger value="equipment">Equipamento</TabsTrigger>
-              <TabsTrigger value="backpack">Mochila</TabsTrigger> {/* <-- ADICIONADO */}
+              <TabsTrigger value="backpack">Mochila</TabsTrigger>
             </TabsList>
             
+            {/* --- 4. DEIXAR OS CAMPOS EDITÁVEIS (disabled=false) --- */}
+            {/* O fieldset NÃO será desabilitado para players.
+              Isso permite que os botões de rolagem (que estão dentro dele) funcionem.
+              O player não pode salvar, pois o botão "Salvar" está escondido
+              e a política de segurança do Supabase o bloquearia de qualquer forma.
+            */}
             <fieldset
-              disabled={form.formState.isSubmitting}
+              disabled={isSubmitting} // Apenas desabilitado durante o submit
               className="p-4 pt-0 space-y-4"
             >
+            {/* --- FIM DA ATUALIZAÇÃO --- */}
               <TabsContent value="details">
                 <NpcDetailsTab />
               </TabsContent>
@@ -148,7 +161,7 @@ const NpcSheetInner = ({
                  <NpcEquipmentTab />
               </TabsContent>
               <TabsContent value="backpack">
-                 <NpcBackpackTab /> {/* <-- ADICIONADO */}
+                 <NpcBackpackTab />
               </TabsContent>
             </fieldset>
           </Tabs>
@@ -162,13 +175,11 @@ const NpcSheetInner = ({
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const { toast } = useToast();
 
-  // *** ATUALIZADO: Lógica de Parse para o NOVO Schema de NPC ***
   const defaults = getDefaultNpcSheetData(initialNpc.name);
   
   const mergedData = {
     ...defaults,
     ...(initialNpc.data as any),
-    // Garante que os schemas aninhados existam
     attributes: {
       ...defaults.attributes,
       ...((initialNpc.data as any)?.attributes || {}),
@@ -178,7 +189,7 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
       ...((initialNpc.data as any)?.combat || {}),
     },
     armors: (initialNpc.data as any)?.armors || defaults.armors, 
-    inventory: (initialNpc.data as any)?.inventory || defaults.inventory, // <-- ADICIONADO
+    inventory: (initialNpc.data as any)?.inventory || defaults.inventory,
   };
 
   mergedData.name = (initialNpc.data as any)?.name || initialNpc.name || defaults.name;
@@ -192,7 +203,6 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   }
   
   initialNpc.data = parsedData.success ? parsedData.data : mergedData;
-  // *** FIM DA LÓGICA DE PARSE ***
 
 
   const handleSave = async (data: NpcSheetData) => {
