@@ -6,28 +6,48 @@ import { roundUpDiv, Armor, InventoryItem } from "../character.schema";
 
 /**
  * Este Hook isola toda a lógica de cálculos derivados da ficha.
- * Ele "assiste" os campos do formulário (como atributos) e retorna
- * os valores calculados (como Limiar de Dor, Vitalidade Máxima).
  */
 export const useCharacterCalculations = () => {
-  // 1. CORREÇÃO: Ler o 'form' diretamente do contexto
   const { form } = useCharacterSheet();
 
-  // 2. "Assistir" (watch) os valores DIRETAMENTE DO FORMULÁRIO
-  // Isso garante que é reativo e funciona tanto para Personagem quanto para NPC
-  const vigorous = form.watch("attributes.vigorous");
-  const resolute = form.watch("attributes.resolute");
-  const quick = form.watch("attributes.quick");
+  const {
+    cunning,
+    discreet,
+    persuasive,
+    precise,
+    quick,
+    resolute,
+    vigilant,
+    vigorous,
+  } = form.watch("attributes");
+  
   const toughnessBonus = form.watch("toughness.bonus");
   const armors = form.watch("armors");
   const inventory = form.watch("inventory");
   const experience = form.watch("experience");
+  
+  const totalAttributePointsSpent = useMemo(() => {
+    return (
+      (cunning || 0) +
+      (discreet || 0) +
+      (persuasive || 0) +
+      (precise || 0) +
+      (quick || 0) +
+      (resolute || 0) +
+      (vigilant || 0) +
+      (vigorous || 0)
+    );
+  }, [cunning, discreet, persuasive, precise, quick, resolute, vigilant, vigorous]);
+  
+  const remainingAttributePoints = useMemo(() => {
+    return 80 - totalAttributePointsSpent;
+  }, [totalAttributePointsSpent]);
 
   /**
    * REGRA: Vitalidade Máx = Math.max(10, Vigoroso) + Bônus
    */
   const toughnessMax = useMemo(() => {
-    const base = Math.max(10, vigorous || 10); // || 10 para evitar NaN
+    const base = Math.max(10, vigorous || 0);
     return base + (toughnessBonus || 0);
   }, [vigorous, toughnessBonus]);
 
@@ -35,14 +55,14 @@ export const useCharacterCalculations = () => {
    * REGRA: Limiar de Dor = Vigoroso / 2 (arredondado para cima)
    */
   const painThreshold = useMemo(() => {
-    return roundUpDiv(vigorous || 10, 2);
+    return roundUpDiv(vigorous || 0, 2);
   }, [vigorous]);
 
   /**
    * REGRA: Limiar de Corrupção = Resoluto / 2 (arredondado para cima)
    */
   const corruptionThreshold = useMemo(() => {
-    return roundUpDiv(resolute || 10, 2);
+    return roundUpDiv(resolute || 0, 2);
   }, [resolute]);
 
   /**
@@ -52,38 +72,32 @@ export const useCharacterCalculations = () => {
     if (!Array.isArray(inventory)) return 0;
     return inventory.reduce(
       (acc: number, item: InventoryItem) =>
-        acc + (item.weight || 0) * (item.quantity || 0), // (Peso x Quantidade)
+        acc + (item.weight || 0) * (item.quantity || 0),
       0,
     );
   }, [inventory]);
 
-  // Limiar de Carga = Vigoroso
-  const encumbranceThreshold = useMemo(() => vigorous || 10, [vigorous]);
-  // Carga Máxima = Vigoroso * 2
-  const maxEncumbrance = useMemo(() => (vigorous || 10) * 2, [vigorous]);
+  const encumbranceThreshold = useMemo(() => vigorous || 0, [vigorous]);
+  const maxEncumbrance = useMemo(() => (vigorous || 0) * 2, [vigorous]);
 
-  // Penalidade de Carga = Peso Atual - Limiar (mínimo 0)
   const encumbrancePenalty = useMemo(() => {
     return Math.max(0, currentWeight - encumbranceThreshold);
   }, [currentWeight, encumbranceThreshold]);
+  
+  // --- REVERSÃO ---
+  // Calculamos a obstrutiva apenas para o 'totalDefense'
+  const totalObstrutiva = useMemo(() => {
+    if (!Array.isArray(armors)) return 0;
+    return armors
+      .filter((a: Armor) => a.equipped)
+      .reduce((acc: number, a: Armor) => acc + (a.obstructive || 0), 0);
+  }, [armors]);
+  // --- FIM DA REVERSÃO ---
 
-  /**
-   * ATUALIZADO: Defesa Total = Rápido - Total Obstrutivo - Penalidade de Carga
-   */
   const totalDefense = useMemo(() => {
-    let totalObstrutiva = 0;
-    if (Array.isArray(armors)) {
-      totalObstrutiva = armors
-        .filter((a: Armor) => a.equipped) // Filtra apenas equipadas
-        .reduce((acc: number, a: Armor) => acc + (a.obstructive || 0), 0); // Soma a Obstrutiva
-    }
+    return (quick || 0) - totalObstrutiva - encumbrancePenalty;
+  }, [quick, totalObstrutiva, encumbrancePenalty]);
 
-    return (quick || 10) - totalObstrutiva - encumbrancePenalty;
-  }, [quick, armors, encumbrancePenalty]);
-
-  /**
-   * CÁLCULO DE EXPERIÊNCIA
-   */
   const currentExperience = useMemo(() => {
     return (experience?.total || 0) - (experience?.spent || 0);
   }, [experience]);
@@ -93,12 +107,18 @@ export const useCharacterCalculations = () => {
     painThreshold,
     corruptionThreshold,
     totalDefense,
-    quick: quick || 10,
-    vigorous: vigorous || 10,
+    quick: quick || 0,
+    vigorous: vigorous || 0,
     currentWeight,
     encumbranceThreshold,
     maxEncumbrance,
     encumbrancePenalty,
     currentExperience,
+    totalAttributePointsSpent,
+    remainingAttributePoints,
+    
+    // --- REVERSÃO ---
+    // 'totalObstrutiva' NÃO é mais exportado
+    // --- FIM DA REVERSÃO ---
   };
 };
