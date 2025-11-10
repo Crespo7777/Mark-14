@@ -11,7 +11,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Plus, Trash2, BookOpen, Edit } from "lucide-react"; // Adicionado BookOpen, Edit
+import { Plus, Trash2, BookOpen, Edit } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast";
 import { CharacterSheetSheet } from "./CharacterSheetSheet";
 import { CreatePlayerCharacterDialog } from "./CreatePlayerCharacterDialog";
@@ -25,9 +25,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Database } from "@/integrations/supabase/types"; // Importar Types
-import { JournalEntryDialog } from "./JournalEntryDialog"; // Importar Diálogo do Diário
-import { Separator } from "@/components/ui/separator"; // Importar Separator
+import { Database } from "@/integrations/supabase/types"; 
+import { JournalEntryDialog } from "./JournalEntryDialog"; 
+import { Separator } from "@/components/ui/separator"; 
+
+// --- 1. IMPORTAR O NOVO RENDERIZADOR ---
+import { JournalRenderer } from "./JournalRenderer";
+// --- FIM DA IMPORTAÇÃO ---
 
 interface PlayerViewProps {
   tableId: string;
@@ -43,7 +47,6 @@ type MyCharacter = {
   player_id: string;
 };
 
-// NOVO: Tipo para as entradas do Diário
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"];
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
@@ -53,17 +56,14 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(
     null,
   );
-
-  // --- NOVOS ESTADOS PARA O DIÁRIO ---
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
-  // --- FIM DOS NOVOS ESTADOS ---
 
   useEffect(() => {
     loadData();
 
     const channel = supabase
-      .channel(`player-view:${tableId}`) // Canal renomeado para cobrir tudo
+      .channel(`player-view:${tableId}`) 
       .on(
         "postgres_changes",
         {
@@ -74,7 +74,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         },
         (payload) => loadData(),
       )
-      // --- ADICIONADO: Ouvir mudanças no Diário ---
       .on(
         "postgres_changes",
         {
@@ -85,7 +84,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         },
         (payload) => loadData(),
       )
-      // --- FIM DA ADIÇÃO ---
       .subscribe();
 
     return () => {
@@ -101,7 +99,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     setUserId(user.id);
 
     try {
-      // --- ATUALIZADO: Carregar Fichas e Diário em paralelo ---
       const [charsRes, journalRes] = await Promise.all([
         supabase
           .from("characters")
@@ -113,12 +110,8 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           .from("journal_entries")
           .select("*")
           .eq("table_id", tableId)
-          // A RLS garante que o jogador
-          // só verá as entradas públicas (player_id IS NULL AND is_shared = true)
-          // OU as suas próprias (player_id = user.id)
           .order("created_at", { ascending: false }),
       ]);
-      // --- FIM DA ATUALIZAÇÃO ---
 
       if (charsRes.error) throw charsRes.error;
       setMyCharacters((charsRes.data as any) || []);
@@ -139,7 +132,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
   };
 
   const handleDeleteCharacter = async () => {
-    // ... (Função sem alteração)
     if (!characterToDelete) return;
     const { error } = await supabase
       .from("characters")
@@ -161,12 +153,9 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     setCharacterToDelete(null); 
   };
 
-  // --- NOVA FUNÇÃO: Deletar Entrada do Diário ---
   const handleDeleteJournalEntry = async () => {
     if (!entryToDelete) return;
     
-    // A RLS
-    // garante que o jogador SÓ pode deletar se entryToDelete.player_id === user.id
     const { error } = await supabase
       .from("journal_entries")
       .delete()
@@ -184,7 +173,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       loadData();
     }
   };
-  // --- FIM DA NOVA FUNÇÃO ---
 
   return (
     <div className="space-y-6">
@@ -193,7 +181,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         <p className="text-muted-foreground">Gerencie suas fichas de personagem e anotações</p>
       </div>
 
-      {/* Seção Minhas Fichas (Sem alteração) */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-semibold">Minhas Fichas</h3>
@@ -252,14 +239,14 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
 
       <Separator />
 
-      {/* --- NOVA SEÇÃO: MEU DIÁRIO --- */}
+      {/* --- SEÇÃO: MEU DIÁRIO (ATUALIZADA) --- */}
       <div className="space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-semibold">Meu Diário</h3>
           <JournalEntryDialog
             tableId={tableId}
             onEntrySaved={loadData}
-            isPlayerNote={true} // <-- IMPORTANTE: Diz ao diálogo que é um jogador
+            isPlayerNote={true} // <-- Diz ao diálogo que é um jogador
           >
             <Button size="sm">
               <Plus className="w-4 h-4 mr-2" />
@@ -287,18 +274,17 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1">
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {entry.content || "Clique para editar"}
-                    </p>
+                    {/* --- 2. ATUALIZAÇÃO DO RENDER --- */}
+                    <JournalRenderer content={entry.content} className="line-clamp-3" />
+                    {/* --- FIM DA ATUALIZAÇÃO --- */}
                   </CardContent>
-                  {/* Só pode editar/excluir se a nota for sua */}
                   {isMyNote && (
                     <CardFooter className="flex justify-end items-center gap-2">
                       <JournalEntryDialog
                         tableId={tableId}
                         onEntrySaved={loadData}
                         entry={entry}
-                        isPlayerNote={true} // <-- Diz ao diálogo que é um jogador
+                        isPlayerNote={true}
                       >
                         <Button variant="outline" size="icon">
                           <Edit className="w-4 h-4" />
@@ -319,9 +305,8 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           )}
         </div>
       </div>
-      {/* --- FIM DA NOVA SEÇÃO --- */}
+      {/* --- FIM DA SEÇÃO --- */}
 
-      {/* AlertDialog para Ficha (Sem alteração) */}
       <AlertDialog
         open={!!characterToDelete}
         onOpenChange={(open) => !open && setCharacterToDelete(null)}
@@ -348,7 +333,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         </AlertDialogContent>
       </AlertDialog>
       
-      {/* --- NOVO: AlertDialog para Diário --- */}
       <AlertDialog
         open={!!entryToDelete}
         onOpenChange={(open) => !open && setEntryToDelete(null)}
@@ -374,7 +358,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {/* --- FIM DO NOVO ALERTDIALOG --- */}
     </div>
   );
 };
