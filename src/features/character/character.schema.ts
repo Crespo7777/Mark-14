@@ -27,16 +27,18 @@ export const roundUpDiv = (value: number, divisor: number) => {
 
 /**
  * 1. ATRIBUTOS
+ * --- ATUALIZADO ---
+ * Todos os atributos agora têm min(0), max(15) e default(0).
  */
 export const attributesSchema = z.object({
-  cunning: z.number().min(5).max(15).default(10),
-  discreet: z.number().min(5).max(15).default(10),
-  persuasive: z.number().min(5).max(15).default(10),
-  precise: z.number().min(5).max(15).default(10),
-  quick: z.number().min(5).max(15).default(10),
-  resolute: z.number().min(5).max(15).default(10),
-  vigilant: z.number().min(5).max(15).default(10),
-  vigorous: z.number().min(5).max(15).default(10),
+  cunning: z.number().min(0).max(15).default(0),
+  discreet: z.number().min(0).max(15).default(0),
+  persuasive: z.number().min(0).max(15).default(0),
+  precise: z.number().min(0).max(15).default(0),
+  quick: z.number().min(0).max(15).default(0),
+  resolute: z.number().min(0).max(15).default(0),
+  vigilant: z.number().min(0).max(15).default(0),
+  vigorous: z.number().min(0).max(15).default(0),
 });
 
 /**
