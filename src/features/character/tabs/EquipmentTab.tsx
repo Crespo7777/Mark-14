@@ -151,8 +151,6 @@ export const EquipmentTab = () => {
 
   return (
     <>
-      {/* --- CORREÇÃO DE LAYOUT PRINCIPAL AQUI --- */}
-      {/* Trocado "grid grid-cols-1 lg:grid-cols-2 gap-6" por "space-y-6" */}
       <div className="space-y-6">
         {/* Card de Armas */}
         <Card>
@@ -182,9 +180,11 @@ export const EquipmentTab = () => {
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  <AccordionTrigger className="p-0 hover:no-underline">
-                    <div className="flex justify-between items-center w-full gap-2">
-                      <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap">
+                  {/* --- INÍCIO DA CORREÇÃO DE NESTING --- */}
+                  {/* O Trigger e os botões agora são irmãos, dentro de um 'flex' */}
+                  <div className="flex justify-between items-center w-full gap-2">
+                    <AccordionTrigger className="p-0 hover:no-underline flex-1">
+                      <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate shrink-0">
                           {form.watch(`weapons.${index}.name`) || "Nova Arma"}
                         </h4>
@@ -199,37 +199,40 @@ export const EquipmentTab = () => {
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleAttackClick(index)}
-                        >
-                          <Dices className="w-4 h-4" />
-                          <span className="hidden sm:inline ml-2">Atacar</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDamageClick(index)}
-                        >
-                          <Dices className="w-4 h-4" />
-                          <span className="hidden sm:inline ml-2">Dano</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => removeWeapon(index)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                    </AccordionTrigger>
+                    {/* Estes botões estão FORA do Trigger, corrigindo o erro */}
+                    <div className="flex items-center gap-1 pl-2 flex-shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleAttackClick(index)}
+                      >
+                        <Dices className="w-4 h-4" />
+                        <span className="hidden sm:inline ml-2">Atacar</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDamageClick(index)}
+                      >
+                        <Dices className="w-4 h-4" />
+                        <span className="hidden sm:inline ml-2">Dano</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeWeapon(index)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                  </AccordionTrigger>
+                  </div>
+                  {/* --- FIM DA CORREÇÃO DE NESTING --- */}
+
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
                       {/* Campos de Edição da Arma */}
@@ -362,9 +365,10 @@ export const EquipmentTab = () => {
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  <AccordionTrigger className="p-0 hover:no-underline">
-                    <div className="flex justify-between items-center w-full gap-2">
-                      <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap">
+                  {/* --- INÍCIO DA CORREÇÃO DE NESTING --- */}
+                  <div className="flex justify-between items-center w-full gap-2">
+                    <AccordionTrigger className="p-0 hover:no-underline flex-1">
+                      <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate shrink-0">
                           {form.watch(`armors.${index}.name`) || "Nova Armadura"}
                         </h4>
@@ -377,46 +381,31 @@ export const EquipmentTab = () => {
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center space-x-2 pr-2">
-                          <FormField
-                            control={form.control}
-                            name={`armors.${index}.equipped`}
-                            render={({ field }) => (
-                              <FormItem className="flex items-center">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value}
-                                    onCheckedChange={field.onChange}
-                                    aria-label="Equipada"
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                           <span className="hidden sm:inline text-sm font-medium">Equipada</span>
-                        </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleProtectionRoll(index)}
-                        >
-                          <Dices className="w-4 h-4" />
-                          <span className="hidden sm:inline ml-2">Rolar</span>
-                        </Button>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => removeArmor(index)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                    </AccordionTrigger>
+                    {/* Estes botões estão FORA do Trigger, corrigindo o erro */}
+                    <div className="flex items-center gap-1 pl-2 flex-shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleProtectionRoll(index)}
+                      >
+                        <Dices className="w-4 h-4" />
+                        <span className="hidden sm:inline ml-2">Rolar</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeArmor(index)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                  </AccordionTrigger>
+                  </div>
+                  {/* --- FIM DA CORREÇÃO DE NESTING --- */}
+                  
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
                       {/* Campos de Edição da Armadura */}
@@ -493,6 +482,26 @@ export const EquipmentTab = () => {
                           </FormItem>
                         )}
                       />
+                      
+                      {/* O Checkbox "Equipada" permanece aqui, seguro */}
+                      <FormField
+                        control={form.control}
+                        name={`armors.${index}.equipped`}
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                              />
+                            </FormControl>
+                            <FormLabel className="m-0">
+                              Equipada
+                            </FormLabel>
+                          </FormItem>
+                        )}
+                      />
+                      
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -502,7 +511,7 @@ export const EquipmentTab = () => {
         </Card>
       </div>
 
-      {/* --- RENDERIZAÇÃO DOS DIÁLOGOS --- */}
+      {/* Diálogos de Rolagem (sem alterações) */}
       {attackRollData && (
         <WeaponAttackDialog
           open={!!attackRollData}
