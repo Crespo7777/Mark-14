@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Users, FileText, Trash2, BookOpen, Edit, UserX } from "lucide-react"; // Adicionado UserX
+import { Plus, Users, FileText, Trash2, BookOpen, Edit, UserX } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -33,7 +33,11 @@ import { CharacterSheetSheet } from "./CharacterSheetSheet";
 import { CreateNpcDialog } from "./CreateNpcDialog";
 import { NpcSheetSheet } from "@/features/npc/NpcSheetSheet";
 import { Database } from "@/integrations/supabase/types";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"; // Importar Avatar
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+
+// --- 1. IMPORTAR O NOVO RENDERIZADOR ---
+import { JournalRenderer } from "./JournalRenderer";
+// --- FIM DA IMPORTAÇÃO ---
 
 // Definir tipos para o State
 type Character = Database["public"]["Tables"]["characters"]["Row"] & {
@@ -41,7 +45,7 @@ type Character = Database["public"]["Tables"]["characters"]["Row"] & {
 };
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 type Member = Database["public"]["Tables"]["table_members"]["Row"] & {
-  user: { id: string; display_name: string }; // Garantir que user.id esteja no tipo
+  user: { id: string; display_name: string };
 };
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"];
 
@@ -59,7 +63,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
 
   const [activeTab, setActiveTab] = useState("characters");
   const [playerFilter, setPlayerFilter] = useState<string | null>(null);
-  const [playerToRemove, setPlayerToRemove] = useState<Member | null>(null); // MUDADO: para o tipo Member
+  const [playerToRemove, setPlayerToRemove] = useState<Member | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [npcToDelete, setNpcToDelete] = useState<Npc | null>(null);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(
@@ -86,13 +90,11 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         { event: "*", schema: "public", table: "characters" },
         (payload) => loadData(),
       )
-      // --- ADICIONADO: Ouvir mudanças em table_members ---
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "table_members" },
         (payload) => loadData(),
       )
-      // --- FIM DA ADIÇÃO ---
       .subscribe();
 
     return () => {
@@ -109,10 +111,8 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       supabase.from("npcs").select("*").eq("table_id", tableId),
       supabase
         .from("table_members")
-        // --- ATUALIZADO: Selecionar o ID do usuário também ---
         .select("*, user:profiles!table_members_user_id_fkey(id, display_name)")
         .eq("table_id", tableId),
-      // --- FIM DA ATUALIZAÇÃO ---
       supabase
         .from("journal_entries")
         .select("*")
@@ -129,7 +129,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   const handleRemovePlayer = async () => {
     if (!playerToRemove) return;
     
-    // 1. Remover o jogador da mesa
     const { error: memberError } = await supabase
       .from("table_members")
       .delete()
@@ -145,12 +144,11 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       return;
     }
     
-    // 2. (Opcional, mas recomendado) Deletar as fichas do jogador
     const { error: charError } = await supabase
       .from("characters")
       .delete()
       .eq("table_id", tableId)
-      .eq("player_id", playerToRemove.user.id); // Deleta fichas pelo user_id
+      .eq("player_id", playerToRemove.user.id); 
 
     if (charError) {
        toast({
@@ -165,11 +163,10 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       });
     }
 
-    loadData(); // Recarrega todos os dados
+    loadData(); 
     setPlayerToRemove(null);
   };
 
-  // ... (Funções de Share e Delete de NPC/Journal/Character permanecem iguais) ...
   const handleShareJournal = async (entryId: string, is_shared: boolean) => {
     const { error } = await supabase
       .from("journal_entries")
@@ -270,7 +267,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           <TabsTrigger value="journal">Diário</TabsTrigger>
         </TabsList>
 
-        {/* SEÇÃO DE PERSONAGENS (Sem alteração) */}
         <TabsContent value="characters" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Fichas dos Jogadores</h3>
@@ -286,7 +282,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               </Button>
             </CreateCharacterDialog>
           </div>
-          {/* ... (filtro de jogador) ... */}
           <div className="grid gap-4 md:grid-cols-2">
             {characters.filter(
               (char) => !playerFilter || char.player_id === playerFilter,
@@ -349,7 +344,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           </div>
         </TabsContent>
 
-        {/* SEÇÃO DE NPCS (Sem alteração) */}
         <TabsContent value="npcs" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">NPCs da Mesa</h3>
@@ -416,7 +410,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           </div>
         </TabsContent>
 
-        {/* --- SEÇÃO DE JOGADORES (ATUALIZADA) --- */}
         <TabsContent value="players" className="space-y-4">
           <h3 className="text-xl font-semibold mb-4">Jogadores na Mesa</h3>
           {members.length === 0 ? (
@@ -452,10 +445,8 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             </div>
           )}
         </TabsContent>
-        {/* --- FIM DA SEÇÃO DE JOGADORES --- */}
 
-
-        {/* SEÇÃO DO DIÁRIO (Sem alteração) */}
+        {/* --- SEÇÃO DO DIÁRIO (ATUALIZADA) --- */}
         <TabsContent value="journal" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Diário do Mestre</h3>
@@ -478,38 +469,45 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                   <CardHeader>
                     <CardTitle>{entry.title}</CardTitle>
                     <CardDescription>
-                      {entry.is_shared
-                        ? "Compartilhado com jogadores"
-                        : "Apenas mestre"}
+                      {entry.player_id
+                        ? `Anotação de: ${members.find(m => m.user_id === entry.player_id)?.user.display_name || 'Jogador'}`
+                        : entry.is_shared
+                        ? "Público (Jogadores podem ver)"
+                        : "Privado (Apenas Mestre)"}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1">
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {entry.content || "Clique para editar"}
-                    </p>
+                    {/* --- 2. ATUALIZAÇÃO DO RENDER --- */}
+                    {/* Passamos o line-clamp como uma prop de className */}
+                    <JournalRenderer content={entry.content} className="line-clamp-3" />
+                    {/* --- FIM DA ATUALIZAÇÃO --- */}
                   </CardContent>
                   <CardFooter className="flex justify-between items-center">
-                      <div
-                        className="flex items-center gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Switch
-                          id={`share-journal-${entry.id}`}
-                          checked={entry.is_shared ?? false}
-                          onCheckedChange={(checked) =>
-                            handleShareJournal(entry.id, checked)
-                          }
-                        />
-                        <Label htmlFor={`share-journal-${entry.id}`}>
-                          Compartilhar
-                        </Label>
-                      </div>
+                      {!entry.player_id && (
+                        <div
+                          className="flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Switch
+                            id={`share-journal-${entry.id}`}
+                            checked={entry.is_shared ?? false}
+                            onCheckedChange={(checked) =>
+                              handleShareJournal(entry.id, checked)
+                            }
+                          />
+                          <Label htmlFor={`share-journal-${entry.id}`}>
+                            Compartilhar
+                          </Label>
+                        </div>
+                      )}
+                      {entry.player_id && <div />}
                       
                       <div className="flex gap-2">
                         <JournalEntryDialog
                           tableId={tableId}
                           onEntrySaved={loadData}
                           entry={entry}
+                          isPlayerNote={!!entry.player_id} 
                         >
                           <Button variant="outline" size="icon">
                             <Edit className="w-4 h-4" />
@@ -531,7 +529,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         </TabsContent>
       </Tabs>
 
-      {/* --- DIÁLOGO DE REMOVER JOGADOR (ATUALIZADO) --- */}
+      {/* --- DIÁLOGOS DE ALERTA (Todos permanecem iguais) --- */}
       <AlertDialog
         open={!!playerToRemove}
         onOpenChange={(open) => !open && setPlayerToRemove(null)}
@@ -560,7 +558,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ... (AlertDialog para Deletar Entrada do Diário) ... */}
       <AlertDialog
         open={!!entryToDelete}
         onOpenChange={(open) => !open && setEntryToDelete(null)}
@@ -585,7 +582,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ... (AlertDialog para Deletar NPC) ... */}
       <AlertDialog
         open={!!npcToDelete}
         onOpenChange={(open) => !open && setNpcToDelete(null)}
@@ -610,7 +606,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* ... (AlertDialog para Deletar Ficha de Personagem) ... */}
       <AlertDialog
         open={!!characterToDelete}
         onOpenChange={(open) => !open && setCharacterToDelete(null)}
