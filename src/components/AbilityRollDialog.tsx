@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import {
   rollAttributeTest,
-  formatAbilityTest, // Usaremos a nova função
+  formatAbilityTest,
 } from "@/lib/dice-parser";
 import {
   Dialog,
@@ -19,16 +19,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dices, ShieldAlert } from "lucide-react";
-import { useCharacterSheet } from "@/features/character/CharacterSheetContext"; // Importar o contexto
+import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { useTableContext } from "@/features/table/TableContext";
 
-// Propriedades que o diálogo de rolagem de habilidade precisa
 interface AbilityRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   abilityName: string;
-  attributeName: string; // O nome do atributo (ex: "Resoluto")
-  attributeValue: number; // O valor do atributo (ex: 13)
-  corruptionCost: number; // O custo de corrupção (ex: 1)
+  attributeName: string;
+  attributeValue: number;
+  corruptionCost: number;
   characterName: string;
   tableId: string;
 }
@@ -46,9 +48,9 @@ export const AbilityRollDialog = ({
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  
-  // Pegamos o 'form' do contexto para atualizar a corrupção
-  const { form } = useCharacterSheet(); 
+  const { form } = useCharacterSheet();
+  const { isMaster, masterId, userId, tableId: contextTableId } = useTableContext();
+  const [isHidden, setIsHidden] = useState(false);
 
   const handleRoll = async () => {
     setLoading(true);
@@ -59,39 +61,37 @@ export const AbilityRollDialog = ({
       return;
     }
 
-    // 1. Aplicar Custo de Corrupção
     if (corruptionCost > 0) {
       const currentCorruption = form.getValues("corruption.temporary");
       form.setValue(
         "corruption.temporary",
         currentCorruption + corruptionCost,
-        { shouldDirty: true }, // Marca o formulário como "sujo" para salvar
+        { shouldDirty: true },
       );
     }
 
-    // 2. Executar a lógica de rolagem (sem Vantagem)
     const result = rollAttributeTest({
       attributeValue,
       modifier,
-      withAdvantage: false, // Habilidades não usam Vantagem
+      withAdvantage: false,
     });
 
-    // 3. Formatar a notificação local (toast)
     const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${result.target}) - ${
       result.isCrit ? "Crítico!" : result.isFumble ? "Falha Crítica!" : result.isSuccess ? "Sucesso!" : "Falha"
     }`;
+    
+    if (!isHidden || isMaster) {
+      toast({
+        title: `Teste de ${abilityName}`,
+        description: localToastDescription,
+        action: (corruptionCost > 0) ? (
+          <div className="flex items-center gap-2 text-purple-400">
+            <ShieldAlert className="w-4 h-4" /> +{corruptionCost} Corrupção
+          </div>
+        ) : undefined,
+      });
+    }
 
-    toast({
-      title: `Teste de ${abilityName}`,
-      description: localToastDescription,
-      action: (corruptionCost > 0) ? (
-        <div className="flex items-center gap-2 text-purple-400">
-          <ShieldAlert className="w-4 h-4" /> +{corruptionCost} Corrupção
-        </div>
-      ) : undefined,
-    });
-
-    // 4. Formatar a mensagem do chat
     const chatMessage = formatAbilityTest(
       characterName,
       abilityName,
@@ -100,16 +100,34 @@ export const AbilityRollDialog = ({
       corruptionCost,
     );
 
-    // 5. Enviar mensagem para o chat
-    await supabase.from("chat_messages").insert({
-      table_id: tableId,
-      user_id: user.id,
-      message: chatMessage,
-      message_type: "roll",
-    });
+    if (isHidden && isMaster) {
+      await supabase.from("chat_messages").insert({
+        table_id: contextTableId,
+        user_id: user.id,
+        message: `${characterName} usou ${abilityName} em segredo.`,
+        message_type: "info",
+        recipient_id: null,
+      });
+      await supabase.from("chat_messages").insert({
+        table_id: contextTableId,
+        user_id: user.id,
+        message: `[SECRETO] ${chatMessage}`,
+        message_type: "roll",
+        recipient_id: masterId,
+      });
+    } else {
+      await supabase.from("chat_messages").insert({
+        table_id: contextTableId,
+        user_id: user.id,
+        message: chatMessage,
+        message_type: "roll",
+        recipient_id: null,
+      });
+    }
 
     setLoading(false);
-    onOpenChange(false); // Fechar o diálogo
+    onOpenChange(false);
+    setIsHidden(false);
   };
 
   return (
@@ -128,15 +146,32 @@ export const AbilityRollDialog = ({
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="modifier">Modificador (no alvo)</Label>
+            <Label htmlFor="modifier-ability">Modificador (no alvo)</Label>
             <Input
-              id="modifier"
+              id="modifier-ability"
               type="number"
               value={modifier}
               onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)}
               placeholder="Ex: -2 ou +1"
             />
           </div>
+
+          {isMaster && (
+            <>
+              <Separator className="my-4" />
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="hidden-roll-ability"
+                  checked={isHidden}
+                  onCheckedChange={(checked) => setIsHidden(checked as boolean)}
+                />
+                <Label htmlFor="hidden-roll-ability" className="text-purple-400">
+                  Rolar Escondido (Apenas Mestre)
+                </Label>
+              </div>
+            </>
+          )}
+
         </div>
         <DialogFooter>
           <Button
