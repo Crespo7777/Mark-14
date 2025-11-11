@@ -92,6 +92,13 @@ All colors MUST be HSL.
     @apply inline-block align-text-bottom mx-1 text-accent;
   }
   /* --- FIM DA ADIÇÃO --- */
+
+  /* --- INÍCIO DA ADIÇÃO (Menções) --- */
+  /* Estilo para menções @ no chat */
+  .mention {
+    @apply bg-accent/30 text-accent-foreground font-semibold px-1 py-0.5 rounded-sm;
+  }
+  /* --- FIM DA ADIÇÃO --- */
 }
 
 @layer utilities {
