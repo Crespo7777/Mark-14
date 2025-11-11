@@ -1,6 +1,6 @@
 // src/components/MasterView.tsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react"; 
 import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
@@ -28,25 +28,46 @@ import { CreateCharacterDialog } from "./CreateCharacterDialog";
 import { JournalEntryDialog } from "./JournalEntryDialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { CharacterSheetSheet } from "./CharacterSheetSheet";
 
-import { CreateNpcDialog } from "./CreateNpcDialog";
-import { NpcSheetSheet } from "@/features/npc/NpcSheetSheet";
 import { Database } from "@/integrations/supabase/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-
-// --- 1. IMPORTAR O NOVO RENDERIZADOR ---
 import { JournalRenderer } from "./JournalRenderer";
-// --- FIM DA IMPORTAÇÃO ---
+import { Skeleton } from "@/components/ui/skeleton";
 
-// Definir tipos para o State
+// --- 1. IMPORTAR O CONTEXTO ---
+import { useTableContext } from "@/features/table/TableContext";
+
+const CharacterSheetSheet = lazy(() =>
+  import("./CharacterSheetSheet").then(module => ({ default: module.CharacterSheetSheet }))
+);
+const CreateNpcDialog = lazy(() =>
+  import("./CreateNpcDialog").then(module => ({ default: module.CreateNpcDialog }))
+);
+const NpcSheetSheet = lazy(() =>
+  import("@/features/npc/NpcSheetSheet").then(module => ({ default: module.NpcSheetSheet }))
+);
+
+const SheetLoadingFallback = () => (
+  <Card className="border-border/50 flex flex-col">
+    <CardHeader>
+      <Skeleton className="h-6 w-1/2" />
+      <Skeleton className="h-4 w-1/3" />
+    </CardHeader>
+    <CardContent className="flex-1">
+      <Skeleton className="h-4 w-3/4" />
+    </CardContent>
+    <CardFooter className="flex justify-between items-center">
+      <Skeleton className="h-8 w-24" />
+      <Skeleton className="h-8 w-8" />
+    </CardFooter>
+  </Card>
+);
+
+// Tipos (o tipo Member agora vem do contexto)
 type Character = Database["public"]["Tables"]["characters"]["Row"] & {
   player: { display_name: string };
 };
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
-type Member = Database["public"]["Tables"]["table_members"]["Row"] & {
-  user: { id: string; display_name: string };
-};
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"];
 
 interface MasterViewProps {
@@ -57,13 +78,18 @@ interface MasterViewProps {
 export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [npcs, setNpcs] = useState<Npc[]>([]);
-  const [members, setMembers] = useState<Member[]>([]);
+  
+  // --- 2. PEGAR MEMBROS DO CONTEXTO ---
+  // Removemos o 'members' do useState e pegamos do contexto
+  const { members } = useTableContext(); 
+  // --- FIM DA ADIÇÃO ---
+  
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState("characters");
   const [playerFilter, setPlayerFilter] = useState<string | null>(null);
-  const [playerToRemove, setPlayerToRemove] = useState<Member | null>(null);
+  const [playerToRemove, setPlayerToRemove] = useState<any | null>(null); // Tipo ajustado
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [npcToDelete, setNpcToDelete] = useState<Npc | null>(null);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(
@@ -93,7 +119,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "table_members" },
-        (payload) => loadData(),
+        (payload) => loadData(), // Mantemos isso caso um novo jogador entre
       )
       .subscribe();
 
@@ -102,17 +128,15 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     };
   }, [tableId]);
 
+  // --- 3. ATUALIZAR 'loadData' ---
+  // Removemos a busca por 'members' daqui
   const loadData = async () => {
-    const [charsRes, npcsRes, membersRes, journalRes] = await Promise.all([
+    const [charsRes, npcsRes, journalRes] = await Promise.all([
       supabase
         .from("characters")
         .select("*, player:profiles!characters_player_id_fkey(display_name)")
         .eq("table_id", tableId),
       supabase.from("npcs").select("*").eq("table_id", tableId),
-      supabase
-        .from("table_members")
-        .select("*, user:profiles!table_members_user_id_fkey(id, display_name)")
-        .eq("table_id", tableId),
       supabase
         .from("journal_entries")
         .select("*")
@@ -122,17 +146,25 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
 
     if (charsRes.data) setCharacters(charsRes.data as any);
     if (npcsRes.data) setNpcs(npcsRes.data);
-    if (membersRes.data) setMembers(membersRes.data as any);
     if (journalRes.data) setJournalEntries(journalRes.data);
+    
+    // A busca por 'table_members' foi removida daqui
   };
+  // --- FIM DA ATUALIZAÇÃO ---
 
   const handleRemovePlayer = async () => {
     if (!playerToRemove) return;
     
+    // --- 4. ATUALIZAR LÓGICA DE REMOÇÃO ---
+    // A lógica de remoção de 'table_members' precisa ser refeita
+    // pois 'playerToRemove' agora é do tipo 'TableMember'
+    
+    // Primeiro, deletamos da tabela 'table_members'
     const { error: memberError } = await supabase
       .from("table_members")
       .delete()
-      .eq("id", playerToRemove.id);
+      .eq("table_id", tableId)
+      .eq("user_id", playerToRemove.id); // Usamos o ID do membro
 
     if (memberError) {
       toast({
@@ -144,11 +176,12 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       return;
     }
     
+    // Segundo, deletamos as fichas
     const { error: charError } = await supabase
       .from("characters")
       .delete()
       .eq("table_id", tableId)
-      .eq("player_id", playerToRemove.user.id); 
+      .eq("player_id", playerToRemove.id); // Usamos o ID do membro
 
     if (charError) {
        toast({
@@ -159,14 +192,19 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     } else {
       toast({
         title: "Jogador removido",
-        description: `${playerToRemove.user.display_name} foi removido da mesa e suas fichas foram limpas.`,
+        description: `${playerToRemove.display_name} foi removido da mesa e suas fichas foram limpas.`,
       });
     }
 
-    loadData(); 
+    // loadData(); // 'loadData' não busca mais membros
+    // Disparar um reload da página inteira é a forma mais fácil 
+    // de forçar o 'TableView' a recarregar a lista de membros.
+    window.location.reload();
     setPlayerToRemove(null);
+    // --- FIM DA ATUALIZAÇÃO ---
   };
-
+  
+  // (O resto das funções handle... permanece igual)
   const handleShareJournal = async (entryId: string, is_shared: boolean) => {
     const { error } = await supabase
       .from("journal_entries")
@@ -202,7 +240,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     else {
       toast({ title: "Visibilidade da Ficha atualizada!" });
       setCharacters((prev) =>
-        prev.map((c) => (c.id === charId ? { ...c, is_shared } : c)),
+        prev.map((c) => (c.id === charId ? { ...c, is_shared } : e)),
       );
     }
   };
@@ -273,7 +311,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             <CreateCharacterDialog
               tableId={tableId}
               masterId={masterId}
-              members={members}
+              members={members} // Passamos os membros do contexto
               onCharacterCreated={loadData}
             >
               <Button size="sm">
@@ -295,50 +333,52 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                   (char) => !playerFilter || char.player_id === playerFilter,
                 )
                 .map((char) => (
-                  <CharacterSheetSheet key={char.id} characterId={char.id}>
-                    <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col">
-                      <CardHeader>
-                        <CardTitle>{char.name}</CardTitle>
-                        <CardDescription>
-                          Jogador: {char.player.display_name}
-                        </CardDescription>
-                      </CardHeader>
-                      <CardContent className="flex-1">
-                        <p className="text-sm text-muted-foreground">
-                          {char.is_shared
-                            ? "Compartilhado com jogadores"
-                            : "Visível apenas para o dono e mestre"}
-                        </p>
-                      </CardContent>
-                      <CardFooter className="flex justify-between items-center">
-                        <div
-                          className="flex items-center gap-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Switch
-                            id={`share-char-${char.id}`}
-                            checked={char.is_shared ?? false}
-                            onCheckedChange={(checked) =>
-                              handleShareCharacter(char.id, checked)
-                            }
-                          />
-                          <Label htmlFor={`share-char-${char.id}`}>
-                            Compartilhar
-                          </Label>
-                        </div>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCharacterToDelete(char);
-                          }}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </CardFooter>
-                    </Card>
-                  </CharacterSheetSheet>
+                  <Suspense key={char.id} fallback={<SheetLoadingFallback />}>
+                    <CharacterSheetSheet characterId={char.id}>
+                      <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col">
+                        <CardHeader>
+                          <CardTitle>{char.name}</CardTitle>
+                          <CardDescription>
+                            Jogador: {char.player.display_name}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex-1">
+                          <p className="text-sm text-muted-foreground">
+                            {char.is_shared
+                              ? "Compartilhado com jogadores"
+                              : "Visível apenas para o dono e mestre"}
+                          </p>
+                        </CardContent>
+                        <CardFooter className="flex justify-between items-center">
+                          <div
+                            className="flex items-center gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Switch
+                              id={`share-char-${char.id}`}
+                              checked={char.is_shared ?? false}
+                              onCheckedChange={(checked) =>
+                                handleShareCharacter(char.id, checked)
+                              }
+                            />
+                            <Label htmlFor={`share-char-${char.id}`}>
+                              Compartilhar
+                            </Label>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCharacterToDelete(char);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    </CharacterSheetSheet>
+                  </Suspense>
                 ))
             )}
           </div>
@@ -347,12 +387,14 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         <TabsContent value="npcs" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">NPCs da Mesa</h3>
-            <CreateNpcDialog tableId={tableId} onNpcCreated={loadData}>
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Novo NPC
-              </Button>
-            </CreateNpcDialog>
+            <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
+              <CreateNpcDialog tableId={tableId} onNpcCreated={loadData}>
+                <Button size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo NPC
+                </Button>
+              </CreateNpcDialog>
+            </Suspense>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {npcs.length === 0 ? (
@@ -361,74 +403,78 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               </p>
             ) : (
               npcs.map((npc) => (
-                <NpcSheetSheet key={npc.id} npcId={npc.id}>
-                  <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col">
-                    <CardHeader>
-                      <CardTitle>{npc.name}</CardTitle>
-                      <CardDescription>
-                        {npc.is_shared
-                          ? "Compartilhado com jogadores"
-                          : "Apenas mestre"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1">
-                      <p className="text-sm text-muted-foreground">
-                        Clique para editar
-                      </p>
-                    </CardContent>
-                    <CardFooter className="flex justify-between items-center">
-                      <div
-                        className="flex items-center gap-2"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <Switch
-                          id={`share-npc-${npc.id}`}
-                          checked={npc.is_shared ?? false}
-                          onCheckedChange={(checked) =>
-                            handleShareNpc(npc.id, checked)
-                          }
-                        />
-                        <Label htmlFor={`share-npc-${npc.id}`}>
-                          Compartilhar
-                        </Label>
-                      </div>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNpcToDelete(npc);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                </NpcSheetSheet>
+                <Suspense key={npc.id} fallback={<SheetLoadingFallback />}>
+                  <NpcSheetSheet npcId={npc.id}>
+                    <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col">
+                      <CardHeader>
+                        <CardTitle>{npc.name}</CardTitle>
+                        <CardDescription>
+                          {npc.is_shared
+                            ? "Compartilhado com jogadores"
+                            : "Apenas mestre"}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex-1">
+                        <p className="text-sm text-muted-foreground">
+                          Clique para editar
+                        </p>
+                      </CardContent>
+                      <CardFooter className="flex justify-between items-center">
+                        <div
+                          className="flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Switch
+                            id={`share-npc-${npc.id}`}
+                            checked={npc.is_shared ?? false}
+                            onCheckedChange={(checked) =>
+                              handleShareNpc(npc.id, checked)
+                            }
+                          />
+                          <Label htmlFor={`share-npc-${npc.id}`}>
+                            Compartilhar
+                          </Label>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setNpcToDelete(npc);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  </NpcSheetSheet>
+                </Suspense>
               ))
             )}
           </div>
         </TabsContent>
 
+        {/* --- 5. ATUALIZAR A LISTAGEM DE JOGADORES --- */}
         <TabsContent value="players" className="space-y-4">
           <h3 className="text-xl font-semibold mb-4">Jogadores na Mesa</h3>
-          {members.length === 0 ? (
+          {/* Filtramos o mestre da lista de "jogadores" */}
+          {members.filter(m => !m.isMaster).length === 0 ? (
             <p className="text-muted-foreground text-center py-8">
               Nenhum jogador entrou na sua mesa ainda.
             </p>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {members.map((member) => (
+              {members.filter(m => !m.isMaster).map((member) => (
                 <Card key={member.id} className="border-border/50">
                   <CardHeader className="flex flex-row items-center justify-between space-y-0">
                     <div className="flex items-center gap-3">
                       <Avatar>
                         <AvatarFallback>
-                          {member.user.display_name.charAt(0).toUpperCase()}
+                          {member.display_name.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <CardTitle className="text-lg">
-                        {member.user.display_name}
+                        {member.display_name}
                       </CardTitle>
                     </div>
                     <Button
@@ -445,8 +491,9 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             </div>
           )}
         </TabsContent>
+        {/* --- FIM DA ATUALIZAÇÃO --- */}
 
-        {/* --- SEÇÃO DO DIÁRIO (ATUALIZADA) --- */}
+
         <TabsContent value="journal" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Diário do Mestre</h3>
@@ -470,17 +517,14 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                     <CardTitle>{entry.title}</CardTitle>
                     <CardDescription>
                       {entry.player_id
-                        ? `Anotação de: ${members.find(m => m.user_id === entry.player_id)?.user.display_name || 'Jogador'}`
+                        ? `Anotação de: ${members.find(m => m.id === entry.player_id)?.display_name || 'Jogador'}`
                         : entry.is_shared
                         ? "Público (Jogadores podem ver)"
                         : "Privado (Apenas Mestre)"}
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1">
-                    {/* --- 2. ATUALIZAÇÃO DO RENDER --- */}
-                    {/* Passamos o line-clamp como uma prop de className */}
-                    <JournalRenderer content={entry.content} className="line-clamp-3" />
-                    {/* --- FIM DA ATUALIZAÇÃO --- */}
+                    <JournalRenderer content={entry.content} />
                   </CardContent>
                   <CardFooter className="flex justify-between items-center">
                       {!entry.player_id && (
@@ -529,7 +573,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         </TabsContent>
       </Tabs>
 
-      {/* --- DIÁLOGOS DE ALERTA (Todos permanecem iguais) --- */}
       <AlertDialog
         open={!!playerToRemove}
         onOpenChange={(open) => !open && setPlayerToRemove(null)}
@@ -540,7 +583,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             <AlertDialogDescription>
               Você tem certeza que quer remover{" "}
               <span className="font-bold text-destructive">
-                {playerToRemove?.user.display_name}
+                {playerToRemove?.display_name}
               </span>{" "}
               da mesa? Todas as fichas de personagem associadas a este jogador
               nesta mesa também serão excluídas. Esta ação não pode ser desfeita.
