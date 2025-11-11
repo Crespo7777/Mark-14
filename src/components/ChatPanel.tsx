@@ -9,8 +9,6 @@ import { Send, Dices, Trash2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser";
 import { cn } from "@/lib/utils";
-
-// --- 1. IMPORTAR O CONTEXTO E O TIPO ---
 import { useTableContext, TableMember } from "@/features/table/TableContext";
 import {
   Dialog,
@@ -31,7 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-
+// (Interface Message, ChatPanelProps... permanecem iguais)
 interface Message {
   id: string;
   message: string;
@@ -41,50 +39,39 @@ interface Message {
     display_name: string;
   };
 }
-
 interface ChatPanelProps {
   tableId: string;
 }
 
-// --- 2. NOVA FUNÇÃO HELPER (PARSE DE MENÇÕES) ---
-// Função para escapar caracteres de regex
+// (Funções parseMentions... permanecem iguais)
 const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
-
-// Função que encontra e substitui as menções
 const parseMentions = (text: string, members: TableMember[]): string => {
   let parsedText = text;
-
   members.forEach(member => {
-    // Cria um Regex para encontrar "@NomeDoMembro" (sem ser sensível a maiúsculas)
     const mentionRegex = new RegExp(`@${escapeRegExp(member.display_name)}`, 'gi');
-    
-    // Substitui por um <strong> com a classe 'mention'
     parsedText = parsedText.replace(mentionRegex, (match) => 
       `<strong class="mention">${match}</strong>`
     );
   });
-
   return parsedText;
 };
-// --- FIM DA FUNÇÃO HELPER ---
 
 
 export const ChatPanel = ({ tableId }: ChatPanelProps) => {
+  // (Todos os hooks e states... permanecem iguais)
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
-
-  // --- 3. PEGAR 'members' DO CONTEXTO ---
   const { isMaster, tableId: contextTableId, members } = useTableContext();
   const [isClearAlertOpen, setIsClearAlertOpen] = useState(false);
 
+  // (useEffect, loadMessages, subscribeToMessages... permanecem iguais)
   useEffect(() => {
     loadMessages();
-
     const channel = subscribeToMessages();
     return () => {
       if (channel && typeof channel.unsubscribe === "function") {
@@ -92,7 +79,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       }
     };
   }, [tableId]);
-
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -115,15 +101,12 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       )
       .eq("table_id", tableId)
       .order("created_at", { ascending: true });
-
     if (error) {
       console.error("Error loading messages:", error);
       return;
     }
-
     setMessages(data || []);
   };
-
   const subscribeToMessages = () => {
     const channel = supabase
       .channel(`chat:${tableId}`)
@@ -140,7 +123,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
             console.warn("Payload de chat recebido sem ID:", payload);
             return;
           }
-
           const { data } = await supabase
             .from("chat_messages")
             .select(
@@ -154,7 +136,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
             )
             .eq("id", payload.new.id)
             .single();
-
           if (data) {
             if (data.message_type === 'info_clear') {
               setMessages([data]);
@@ -177,16 +158,14 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         },
       )
       .subscribe();
-
     return channel;
   };
 
+  // (handleSend, handleKeyPress, handleClearChat... permanecem iguais)
   const handleSend = async () => {
     const messageContent = newMessage.trim();
     if (!messageContent) return;
-
     setLoading(true);
-
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -194,14 +173,11 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       setLoading(false);
       return;
     }
-
     let messageToSend = messageContent;
     let messageType = "chat";
-
     if (messageContent.startsWith("/r ") || messageContent.startsWith("/roll ")) {
       const command = messageContent.replace(/(\/r|\/roll)\s+/, "");
       const result = parseDiceRoll(command);
-
       if (result) {
         messageToSend = formatRollResult(command, result);
         messageType = "roll";
@@ -210,13 +186,9 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         messageType = "error";
       }
     } else {
-      // --- 4. CHAMAR A FUNÇÃO DE PARSE ---
-      // É uma mensagem de chat normal, vamos parsear as menções
       messageToSend = parseMentions(messageContent, members);
       messageType = "chat";
-      // --- FIM DA MUDANÇA ---
     }
-
     const { error } = await supabase.from("chat_messages").insert({
       table_id: tableId,
       user_id: user.id,
@@ -224,7 +196,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       message_type: messageType,
       recipient_id: null,
     });
-
     if (error) {
       toast({
         title: "Erro",
@@ -234,27 +205,22 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     } else {
       setNewMessage("");
     }
-
     setLoading(false);
   };
-
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
-
   const handleClearChat = async () => {
     setLoading(true);
     const { error } = await supabase
       .from("chat_messages")
       .delete()
       .eq("table_id", contextTableId);
-    
     setLoading(false);
     setIsClearAlertOpen(false);
-
     if (error) {
       toast({
         title: "Erro ao limpar o chat",
@@ -287,9 +253,13 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     }
   };
 
+  // --- INÍCIO DA CORREÇÃO DAS BORDAS ---
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border/50">
+    // 1. Adicionado 'bg-card' para garantir um fundo sólido
+    <div className="flex flex-col h-full bg-card">
+      
+      {/* 2. Alterado 'border-border/50' para 'border-border' (sólido) */}
+      <div className="p-4 border-b border-border">
         <div className="flex justify-between items-center">
           <h2 className="font-semibold">Chat da Mesa</h2>
           {isMaster && (
@@ -314,6 +284,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
               key={msg.id}
               className={cn(
                 "p-3 rounded-lg",
+                // 3. O fundo das mensagens pode continuar 'muted/50' (fica bom)
                 msg.message_type === "roll"
                   ? "bg-accent/20 border border-accent/30"
                   : "bg-muted/50",
@@ -358,8 +329,9 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
-
-      <div className="p-4 border-t border-border/50">
+      
+      {/* 4. Alterado 'border-border/50' para 'border-border' (sólido) */}
+      <div className="p-4 border-t border-border">
         <div className="flex gap-2">
           <Input
             placeholder="Digite /r 1d20+5 para rolar..."
@@ -368,7 +340,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
             onKeyPress={handleKeyPress}
             disabled={loading}
           />
-
+          {/* (Botões de Ajuda e Enviar permanecem iguais) */}
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="icon">
@@ -407,6 +379,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         </div>
       </div>
 
+      {/* (AlertDialog permanece igual) */}
       <AlertDialog
         open={isClearAlertOpen}
         onOpenChange={setIsClearAlertOpen}
@@ -434,4 +407,5 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       </AlertDialog>
     </div>
   );
+  // --- FIM DA CORREÇÃO DAS BORDAS ---
 };
