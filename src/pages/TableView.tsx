@@ -5,12 +5,11 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, MessageSquare } from "lucide-react"; 
+import { ArrowLeft, MessageSquare } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
 
-// --- 1. IMPORTAR O NOVO TIPO ---
 import { TableProvider, TableMember } from "@/features/table/TableContext";
 import {
   Sheet,
@@ -19,6 +18,7 @@ import {
 } from "@/components/ui/sheet";
 
 const TableView = () => {
+  // (Todos os hooks, states, e funções de loadTable... permanecem iguais)
   const { tableId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -26,10 +26,7 @@ const TableView = () => {
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
-
-  // --- 2. NOVO ESTADO PARA OS MEMBROS ---
   const [members, setMembers] = useState<TableMember[]>([]);
-  // --- FIM DA ADIÇÃO ---
 
   useEffect(() => {
     loadTable();
@@ -45,13 +42,10 @@ const TableView = () => {
 
     setUserId(user.id);
 
-    // --- 3. ATUALIZAR A LÓGICA DE CARREGAMENTO ---
-    // Agora, buscamos a mesa, os membros e o perfil do mestre de uma vez
     try {
-      // 1. Busca a mesa
       const { data: tableData, error: tableError } = await supabase
         .from("tables")
-        .select("*, master:profiles!tables_master_id_fkey(id, display_name)") // Puxa o perfil do mestre
+        .select("*, master:profiles!tables_master_id_fkey(id, display_name)")
         .eq("id", tableId)
         .single();
 
@@ -59,7 +53,6 @@ const TableView = () => {
         throw tableError || new Error("Mesa não encontrada");
       }
 
-      // 2. Busca os membros da mesa (jogadores)
       const { data: membersData, error: membersError } = await supabase
         .from("table_members")
         .select("user:profiles!table_members_user_id_fkey(id, display_name)")
@@ -69,17 +62,14 @@ const TableView = () => {
         throw membersError;
       }
 
-      // 3. Formata a lista de membros
       const masterProfile = tableData.master as { id: string, display_name: string };
       
       const memberList: TableMember[] = [
-        // Adiciona o Mestre à lista
         { 
           id: masterProfile.id, 
           display_name: masterProfile.display_name, 
           isMaster: true 
         },
-        // Adiciona os outros jogadores
         ...membersData.map((m: any) => ({
           id: m.user.id,
           display_name: m.user.display_name,
@@ -88,7 +78,7 @@ const TableView = () => {
       ];
       
       setTable(tableData);
-      setMembers(memberList); // Define a lista de membros
+      setMembers(memberList);
       setIsMaster(tableData.master_id === user.id);
       setLoading(false);
 
@@ -102,11 +92,9 @@ const TableView = () => {
       navigate("/dashboard");
       return;
     }
-    // --- FIM DA ATUALIZAÇÃO ---
   };
 
-  // --- 4. ATUALIZAR CONDIÇÃO DE LOADING ---
-  if (loading || !table || !userId || members.length === 0) { 
+  if (loading || !table || !userId || members.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando mesa...</p>
@@ -114,67 +102,87 @@ const TableView = () => {
     );
   }
   
-  // --- 5. ATUALIZAR VALOR DO CONTEXTO ---
   const tableContextValue = {
     tableId: table.id,
     masterId: table.master_id,
     userId: userId,
     isMaster: isMaster,
-    members: members, // Passa a lista de membros
+    members: members,
   };
-  // --- FIM DA ATUALIZAÇÃO ---
 
+  // --- INÍCIO DA CORREÇÃO DE LAYOUT ---
   return (
     <Sheet>
       <TableProvider value={tableContextValue}>
+        {/* 1. Container principal ocupa a tela toda (min-h-screen)
+            - Em ecrãs 'md' (desktop), usamos 'flex' para criar as colunas.
+        */}
         <div className="min-h-screen bg-background">
-          <div className="border-b border-border/50 bg-card/50 backdrop-blur">
-            <div className="max-w-6xl mx-auto px-4 py-4">
-              <div className="flex items-center gap-4">
-                <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-                <div>
-                  <h1 className="text-2xl font-bold">{table?.name}</h1>
-                  <p className="text-sm text-muted-foreground">
-                    {isMaster ? "Você é o Mestre" : "Jogador"}
-                  </p>
+          
+          {/* 2. O Painel do Chat (Desktop)
+              - Fica *fixo* (fixed) à direita, ocupando 100% da altura (h-screen).
+              - Tem uma largura fixa (w-96).
+              - 'border-l' (borda esquerda) o separa do conteúdo.
+              - 'hidden md:flex' o esconde em mobile e mostra em desktop.
+          */}
+          <div className="w-96 h-screen fixed right-0 top-0 border-l border-border bg-card hidden md:flex">
+            <ChatPanel tableId={tableId!} />
+          </div>
+
+          {/* 3. O Conteúdo Principal (Cabeçalho + Master/Player)
+              - Em ecrãs 'md', aplicamos 'mr-96' (margem direita de 96)
+                para "empurrar" o conteúdo e dar espaço ao chat fixo.
+          */}
+          <div className="md:mr-96">
+            
+            {/* 4. O Cabeçalho (com o nome da mesa)
+                - O conteúdo dele é alinhado com 'max-w-6xl mx-auto'.
+            */}
+            <div className="border-b border-border bg-card/50 backdrop-blur top-0 z-10 sticky">
+              <div className="max-w-6xl mx-auto px-4 py-4">
+                <div className="flex items-center gap-4">
+                  <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
+                    <ArrowLeft className="w-5 h-5" />
+                  </Button>
+                  <div>
+                    <h1 className="text-2xl font-bold">{table?.name}</h1>
+                    <p className="text-sm text-muted-foreground">
+                      {isMaster ? "Você é o Mestre" : "Jogador"}
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex h-[calc(100vh-80px)]">
-            
-            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            {/* 5. O Painel de Conteúdo (Master/Player)
+                - Também alinhado com 'max-w-6xl mx-auto'.
+                - O 'p-4 md:p-6' dá o espaçamento interno.
+            */}
+            <div className="p-4 md:p-6">
               <div className="max-w-6xl mx-auto">
                 {isMaster ? (
-                  // O MasterView agora pode pegar os 'members' do contexto
-                  <MasterView tableId={tableId!} masterId={table.master_id} /> 
+                  <MasterView tableId={tableId!} masterId={table.master_id} />
                 ) : (
                   <PlayerView tableId={tableId!} />
                 )}
               </div>
             </div>
-
-            <div className="w-96 border-l border-border/50 bg-card/30 hidden md:flex">
-              <ChatPanel tableId={tableId!} />
-            </div>
-
-            <SheetTrigger asChild>
-              <Button
-                variant="default" // Mudei para 'default' (verde)
-                size="icon"
-                className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg md:hidden z-50"
-              >
-                <MessageSquare className="w-6 h-6" />
-                <span className="sr-only">Abrir Chat</span>
-              </Button>
-            </SheetTrigger>
-
           </div>
-          
-          <SheetContent side="right" className="p-0 w-full max-w-sm sm:max-w-sm">
+
+
+          {/* 6. O Chat Móvel (permanece igual) */}
+          <SheetTrigger asChild>
+            <Button
+              variant="default"
+              size="icon"
+              className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg md:hidden z-50"
+            >
+              <MessageSquare className="w-6 h-6" />
+              <span className="sr-only">Abrir Chat</span>
+            </Button>
+          </SheetTrigger>
+
+          <SheetContent side="right" className="p-0 w-full max-w-sm sm:max-w-sm h-full">
             <ChatPanel tableId={tableId!} />
           </SheetContent>
           
@@ -182,6 +190,7 @@ const TableView = () => {
       </TableProvider>
     </Sheet>
   );
+  // --- FIM DA CORREÇÃO DE LAYOUT ---
 };
 
 export default TableView;
