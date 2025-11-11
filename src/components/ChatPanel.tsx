@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser";
 import { cn } from "@/lib/utils";
 
-import { useTableContext } from "@/features/table/TableContext";
+// --- 1. IMPORTAR O CONTEXTO E O TIPO ---
+import { useTableContext, TableMember } from "@/features/table/TableContext";
 import {
   Dialog,
   DialogContent,
@@ -45,6 +46,31 @@ interface ChatPanelProps {
   tableId: string;
 }
 
+// --- 2. NOVA FUNÇÃO HELPER (PARSE DE MENÇÕES) ---
+// Função para escapar caracteres de regex
+const escapeRegExp = (string: string) => {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+// Função que encontra e substitui as menções
+const parseMentions = (text: string, members: TableMember[]): string => {
+  let parsedText = text;
+
+  members.forEach(member => {
+    // Cria um Regex para encontrar "@NomeDoMembro" (sem ser sensível a maiúsculas)
+    const mentionRegex = new RegExp(`@${escapeRegExp(member.display_name)}`, 'gi');
+    
+    // Substitui por um <strong> com a classe 'mention'
+    parsedText = parsedText.replace(mentionRegex, (match) => 
+      `<strong class="mention">${match}</strong>`
+    );
+  });
+
+  return parsedText;
+};
+// --- FIM DA FUNÇÃO HELPER ---
+
+
 export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
@@ -52,7 +78,8 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
-  const { isMaster, tableId: contextTableId } = useTableContext();
+  // --- 3. PEGAR 'members' DO CONTEXTO ---
+  const { isMaster, tableId: contextTableId, members } = useTableContext();
   const [isClearAlertOpen, setIsClearAlertOpen] = useState(false);
 
   useEffect(() => {
@@ -182,6 +209,12 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         messageToSend = `Comando de rolagem inválido: ${command}`;
         messageType = "error";
       }
+    } else {
+      // --- 4. CHAMAR A FUNÇÃO DE PARSE ---
+      // É uma mensagem de chat normal, vamos parsear as menções
+      messageToSend = parseMentions(messageContent, members);
+      messageType = "chat";
+      // --- FIM DA MUDANÇA ---
     }
 
     const { error } = await supabase.from("chat_messages").insert({
@@ -212,10 +245,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     }
   };
 
-  // --- INÍCIO DA CORREÇÃO ---
-  // A lógica foi atualizada para limpar o estado local
-  // imediatamente após o sucesso do delete.
-
   const handleClearChat = async () => {
     setLoading(true);
     const { error } = await supabase
@@ -233,24 +262,16 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         variant: "destructive",
       });
     } else {
-      // O delete foi bem-sucedido no banco.
-      
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Criamos o objeto da mensagem 'info_clear'
         const clearMessage = {
-          id: `local-${Date.now()}`, // ID temporário local
+          id: `local-${Date.now()}`,
           message: "O Mestre limpou o histórico do chat.",
           message_type: "info_clear",
           created_at: new Date().toISOString(),
-          user: { display_name: "Sistema" } // O usuário não importa aqui
+          user: { display_name: "Sistema" }
         };
-
-        // 1. Limpa o chat local IMEDIATAMENTE para o Mestre.
         setMessages([clearMessage as Message]);
-
-        // 2. Envia a mensagem 'info_clear' para o banco,
-        // para notificar os outros jogadores (que vão limpar via realtime)
         await supabase.from("chat_messages").insert({
           table_id: contextTableId,
           user_id: user.id,
@@ -265,7 +286,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       });
     }
   };
-  // --- FIM DA CORREÇÃO ---
 
   return (
     <div className="flex flex-col h-full">
@@ -397,7 +417,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
             <AlertDialogDescription>
               Esta ação irá remover permanentemente **todas** as mensagens do
               chat para **todos** os jogadores nesta mesa. Isso não pode ser
-precedido.
+              desfeito.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
