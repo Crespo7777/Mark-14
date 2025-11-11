@@ -22,14 +22,18 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getDefaultCharacterSheetData } from "@/features/character/character.schema"; // Importar
+import { getDefaultCharacterSheetData } from "@/features/character/character.schema";
+
+// --- 1. IMPORTAR O TIPO 'TableMember' ---
+import { TableMember } from "@/features/table/TableContext";
 
 interface CreateCharacterDialogProps {
   children: React.ReactNode;
   onCharacterCreated: () => void;
   tableId: string;
   masterId: string;
-  members: any[];
+  // --- 2. ATUALIZAR O TIPO DA PROP 'members' ---
+  members: TableMember[];
 }
 
 export const CreateCharacterDialog = ({
@@ -41,8 +45,8 @@ export const CreateCharacterDialog = ({
 }: CreateCharacterDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
-  const [race, setRace] = useState(""); // NOVO
-  const [occupation, setOccupation] = useState(""); // NOVO
+  const [race, setRace] = useState("");
+  const [occupation, setOccupation] = useState("");
   const [assignedPlayerId, setAssignedPlayerId] = useState<string>(masterId);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -59,9 +63,7 @@ export const CreateCharacterDialog = ({
 
     setLoading(true);
 
-    // Gerar dados padrão da ficha
     const defaultData = getDefaultCharacterSheetData(name.trim());
-    // Sobrescrever com os campos do formulário se preenchidos
     if (race.trim()) defaultData.race = race.trim();
     if (occupation.trim()) defaultData.occupation = occupation.trim();
 
@@ -69,14 +71,13 @@ export const CreateCharacterDialog = ({
       name: name.trim(),
       table_id: tableId,
       player_id: assignedPlayerId,
-      data: defaultData, // Inserir os dados da ficha
+      data: defaultData,
     });
 
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Ficha criada!", description: "A ficha foi criada com sucesso." });
-      // Resetar todos os campos
       setName("");
       setRace("");
       setOccupation("");
@@ -110,7 +111,6 @@ export const CreateCharacterDialog = ({
             />
           </div>
 
-          {/* NOVOS CAMPOS DE RAÇA E OCUPAÇÃO */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="char-race">Raça</Label>
@@ -141,11 +141,20 @@ export const CreateCharacterDialog = ({
               <SelectContent>
                 <SelectItem value={masterId}>Mestre (Você)</SelectItem>
                 <SelectSeparator />
-                {members.map((member) => (
-                  <SelectItem key={member.user_id} value={member.user_id}>
-                    {member.user.display_name}
+                
+                {/* --- 3. CORRIGIR O MAPA AQUI --- */}
+                {/* Filtramos o mestre (m.isMaster) porque ele já foi 
+                  adicionado manualmente acima.
+                  Mudamos 'member.user_id' para 'member.id'.
+                  Mudamos 'member.user.display_name' para 'member.display_name'.
+                */}
+                {members.filter(m => !m.isMaster).map((member) => (
+                  <SelectItem key={member.id} value={member.id}>
+                    {member.display_name}
                   </SelectItem>
                 ))}
+                {/* --- FIM DA CORREÇÃO --- */}
+
               </SelectContent>
             </Select>
           </div>
