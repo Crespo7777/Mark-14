@@ -1,6 +1,6 @@
 // src/components/PlayerView.tsx
 
-import { useEffect, useState, lazy, Suspense } from "react"; 
+import { useEffect, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
@@ -11,7 +11,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Plus, Trash2, BookOpen, Edit, Users } from "lucide-react";
+import { Plus, Trash2, BookOpen, Edit, Users, UserSquare } from "lucide-react"; // Importar UserSquare
 import { useToast } from "@/hooks/use-toast";
 import { CreatePlayerCharacterDialog } from "./CreatePlayerCharacterDialog";
 import {
@@ -24,12 +24,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Database } from "@/integrations/supabase/types"; 
-import { Separator } from "@/components/ui/separator"; 
+import { Database } from "@/integrations/supabase/types";
+// --- 1. IMPORTAR COMPONENTES DE ABAS ---
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// --- FIM DA IMPORTAÇÃO ---
 import { JournalRenderer } from "./JournalRenderer";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Remover import de 'Separator'
+
 // Definição de carregamento "preguiçoso" (Lazy)
+// (Resto dos imports lazy... permanecem iguais)
 const CharacterSheetSheet = lazy(() =>
   import("./CharacterSheetSheet").then(module => ({ default: module.CharacterSheetSheet }))
 );
@@ -40,7 +45,7 @@ const JournalEntryDialog = lazy(() =>
   import("./JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
 );
 
-// Componente de Fallback (Loading)
+// (Fallbacks de Loading... permanecem iguais)
 const SheetLoadingFallback = () => (
   <Card className="border-border/50 flex flex-col">
     <CardHeader>
@@ -55,7 +60,6 @@ const SheetLoadingFallback = () => (
     </CardFooter>
   </Card>
 );
-
 const NpcLoadingFallback = () => (
   <Card className="border-border/50 flex flex-col">
     <CardHeader>
@@ -68,10 +72,12 @@ const NpcLoadingFallback = () => (
   </Card>
 );
 
+
 interface PlayerViewProps {
   tableId: string;
 }
 
+// (Tipos MyCharacter, Npc, JournalEntry... permanecem iguais)
 type MyCharacter = {
   id: string;
   name: string;
@@ -81,27 +87,28 @@ type MyCharacter = {
   };
   player_id: string;
 };
-
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"];
 
+
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
+  // (Todos os hooks e states... permanecem iguais)
   const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const { toast } = useToast();
   const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(
     null,
   );
-  
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [sharedNpcs, setSharedNpcs] = useState<Npc[]>([]);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
 
+  // (useEffect e loadData... permanecem iguais)
   useEffect(() => {
     loadData();
 
     const channel = supabase
-      .channel(`player-view:${tableId}`) 
+      .channel(`player-view:${tableId}`)
       .on(
         "postgres_changes",
         {
@@ -148,28 +155,19 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
 
     try {
       const [charsRes, journalRes, npcsRes] = await Promise.all([
-        // 1. Minhas Fichas
         supabase
           .from("characters")
           .select("*, player:profiles!characters_player_id_fkey(display_name)")
           .eq("table_id", tableId)
           .eq("player_id", user.id),
-        
-        // --- INÍCIO DA CORREÇÃO ---
-        // 2. Diário (Público do Mestre + Meu Privado)
         supabase
           .from("journal_entries")
           .select("*")
           .eq("table_id", tableId)
-          // A sintaxe correta do 'or' é: " (A e B) ou C "
-          // (is_shared=true E player_id=null) OU (player_id=user.id)
           .or(
             `and(is_shared.eq.true,player_id.is.null),player_id.eq.${user.id}`
-          ) 
+          )
           .order("created_at", { ascending: false }),
-        // --- FIM DA CORREÇÃO ---
-
-        // 3. NPCs (Apenas compartilhados)
         supabase
           .from("npcs")
           .select("*")
@@ -183,13 +181,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
 
       if (journalRes.error) throw journalRes.error;
       setJournalEntries(journalRes.data || []);
-      
+
       if (npcsRes.error) throw npcsRes.error;
       setSharedNpcs(npcsRes.data || []);
 
     } catch (error: any) {
-      // Esta linha é a que você está vendo no console:
-      console.error("Erro ao carregar dados do jogador:", error.message); 
+      console.error("Erro ao carregar dados do jogador:", error.message);
       toast({
         title: "Erro ao carregar dados",
         description: "Houve um problema ao buscar seus dados.",
@@ -201,6 +198,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     }
   };
 
+  // (Todas as funções handle... permanecem iguais)
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
     const { error } = await supabase
@@ -218,21 +216,21 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         title: "Ficha excluída!",
         description: `A ficha ${characterToDelete.name} foi removida.`,
       });
-      loadData(); 
+      loadData();
     }
-    setCharacterToDelete(null); 
+    setCharacterToDelete(null);
   };
 
   const handleDeleteJournalEntry = async () => {
     if (!entryToDelete) return;
-    
+
     const { error } = await supabase
       .from("journal_entries")
       .delete()
       .eq("id", entryToDelete.id);
 
     if (error) {
-       toast({
+      toast({
         title: "Erro ao excluir anotação",
         description: error.message,
         variant: "destructive",
@@ -243,180 +241,200 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       loadData();
     }
   };
-
+  
+  // --- 2. INÍCIO DA MUDANÇA NO LAYOUT ---
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold mb-2">Painel do Jogador</h2>
-        <p className="text-muted-foreground">Gerencie suas fichas de personagem e anotações</p>
+        <p className="text-muted-foreground">
+          Gerencie suas fichas de personagem e anotações
+        </p>
       </div>
 
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold">Minhas Fichas</h3>
-          <CreatePlayerCharacterDialog
-            tableId={tableId}
-            onCharacterCreated={loadData}
-          >
-            <Button size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              Nova Ficha
-            </Button>
-          </CreatePlayerCharacterDialog>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {myCharacters.length === 0 ? (
-            <p className="text-muted-foreground col-span-full text-center py-8">
-              Você ainda não criou nenhum personagem. Clique em "Nova Ficha" para começar.
-            </p>
-          ) : (
-            myCharacters.map((char) => (
-              <Suspense key={char.id} fallback={<SheetLoadingFallback />}>
-                <CharacterSheetSheet characterId={char.id}>
-                  <Card className="border-border/50 flex flex-col justify-between h-full">
-                    <div className="flex-1 hover:shadow-glow transition-shadow cursor-pointer">
+      {/* Usar a mesma estrutura de Abas do MasterView */}
+      <Tabs defaultValue="characters" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="characters">
+             <UserSquare className="w-4 h-4 mr-2" />
+             Minhas Fichas
+          </TabsTrigger>
+          <TabsTrigger value="npcs">
+             <Users className="w-4 h-4 mr-2" />
+             NPCs Compartilhados
+          </TabsTrigger>
+          <TabsTrigger value="journal">
+            <BookOpen className="w-4 h-4 mr-2" />
+            Diário & Anotações
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Aba 1: Minhas Fichas */}
+        <TabsContent value="characters" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-semibold">Minhas Fichas</h3>
+            <CreatePlayerCharacterDialog
+              tableId={tableId}
+              onCharacterCreated={loadData}
+            >
+              <Button size="sm">
+                <Plus className="w-4 h-4 mr-2" />
+                Nova Ficha
+              </Button>
+            </CreatePlayerCharacterDialog>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {myCharacters.length === 0 ? (
+              <p className="text-muted-foreground col-span-full text-center py-8">
+                Você ainda não criou nenhum personagem. Clique em "Nova Ficha"
+                para começar.
+              </p>
+            ) : (
+              myCharacters.map((char) => (
+                <Suspense key={char.id} fallback={<SheetLoadingFallback />}>
+                  <CharacterSheetSheet characterId={char.id}>
+                    <Card className="border-border/50 flex flex-col justify-between h-full">
+                      <div className="flex-1 hover:shadow-glow transition-shadow cursor-pointer">
+                        <CardHeader>
+                          <CardTitle>{char.name}</CardTitle>
+                          <CardDescription>Sua Ficha</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <p className="text-sm text-muted-foreground">
+                            Clique para editar
+                          </p>
+                        </CardContent>
+                      </div>
+                      <CardFooter className="p-4 pt-0">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="w-full"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCharacterToDelete(char);
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" />
+                          Excluir Ficha
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  </CharacterSheetSheet>
+                </Suspense>
+              ))
+            )}
+          </div>
+        </TabsContent>
+
+        {/* Aba 2: NPCs Compartilhados */}
+        <TabsContent value="npcs" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-semibold">NPCs Compartilhados</h3>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {sharedNpcs.length === 0 ? (
+              <p className="text-muted-foreground col-span-full text-center py-8">
+                O Mestre ainda não compartilhou nenhum NPC.
+              </p>
+            ) : (
+              sharedNpcs.map((npc) => (
+                <Suspense key={npc.id} fallback={<NpcLoadingFallback />}>
+                  <NpcSheetSheet npcId={npc.id}>
+                    <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col h-full">
                       <CardHeader>
-                        <CardTitle>{char.name}</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                          <Users className="w-5 h-5" /> {npc.name}
+                        </CardTitle>
                         <CardDescription>
-                          Sua Ficha
+                          NPC compartilhado pelo Mestre
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
                         <p className="text-sm text-muted-foreground">
-                          Clique para editar
+                          Clique para ver e rolar dados
                         </p>
                       </CardContent>
-                    </div>
-                    <CardFooter className="p-4 pt-0">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="w-full"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCharacterToDelete(char);
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Excluir Ficha
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                </CharacterSheetSheet>
-              </Suspense>
-            ))
-          )}
-        </div>
-      </div>
+                    </Card>
+                  </NpcSheetSheet>
+                </Suspense>
+              ))
+            )}
+          </div>
+        </TabsContent>
 
-      <Separator />
+        {/* Aba 3: Diário & Anotações */}
+        <TabsContent value="journal" className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-semibold">Diário & Anotações</h3>
+            <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
+              <JournalEntryDialog
+                tableId={tableId}
+                onEntrySaved={loadData}
+                isPlayerNote={true}
+              >
+                <Button size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Anotação
+                </Button>
+              </JournalEntryDialog>
+            </Suspense>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {journalEntries.length === 0 ? (
+              <p className="text-muted-foreground col-span-full text-center py-8">
+                Nenhuma anotação pública ou privada.
+              </p>
+            ) : (
+              journalEntries.map((entry) => {
+                const isMyNote = entry.player_id === userId;
 
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold">NPCs Compartilhados</h3>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {sharedNpcs.length === 0 ? (
-            <p className="text-muted-foreground col-span-full text-center py-8">
-              O Mestre ainda não compartilhou nenhum NPC.
-            </p>
-          ) : (
-            sharedNpcs.map((npc) => (
-              <Suspense key={npc.id} fallback={<NpcLoadingFallback />}>
-                <NpcSheetSheet npcId={npc.id}>
-                  <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col h-full">
+                return (
+                  <Card key={entry.id} className="border-border/50 flex flex-col">
                     <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Users className="w-5 h-5" /> {npc.name}
-                      </CardTitle>
+                      <CardTitle>{entry.title}</CardTitle>
                       <CardDescription>
-                        NPC compartilhado pelo Mestre
+                        {isMyNote
+                          ? "Sua Anotação Privada"
+                          : "Anotação Pública do Mestre"}
                       </CardDescription>
                     </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">
-                        Clique para ver e rolar dados
-                      </p>
+                    <CardContent className="flex-1">
+                      <JournalRenderer content={entry.content} />
                     </CardContent>
-                  </Card>
-                </NpcSheetSheet>
-              </Suspense>
-            ))
-          )}
-        </div>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <h3 className="text-xl font-semibold">Diário & Anotações</h3>
-          <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
-            <JournalEntryDialog
-              tableId={tableId}
-              onEntrySaved={loadData}
-              isPlayerNote={true}
-            >
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Anotação
-              </Button>
-            </JournalEntryDialog>
-          </Suspense>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {journalEntries.length === 0 ? (
-            <p className="text-muted-foreground col-span-full text-center py-8">
-              Nenhuma anotação pública ou privada.
-            </p>
-          ) : (
-            journalEntries.map((entry) => {
-              const isMyNote = entry.player_id === userId;
-              
-              return (
-                <Card key={entry.id} className="border-border/50 flex flex-col">
-                  <CardHeader>
-                    <CardTitle>{entry.title}</CardTitle>
-                    <CardDescription>
-                      {isMyNote
-                        ? "Sua Anotação Privada"
-                        : "Anotação Pública do Mestre"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex-1">
-                    <JournalRenderer content={entry.content} />
-                  </CardContent>
-                  {isMyNote && (
-                    <CardFooter className="flex justify-end items-center gap-2">
-                      <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
-                        <JournalEntryDialog
-                          tableId={tableId}
-                          onEntrySaved={loadData}
-                          entry={entry}
-                          isPlayerNote={true}
+                    {isMyNote && (
+                      <CardFooter className="flex justify-end items-center gap-2">
+                        <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
+                          <JournalEntryDialog
+                            tableId={tableId}
+                            onEntrySaved={loadData}
+                            entry={entry}
+                            isPlayerNote={true}
+                          >
+                            <Button variant="outline" size="icon">
+                              <Edit className="w-4 h-4" />
+                            </Button>
+                          </JournalEntryDialog>
+                        </Suspense>
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          onClick={() => setEntryToDelete(entry)}
                         >
-                          <Button variant="outline" size="icon">
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                        </JournalEntryDialog>
-                      </Suspense>
-                      <Button
-                        variant="destructive"
-                        size="icon"
-                        onClick={() => setEntryToDelete(entry)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </CardFooter>
-                  )}
-                </Card>
-              );
-            })
-          )}
-        </div>
-      </div>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </CardFooter>
+                    )}
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
-      <AlertDialog
+      {/* (Todos os AlertDialogs... permanecem iguais no final) */}
+       <AlertDialog
         open={!!characterToDelete}
         onOpenChange={(open) => !open && setCharacterToDelete(null)}
       >
@@ -467,6 +485,8 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
     </div>
   );
+  // --- 3. FIM DA MUDANÇA NO LAYOUT ---
 };
