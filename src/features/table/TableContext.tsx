@@ -2,11 +2,23 @@
 
 import { createContext, useContext, ReactNode } from "react";
 
+// --- 1. NOVO TIPO: Membro da Mesa ---
+// Uma interface simplificada para nossos propósitos
+export interface TableMember {
+  id: string; // user_id (ou master_id)
+  display_name: string;
+  isMaster: boolean;
+}
+// --- FIM DA ADIÇÃO ---
+
 interface TableContextType {
   tableId: string;
-  masterId: string; // ID do mestre da mesa
-  userId: string; // ID do usuário logado
-  isMaster: boolean; // O usuário logado é o mestre?
+  masterId: string;
+  userId: string;
+  isMaster: boolean;
+  // --- 2. ADICIONAR MEMBROS AO CONTEXTO ---
+  members: TableMember[]; 
+  // --- FIM DA ADIÇÃO ---
 }
 
 const TableContext = createContext<TableContextType | null>(null);
