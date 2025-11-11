@@ -5,19 +5,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, MessageSquare } from "lucide-react"; // --- MUDANÇA: Importado 'MessageSquare'
+import { ArrowLeft, MessageSquare } from "lucide-react"; 
 import { ChatPanel } from "@/components/ChatPanel";
 import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
-import { TableProvider } from "@/features/table/TableContext";
 
-// --- MUDANÇA: Importado Sheet para o chat mobile ---
+// --- 1. IMPORTAR O NOVO TIPO ---
+import { TableProvider, TableMember } from "@/features/table/TableContext";
 import {
   Sheet,
   SheetContent,
   SheetTrigger,
 } from "@/components/ui/sheet";
-// --- FIM DA MUDANÇA ---
 
 const TableView = () => {
   const { tableId } = useParams();
@@ -27,6 +26,10 @@ const TableView = () => {
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+
+  // --- 2. NOVO ESTADO PARA OS MEMBROS ---
+  const [members, setMembers] = useState<TableMember[]>([]);
+  // --- FIM DA ADIÇÃO ---
 
   useEffect(() => {
     loadTable();
@@ -42,28 +45,68 @@ const TableView = () => {
 
     setUserId(user.id);
 
-    const { data, error } = await supabase
-      .from("tables")
-      .select("*")
-      .eq("id", tableId)
-      .single();
+    // --- 3. ATUALIZAR A LÓGICA DE CARREGAMENTO ---
+    // Agora, buscamos a mesa, os membros e o perfil do mestre de uma vez
+    try {
+      // 1. Busca a mesa
+      const { data: tableData, error: tableError } = await supabase
+        .from("tables")
+        .select("*, master:profiles!tables_master_id_fkey(id, display_name)") // Puxa o perfil do mestre
+        .eq("id", tableId)
+        .single();
 
-    if (error || !data) {
+      if (tableError || !tableData) {
+        throw tableError || new Error("Mesa não encontrada");
+      }
+
+      // 2. Busca os membros da mesa (jogadores)
+      const { data: membersData, error: membersError } = await supabase
+        .from("table_members")
+        .select("user:profiles!table_members_user_id_fkey(id, display_name)")
+        .eq("table_id", tableId);
+
+      if (membersError) {
+        throw membersError;
+      }
+
+      // 3. Formata a lista de membros
+      const masterProfile = tableData.master as { id: string, display_name: string };
+      
+      const memberList: TableMember[] = [
+        // Adiciona o Mestre à lista
+        { 
+          id: masterProfile.id, 
+          display_name: masterProfile.display_name, 
+          isMaster: true 
+        },
+        // Adiciona os outros jogadores
+        ...membersData.map((m: any) => ({
+          id: m.user.id,
+          display_name: m.user.display_name,
+          isMaster: false,
+        }))
+      ];
+      
+      setTable(tableData);
+      setMembers(memberList); // Define a lista de membros
+      setIsMaster(tableData.master_id === user.id);
+      setLoading(false);
+
+    } catch (error: any) {
+      console.error("Erro ao carregar dados da mesa:", error);
       toast({
         title: "Erro",
-        description: "Mesa não encontrada",
+        description: error.message || "Mesa não encontrada",
         variant: "destructive",
       });
       navigate("/dashboard");
       return;
     }
-
-    setTable(data);
-    setIsMaster(data.master_id === user.id);
-    setLoading(false);
+    // --- FIM DA ATUALIZAÇÃO ---
   };
 
-  if (loading || !table || !userId) { 
+  // --- 4. ATUALIZAR CONDIÇÃO DE LOADING ---
+  if (loading || !table || !userId || members.length === 0) { 
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p className="text-muted-foreground">Carregando mesa...</p>
@@ -71,19 +114,20 @@ const TableView = () => {
     );
   }
   
+  // --- 5. ATUALIZAR VALOR DO CONTEXTO ---
   const tableContextValue = {
     tableId: table.id,
     masterId: table.master_id,
     userId: userId,
     isMaster: isMaster,
+    members: members, // Passa a lista de membros
   };
+  // --- FIM DA ATUALIZAÇÃO ---
 
   return (
-    // --- MUDANÇA: A página agora é um <Sheet> para o chat mobile ---
     <Sheet>
       <TableProvider value={tableContextValue}>
         <div className="min-h-screen bg-background">
-          {/* O Header não muda */}
           <div className="border-b border-border/50 bg-card/50 backdrop-blur">
             <div className="max-w-6xl mx-auto px-4 py-4">
               <div className="flex items-center gap-4">
@@ -100,36 +144,26 @@ const TableView = () => {
             </div>
           </div>
 
-          {/* --- MUDANÇA: Layout principal modificado --- */}
           <div className="flex h-[calc(100vh-80px)]">
             
-            {/* 1. Conteúdo Principal */}
-            {/* Em telas médias (md) ou maiores, tem um padding à direita (pr-6) para não colar no chat */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6">
               <div className="max-w-6xl mx-auto">
                 {isMaster ? (
-                  <MasterView tableId={tableId!} masterId={table.master_id} />
+                  // O MasterView agora pode pegar os 'members' do contexto
+                  <MasterView tableId={tableId!} masterId={table.master_id} /> 
                 ) : (
                   <PlayerView tableId={tableId!} />
                 )}
               </div>
             </div>
 
-            {/* 2. Chat Lateral (Desktop) */}
-            {/* 'hidden' = Escondido por padrão (mobile)
-              'md:flex' = Vira 'flex' em telas médias (md) ou maiores
-            */}
             <div className="w-96 border-l border-border/50 bg-card/30 hidden md:flex">
               <ChatPanel tableId={tableId!} />
             </div>
 
-            {/* 3. Botão Flutuante (Mobile) */}
-            {/* 'md:hidden' = Fica escondido em telas médias (md) ou maiores
-              'fixed' = Fica flutuando na tela
-            */}
             <SheetTrigger asChild>
               <Button
-                variant="primary"
+                variant="default" // Mudei para 'default' (verde)
                 size="icon"
                 className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg md:hidden z-50"
               >
@@ -139,10 +173,7 @@ const TableView = () => {
             </SheetTrigger>
 
           </div>
-          {/* --- FIM DA MUDANÇA --- */}
-
-          {/* 4. Conteúdo do Chat (Mobile) */}
-          {/* O <ChatPanel> agora é renderizado dentro de um <SheetContent> */}
+          
           <SheetContent side="right" className="p-0 w-full max-w-sm sm:max-w-sm">
             <ChatPanel tableId={tableId!} />
           </SheetContent>
@@ -150,7 +181,6 @@ const TableView = () => {
         </div>
       </TableProvider>
     </Sheet>
-    // --- FIM DA MUDANÇA ---
   );
 };
 
