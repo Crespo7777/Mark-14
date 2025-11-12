@@ -6,13 +6,13 @@ import { z } from "zod";
 // CORREÇÃO: Adicionado "export" para que outros schemas (como o do NPC) possam usar
 // ---
 export const simpleUUID = () => {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c) {
-    var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+    var r = (Math.random() * 16) | 0,
+      v = c == "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
-}
+};
 // --- FIM DA CORREÇÃO ---
-
 
 // --- HELPERS (Funções Auxiliares) ---
 
@@ -85,6 +85,10 @@ export const weaponSchema = z.object({
   damage: z.string().default("1d6"),
   attribute: z.string().default("Vigoroso"),
   attackAttribute: z.string().default("precise"),
+  // --- ATUALIZADO ---
+  // Adiciona um campo para ligar a um projétil
+  projectileId: z.string().optional(),
+  // --- FIM DA ATUALIZAÇÃO ---
 });
 
 /**
@@ -134,6 +138,17 @@ export const inventoryItemSchema = z.object({
   description: z.string().default(""),
 });
 
+// --- NOVO ---
+/**
+ * 11. PROJÉTEIS (Munição)
+ */
+export const projectileSchema = z.object({
+  id: z.string().default(() => simpleUUID()),
+  name: z.string().default("Novo Projétil"),
+  quantity: z.number().default(0),
+});
+// --- FIM DO NOVO ---
+
 // --- TIPOS E FUNÇÕES EXPORTADAS ---
 
 export type Weapon = z.infer<typeof weaponSchema>;
@@ -141,6 +156,9 @@ export type Armor = z.infer<typeof armorSchema>;
 export type Ability = z.infer<typeof abilitySchema>;
 export type Trait = z.infer<typeof traitSchema>;
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
+// --- NOVO ---
+export type Projectile = z.infer<typeof projectileSchema>;
+// --- FIM DO NOVO ---
 
 // Funções para criar itens padrão
 export const getDefaultWeapon = (): Weapon => weaponSchema.parse({});
@@ -149,6 +167,10 @@ export const getDefaultAbility = (): Ability => abilitySchema.parse({});
 export const getDefaultTrait = (): Trait => traitSchema.parse({});
 export const getDefaultInventoryItem = (): InventoryItem =>
   inventoryItemSchema.parse({});
+// --- NOVO ---
+export const getDefaultProjectile = (): Projectile =>
+  projectileSchema.parse({});
+// --- FIM DO NOVO ---
 
 // --- O SCHEMA PRINCIPAL (A Ficha Completa) ---
 
@@ -166,6 +188,9 @@ export const characterSheetSchema = z.object({
   abilities: z.array(abilitySchema).default([]),
   traits: z.array(traitSchema).default([]),
   inventory: z.array(inventoryItemSchema).default([]),
+  // --- ATUALIZADO ---
+  projectiles: z.array(projectileSchema).default([]),
+  // --- FIM DA ATUALIZAÇÃO ---
 });
 
 // Este é o tipo TypeScript que usaremos em toda a aplicação
