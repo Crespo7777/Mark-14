@@ -13,9 +13,10 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Heart, Shield, Dices, ShieldAlert } from "lucide-react"; // Importar ShieldAlert
-import { DefenseRollDialog } from "@/components/DefenseRollDialog";
-import { useToast } from "@/hooks/use-toast"; // 1. IMPORTAR O TOAST
+// --- 1. 'Dices' e 'DefenseRollDialog' REMOVIDOS ---
+import { Heart, Shield, ShieldAlert } from "lucide-react"; 
+import { useToast } from "@/hooks/use-toast"; 
+// --- FIM DA REMOÇÃO ---
 
 /**
  * Componente de UI reutilizável para aplicar dano/cura
@@ -53,40 +54,37 @@ const DamageHealControl = ({
 
 export const NpcCombatTab = () => {
   const { form, npc } = useNpcSheet(); // ATUALIZADO: Pegar o 'npc'
-  const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
-  const { toast } = useToast(); // 2. INICIAR O TOAST
+  
+  // --- 2. 'isDefenseRollOpen' REMOVIDO ---
+  // const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
+  // --- FIM DA REMOÇÃO ---
+
+  const { toast } = useToast(); 
 
   // Observa os valores do formulário para os cálculos
   const currentToughness = form.watch("combat.toughness_current");
   const maxToughness = form.watch("combat.toughness_max");
-  const defenseValue = form.watch("combat.defense");
+  // const defenseValue = form.watch("combat.defense"); // Já não precisamos de o observar
 
-  // 3. ATUALIZAR A LÓGICA DE DANO
   const handleDamage = (rawDamage: number) => {
-    // Lê os valores atuais do formulário
     const armorRD = form.getValues("combat.armor_rd") || 0;
     const painThreshold = form.getValues("combat.pain_threshold") || 0;
     const currentToughness = form.getValues("combat.toughness_current");
 
-    // Calcula o dano líquido (Dano Bruto - Armadura, mínimo 0)
     const netDamage = Math.max(0, rawDamage - armorRD);
-
-    // Aplica o dano líquido
     const newValue = Math.max(0, currentToughness - netDamage);
     form.setValue("combat.toughness_current", newValue, { shouldDirty: true });
 
-    // Envia o Toast de Dano
     toast({
       title: "Dano Recebido!",
       description: `${npc.name} sofreu ${netDamage} de dano (Dano Bruto: ${rawDamage}, Armadura: ${armorRD}).`,
     });
 
-    // VERIFICA O LIMIAR DE DOR
     if (netDamage > 0 && netDamage >= painThreshold) {
       toast({
         title: "Limiar de Dor Ultrapassado!",
         description: `${npc.name} sofreu ${netDamage} de dano (Limiar: ${painThreshold}) e pode precisar fazer um teste!`,
-        variant: "destructive", // Destaque
+        variant: "destructive", 
         action: (
           <div className="flex items-center gap-2 text-destructive-foreground/80">
             <ShieldAlert className="w-4 h-4" /> Aviso
@@ -96,7 +94,6 @@ export const NpcCombatTab = () => {
     }
   };
 
-  // Lógica de Cura (sem alteração, mas adicionei um toast)
   const handleHeal = (healAmount: number) => {
     const currentToughness = form.getValues("combat.toughness_current");
     const maxToughness = form.getValues("combat.toughness_max");
@@ -188,7 +185,6 @@ export const NpcCombatTab = () => {
                   </FormItem>
                 )}
               />
-              {/* --- 4. NOVO CAMPO DE UI --- */}
               <FormField
                 control={form.control}
                 name="combat.pain_threshold"
@@ -209,7 +205,6 @@ export const NpcCombatTab = () => {
                   </FormItem>
                 )}
               />
-              {/* --- FIM DO NOVO CAMPO --- */}
             </div>
 
             {/* Controles de Dano/Cura */}
@@ -228,7 +223,7 @@ export const NpcCombatTab = () => {
           </CardContent>
         </Card>
 
-        {/* CARD DE DEFESA FIXA */}
+        {/* --- 3. CARD DE DEFESA MODIFICADO --- */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -241,12 +236,12 @@ export const NpcCombatTab = () => {
               name="combat.defense"
               render={({ field }) => (
                 <FormItem className="space-y-2">
-                  <FormLabel>Defesa (Alvo do Atacante)</FormLabel>
+                  <FormLabel>Modificador de Defesa (Fixo)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
                       className="text-2xl font-bold h-12"
-                      placeholder="10"
+                      placeholder="0"
                       {...field}
                       onChange={(e) =>
                         field.onChange(parseInt(e.target.value, 10) || 0)
@@ -258,30 +253,24 @@ export const NpcCombatTab = () => {
               )}
             />
             <p className="text-xs text-muted-foreground">
-              Este é o valor alvo para o teste de Defesa (1d20). Pode ser
-              negativo (ex: -3) ou positivo (ex: +2).
+              Este é um modificador fixo (ex: -3 ou +2) que se aplica à rolagem de ataque do Oponente. Não é uma rolagem.
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setIsDefenseRollOpen(true)}
-            >
-              <Dices className="w-4 h-4" />
-              Rolar Defesa (vs {defenseValue})
-            </Button>
+            {/* O BOTÃO DE ROLAGEM FOI REMOVIDO DAQUI */}
           </CardContent>
         </Card>
+        {/* --- FIM DA MODIFICAÇÃO --- */}
+
       </div>
 
-      {/* Diálogo de Rolagem de Defesa (ATUALIZADO) */}
-      <DefenseRollDialog
+      {/* --- 4. DIÁLOGO DE ROLAGEM REMOVIDO --- */}
+      {/* <DefenseRollDialog
         open={isDefenseRollOpen}
         onOpenChange={setIsDefenseRollOpen}
         defenseValue={defenseValue}
         characterName={npc.name}
         tableId={npc.table_id}
-      />
+      /> 
+      */}
     </>
   );
 };
