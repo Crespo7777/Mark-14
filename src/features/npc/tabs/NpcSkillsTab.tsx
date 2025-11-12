@@ -42,7 +42,8 @@ type AbilityRollData = {
   attributeValue: number;
 };
 
-export const NpcSkillsTab = () => { // <-- Nome do Componente
+export const NpcSkillsTab = () => {
+  // <-- Nome do Componente
   const { form, npc } = useNpcSheet(); // <-- USA O HOOK DO NPC
   const [selectedAbilityRoll, setSelectedAbilityRoll] =
     useState<AbilityRollData | null>(null);
@@ -59,14 +60,17 @@ export const NpcSkillsTab = () => { // <-- Nome do Componente
   const handleRollClick = (index: number) => {
     const ability = form.getValues(`abilities.${index}`);
     const allAttributes = form.getValues("attributes");
-    
+
     const selectedAttr = attributesList.find(
       (attr) => attr.key === ability.associatedAttribute,
     );
 
+    // --- ATUALIZADO ---
+    // Temos de ler o .value do objeto de atributo
     const attributeValue = selectedAttr
-      ? allAttributes[selectedAttr.key as keyof typeof allAttributes]
+      ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
       : 0;
+    // --- FIM DA ATUALIZAÇÃO ---
 
     setSelectedAbilityRoll({
       abilityName: ability.name || "Habilidade",
@@ -103,14 +107,14 @@ export const NpcSkillsTab = () => { // <-- Nome do Componente
               <AccordionItem
                 key={field.id}
                 value={field.id}
-                className="p-3 rounded-md border bg-muted/20" 
+                className="p-3 rounded-md border bg-muted/20"
               >
                 <AccordionTrigger className="p-0 hover:no-underline">
                   <div className="flex justify-between items-center w-full">
-                    
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                       <h4 className="font-semibold text-base text-primary-foreground truncate">
-                        {form.watch(`abilities.${index}.name`) || "Nova Habilidade"}
+                        {form.watch(`abilities.${index}.name`) ||
+                          "Nova Habilidade"}
                       </h4>
                       <div className="flex gap-1.5 flex-wrap">
                         <Badge variant="secondary" className="px-1.5 py-0.5">
@@ -118,20 +122,29 @@ export const NpcSkillsTab = () => { // <-- Nome do Componente
                         </Badge>
                         <Badge variant="outline" className="px-1.5 py-0.5">
                           {attributesList.find(
-                            (a) => a.key === form.watch(`abilities.${index}.associatedAttribute`)
+                            (a) =>
+                              a.key ===
+                              form.watch(
+                                `abilities.${index}.associatedAttribute`,
+                              ),
                           )?.label || "N/A"}
                         </Badge>
                         {/* Badge de Custo de Corrupção REMOVIDO */}
                       </div>
                     </div>
-                    
-                    <div className="flex gap-1 pl-2" onClick={(e) => e.stopPropagation()}> 
+
+                    <div
+                      className="flex gap-1 pl-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Button
                         type="button"
                         size="sm"
                         onClick={() => handleRollClick(index)}
                         disabled={
-                          form.watch(`abilities.${index}.associatedAttribute`) === "Nenhum"
+                          form.watch(
+                            `abilities.${index}.associatedAttribute`,
+                          ) === "Nenhum"
                         }
                       >
                         <Dices className="w-4 h-4" />
@@ -147,10 +160,9 @@ export const NpcSkillsTab = () => { // <-- Nome do Componente
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     </div>
-
                   </div>
                 </AccordionTrigger>
-                
+
                 <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -209,7 +221,9 @@ export const NpcSkillsTab = () => { // <-- Nome do Componente
                                 </SelectTrigger>
                               </FormControl>
                               <SelectContent>
-                                <SelectItem value="Habilidade">Habilidade</SelectItem>
+                                <SelectItem value="Habilidade">
+                                  Habilidade
+                                </SelectItem>
                                 <SelectItem value="Poder">Poder</SelectItem>
                                 <SelectItem value="Ritual">Ritual</SelectItem>
                               </SelectContent>
@@ -225,7 +239,9 @@ export const NpcSkillsTab = () => { // <-- Nome do Componente
                       name={`abilities.${index}.associatedAttribute`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Atributo Associado (para rolagem)</FormLabel>
+                          <FormLabel>
+                            Atributo Associado (para rolagem)
+                          </FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
@@ -270,7 +286,6 @@ export const NpcSkillsTab = () => { // <-- Nome do Componente
               </AccordionItem>
             ))}
           </Accordion>
-          
         </CardContent>
       </Card>
 
