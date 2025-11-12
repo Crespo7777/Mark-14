@@ -22,10 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Shield, Sword, Dices } from "lucide-react";
-import {
-  getDefaultWeapon,
-  getDefaultArmor,
-} from "../character.schema";
+import { getDefaultWeapon, getDefaultArmor } from "../character.schema";
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
 import { attributesList } from "../character.constants";
 import { Separator } from "@/components/ui/separator";
@@ -47,6 +44,7 @@ type AttackRollData = {
   weaponName: string;
   attributeName: string;
   attributeValue: number;
+  projectileId?: string; // --- ATUALIZADO ---
 };
 type DamageRollData = {
   weaponName: string;
@@ -57,6 +55,11 @@ export const EquipmentTab = () => {
   const { form, character } = useCharacterSheet();
   const { totalDefense, quick } = useCharacterCalculations();
   const { toast } = useToast();
+
+  // --- NOVO ---
+  // Observa a lista de projéteis para usar no dropdown
+  const projectiles = form.watch("projectiles");
+  // --- FIM DO NOVO ---
 
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(
     null,
@@ -84,7 +87,7 @@ export const EquipmentTab = () => {
     name: "armors",
   });
 
-  // Funções de rolagem (sem alteração)
+  // --- ATUALIZADO ---
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -106,8 +109,11 @@ export const EquipmentTab = () => {
       weaponName: weapon.name || "Arma",
       attributeName: selectedAttr?.label || "N/D",
       attributeValue: attributeValue,
+      projectileId: weapon.projectileId, // Passa o ID do projétil
     });
   };
+  // --- FIM DA ATUALIZAÇÃO ---
+
   const handleDamageClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     if (!weapon.damage) {
@@ -130,7 +136,9 @@ export const EquipmentTab = () => {
       });
       return;
     }
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
     toast({
       title: `Proteção de ${armor.name}`,
@@ -172,7 +180,7 @@ export const EquipmentTab = () => {
                 Nenhuma arma adicionada.
               </p>
             )}
-            
+
             <Accordion type="multiple" className="space-y-4">
               {weaponFields.map((field, index) => (
                 <AccordionItem
@@ -180,8 +188,6 @@ export const EquipmentTab = () => {
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  {/* --- INÍCIO DA CORREÇÃO DE NESTING --- */}
-                  {/* O Trigger e os botões agora são irmãos, dentro de um 'flex' */}
                   <div className="flex justify-between items-center w-full gap-2">
                     <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
@@ -189,18 +195,40 @@ export const EquipmentTab = () => {
                           {form.watch(`weapons.${index}.name`) || "Nova Arma"}
                         </h4>
                         <div className="flex gap-1.5 flex-wrap">
-                          <Badge variant="secondary" className="px-1.5 py-0.5">
-                            Dano: {form.watch(`weapons.${index}.damage`) || 'N/A'}
+                          <Badge
+                            variant="secondary"
+                            className="px-1.5 py-0.5"
+                          >
+                            Dano:{" "}
+                            {form.watch(`weapons.${index}.damage`) || "N/A"}
                           </Badge>
                           <Badge variant="outline" className="px-1.5 py-0.5">
-                            Atq: {attributesList.find(
-                              (a) => a.key === form.watch(`weapons.${index}.attackAttribute`)
+                            Atq:{" "}
+                            {attributesList.find(
+                              (a) =>
+                                a.key ===
+                                form.watch(`weapons.${index}.attackAttribute`),
                             )?.label || "N/A"}
                           </Badge>
+                          {/* --- NOVO: Badge de Projétil --- */}
+                          {form.watch(`weapons.${index}.projectileId`) && (
+                            <Badge
+                              variant="destructive"
+                              className="px-1.5 py-0.5"
+                            >
+                              Gasta:{" "}
+                              {projectiles.find(
+                                (p) =>
+                                  p.id ===
+                                  form.watch(`weapons.${index}.projectileId`),
+                              )?.name || "N/A"}
+                            </Badge>
+                          )}
+                          {/* --- FIM DO NOVO --- */}
                         </div>
                       </div>
                     </AccordionTrigger>
-                    {/* Estes botões estão FORA do Trigger, corrigindo o erro */}
+                    {/* Estes botões estão FORA do Trigger */}
                     <div className="flex items-center gap-1 pl-2 flex-shrink-0">
                       <Button
                         type="button"
@@ -231,7 +259,6 @@ export const EquipmentTab = () => {
                       </Button>
                     </div>
                   </div>
-                  {/* --- FIM DA CORREÇÃO DE NESTING --- */}
 
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
@@ -255,11 +282,20 @@ export const EquipmentTab = () => {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Atributo de Ataque</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione..." />
+                                  </SelectTrigger>
+                                </FormControl>
                                 <SelectContent>
                                   {attributesList.map((attr) => (
-                                    <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>
+                                    <SelectItem key={attr.key} value={attr.key}>
+                                      {attr.label}
+                                    </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -272,11 +308,49 @@ export const EquipmentTab = () => {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Dano</FormLabel>
-                              <FormControl><Input placeholder="1d8" {...field} /></FormControl>
+                              <FormControl>
+                                <Input placeholder="1d8" {...field} />
+                              </FormControl>
                             </FormItem>
                           )}
                         />
                       </div>
+                      
+                      {/* --- NOVO CAMPO: GASTA PROJÉTIL --- */}
+                      <FormField
+                        control={form.control}
+                        name={`weapons.${index}.projectileId`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Gasta Projétil (Opcional)</FormLabel>
+                            <Select
+                              onValueChange={(value) =>
+                                field.onChange(
+                                  value === "none" ? undefined : value,
+                                )
+                              }
+                              value={field.value || "none"}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecione um projétil..." />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="none">Nenhum</SelectItem>
+                                {projectiles.length > 0 && <Separator />}
+                                {projectiles.map((proj) => (
+                                  <SelectItem key={proj.id} value={proj.id}>
+                                    {proj.name} (Qtd: {proj.quantity})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      {/* --- FIM DO NOVO CAMPO --- */}
+
                       <div className="grid grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
@@ -284,7 +358,9 @@ export const EquipmentTab = () => {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Atributo de Dano</FormLabel>
-                              <FormControl><Input placeholder="Vigoroso" {...field} /></FormControl>
+                              <FormControl>
+                                <Input placeholder="Vigoroso" {...field} />
+                              </FormControl>
                             </FormItem>
                           )}
                         />
@@ -294,7 +370,9 @@ export const EquipmentTab = () => {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Qualidades</FormLabel>
-                              <FormControl><Input placeholder="Precisa" {...field} /></FormControl>
+                              <FormControl>
+                                <Input placeholder="Precisa" {...field} />
+                              </FormControl>
                             </FormItem>
                           )}
                         />
@@ -304,8 +382,16 @@ export const EquipmentTab = () => {
                         name={`weapons.${index}.quality_desc`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Descrição das Qualidades (Notas)</FormLabel>
-                            <FormControl><Textarea placeholder="Precisa: +1d4 no dano..." {...field} className="min-h-[60px] text-sm" /></FormControl>
+                            <FormLabel>
+                              Descrição das Qualidades (Notas)
+                            </FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Precisa: +1d4 no dano..."
+                                {...field}
+                                className="min-h-[60px] text-sm"
+                              />
+                            </FormControl>
                           </FormItem>
                         )}
                       />
@@ -332,7 +418,7 @@ export const EquipmentTab = () => {
                 <Plus className="w-4 h-4 mr-2" /> Adicionar Armadura
               </Button>
             </div>
-            
+
             <div className="pt-4 space-y-2">
               <span className="text-3xl font-bold">
                 Defesa Total: {totalDefense}
@@ -365,24 +451,29 @@ export const EquipmentTab = () => {
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  {/* --- INÍCIO DA CORREÇÃO DE NESTING --- */}
                   <div className="flex justify-between items-center w-full gap-2">
                     <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate shrink-0">
-                          {form.watch(`armors.${index}.name`) || "Nova Armadura"}
+                          {form.watch(`armors.${index}.name`) ||
+                            "Nova Armadura"}
                         </h4>
                         <div className="flex gap-1.5 flex-wrap">
-                          <Badge variant="secondary" className="px-1.5 py-0.5">
-                            Prot: {form.watch(`armors.${index}.protection`) || '0'}
+                          <Badge
+                            variant="secondary"
+                            className="px-1.5 py-0.5"
+                          >
+                            Prot:{" "}
+                            {form.watch(`armors.${index}.protection`) || "0"}
                           </Badge>
                           <Badge variant="outline" className="px-1.5 py-0.5">
-                            Obst: {form.watch(`armors.${index}.obstructive`) || 0}
+                            Obst:{" "}
+                            {form.watch(`armors.${index}.obstructive`) || 0}
                           </Badge>
                         </div>
                       </div>
                     </AccordionTrigger>
-                    {/* Estes botões estão FORA do Trigger, corrigindo o erro */}
+                    {/* Estes botões estão FORA do Trigger */}
                     <div className="flex items-center gap-1 pl-2 flex-shrink-0">
                       <Button
                         type="button"
@@ -404,8 +495,7 @@ export const EquipmentTab = () => {
                       </Button>
                     </div>
                   </div>
-                  {/* --- FIM DA CORREÇÃO DE NESTING --- */}
-                  
+
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
                       {/* Campos de Edição da Armadura */}
@@ -429,7 +519,11 @@ export const EquipmentTab = () => {
                             <FormItem>
                               <FormLabel>Proteção</FormLabel>
                               <FormControl>
-                                <Input type="text" placeholder="1d4" {...field} />
+                                <Input
+                                  type="text"
+                                  placeholder="1d4"
+                                  {...field}
+                                />
                               </FormControl>
                             </FormItem>
                           )}
@@ -446,7 +540,9 @@ export const EquipmentTab = () => {
                                   placeholder="-2"
                                   {...field}
                                   onChange={(e) =>
-                                    field.onChange(parseInt(e.target.value, 10) || 0)
+                                    field.onChange(
+                                      parseInt(e.target.value, 10) || 0,
+                                    )
                                   }
                                 />
                               </FormControl>
@@ -471,7 +567,9 @@ export const EquipmentTab = () => {
                         name={`armors.${index}.quality_desc`}
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Descrição das Qualidades (Notas)</FormLabel>
+                            <FormLabel>
+                              Descrição das Qualidades (Notas)
+                            </FormLabel>
                             <FormControl>
                               <Textarea
                                 placeholder="Reforçada: +1 na Proteção..."
@@ -482,7 +580,7 @@ export const EquipmentTab = () => {
                           </FormItem>
                         )}
                       />
-                      
+
                       {/* O Checkbox "Equipada" permanece aqui, seguro */}
                       <FormField
                         control={form.control}
@@ -495,13 +593,10 @@ export const EquipmentTab = () => {
                                 onCheckedChange={field.onChange}
                               />
                             </FormControl>
-                            <FormLabel className="m-0">
-                              Equipada
-                            </FormLabel>
+                            <FormLabel className="m-0">Equipada</FormLabel>
                           </FormItem>
                         )}
                       />
-                      
                     </div>
                   </AccordionContent>
                 </AccordionItem>
@@ -511,7 +606,7 @@ export const EquipmentTab = () => {
         </Card>
       </div>
 
-      {/* Diálogos de Rolagem (sem alterações) */}
+      {/* Diálogos de Rolagem (ATUALIZADO) */}
       {attackRollData && (
         <WeaponAttackDialog
           open={!!attackRollData}
@@ -519,6 +614,7 @@ export const EquipmentTab = () => {
           characterName={character.name}
           tableId={character.table_id}
           {...attackRollData}
+          projectileId={attackRollData?.projectileId} // 4. Passa a nova prop
         />
       )}
       {damageRollData && (
