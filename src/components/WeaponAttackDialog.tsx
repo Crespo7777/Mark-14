@@ -3,10 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import {
-  rollAttributeTest,
-  formatAttackRoll,
-} from "@/lib/dice-parser";
+import { rollAttributeTest, formatAttackRoll } from "@/lib/dice-parser";
 import {
   Dialog,
   DialogContent,
@@ -19,19 +16,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dices } from "lucide-react";
+import { Dices, Crosshair } from "lucide-react"; // 1. Importar Crosshair
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
+// --- NOVO ---
+import { useCharacterSheet } from "@/features/character/CharacterSheetContext"; // 2. Importar o hook da ficha
+// --- FIM DO NOVO ---
 
+// --- ATUALIZADO ---
 interface WeaponAttackDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   weaponName: string;
   attributeName: string;
   attributeValue: number;
-  characterName: string; 
+  characterName: string;
   tableId: string;
+  projectileId?: string; // 3. Adicionar projectileId
 }
+// --- FIM DA ATUALIZAÇÃO ---
 
 export const WeaponAttackDialog = ({
   open,
@@ -41,15 +44,71 @@ export const WeaponAttackDialog = ({
   attributeValue,
   characterName,
   tableId,
+  projectileId, // 3. Receber o projectileId
 }: WeaponAttackDialogProps) => {
   const [withAdvantage, setWithAdvantage] = useState(false);
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { isMaster, masterId, userId, tableId: contextTableId } = useTableContext();
+  const {
+    isMaster,
+    masterId,
+    tableId: contextTableId,
+  } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
 
+  // --- NOVO ---
+  // 4. Obter o formulário da ficha de personagem
+  const { form } = useCharacterSheet();
+  // --- FIM DO NOVO ---
+
   const handleRoll = async () => {
+    // --- LÓGICA DE MUNIÇÃO (INÍCIO) ---
+    // 5. Adicionar a lógica de verificação e gasto de munição
+    if (projectileId && form) {
+      const projectiles = form.getValues("projectiles");
+      const projectileIndex = projectiles.findIndex(
+        (p) => p.id === projectileId,
+      );
+      const projectile = projectiles[projectileIndex];
+
+      if (projectileIndex === -1) {
+        toast({
+          title: "Erro de Projétil",
+          description: "A munição ligada a esta arma não foi encontrada.",
+          variant: "destructive",
+        });
+        return; // Para a execução
+      }
+
+      if (projectile.quantity <= 0) {
+        toast({
+          title: "Sem Munição!",
+          description: `Você não tem mais ${projectile.name} para disparar.`,
+          variant: "destructive",
+        });
+        return; // Para a execução
+      }
+
+      // Se chegou aqui, tem munição. Vamos gastar.
+      const newQuantity = projectile.quantity - 1;
+      form.setValue(`projectiles.${projectileIndex}.quantity`, newQuantity, {
+        shouldDirty: true, // Marca a ficha como "modificada"
+      });
+
+      // Toast de sucesso (não-destrutivo)
+      toast({
+        title: "Disparou!",
+        description: (
+          <div className="flex items-center gap-2">
+            <Crosshair className="w-4 h-4" />
+            {`${projectile.name}: ${newQuantity} restantes.`}
+          </div>
+        ),
+      });
+    }
+    // --- LÓGICA DE MUNIÇÃO (FIM) ---
+
     setLoading(true);
 
     const {
@@ -66,8 +125,16 @@ export const WeaponAttackDialog = ({
       withAdvantage,
     });
 
-    const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${result.target}) - ${
-      result.isCrit ? "Crítico!" : result.isFumble ? "Falha Crítica!" : result.isSuccess ? "Sucesso!" : "Falha"
+    const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${
+      result.target
+    }) - ${
+      result.isCrit
+        ? "Crítico!"
+        : result.isFumble
+        ? "Falha Crítica!"
+        : result.isSuccess
+        ? "Sucesso!"
+        : "Falha"
     }`;
 
     if (!isHidden || isMaster) {
@@ -158,7 +225,6 @@ export const WeaponAttackDialog = ({
               </div>
             </>
           )}
-
         </div>
         <DialogFooter>
           <Button
