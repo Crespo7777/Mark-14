@@ -1,6 +1,6 @@
 // src/components/JournalEntryDialog.tsx
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import {
   Dialog,
   DialogContent,
@@ -15,12 +15,12 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
+import { Skeleton } from "@/components/ui/skeleton";
 
-// --- 1. IMPORTAR O NOVO EDITOR ---
-import { RichTextEditor } from "./RichTextEditor";
-// --- FIM DA IMPORTAÇÃO ---
-
-// Remover import de 'Upload', 'useRef', 'Textarea'
+// --- 1. IMPORTAR O NOVO EDITOR (Lazy) ---
+const RichTextEditor = lazy(() =>
+  import("./RichTextEditor").then(module => ({ default: module.RichTextEditor }))
+);
 
 interface JournalEntryDialogProps {
   children: React.ReactNode;
@@ -28,6 +28,10 @@ interface JournalEntryDialogProps {
   onEntrySaved: () => void;
   entry?: any;
   isPlayerNote?: boolean;
+  // --- 2. NOVAS PROPS PARA LIGAÇÃO ---
+  characterId?: string;
+  npcId?: string;
+  // --- FIM DAS NOVAS PROPS ---
 }
 
 export const JournalEntryDialog = ({
@@ -36,21 +40,20 @@ export const JournalEntryDialog = ({
   onEntrySaved,
   entry,
   isPlayerNote = false,
+  characterId,
+  npcId,
 }: JournalEntryDialogProps) => {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState(""); // Este 'content' agora será HTML
+  const [content, setContent] = useState(""); 
   const [isShared, setIsShared] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // --- 2. REMOVER ESTADOS E REFS DE UPLOAD ---
-  // const [isUploading, setIsUploading] = useState(false);
-  // const fileInputRef = useRef<HTMLInputElement>(null);
-  // const textareaRef = useRef<HTMLTextAreaElement>(null);
-  // --- FIM DA REMOÇÃO ---
-
   const { toast } = useToast();
   const isEditing = !!entry;
+
+  // Define se o switch "Compartilhar" deve aparecer
+  const canShare = !isPlayerNote && !characterId && !npcId;
 
   useEffect(() => {
     if (open) {
@@ -66,10 +69,6 @@ export const JournalEntryDialog = ({
     }
   }, [entry, isEditing, open]);
 
-  // --- 3. REMOVER TODAS AS FUNÇÕES DE IMAGEM ---
-  // handleImageUpload, uploadImage, handlePaste FORAM REMOVIDAS
-  // --- FIM DA REMOÇÃO ---
-
   const handleSave = async () => {
     if (!title.trim()) {
       toast({ title: "Erro", description: "O título é obrigatório", variant: "destructive" });
@@ -84,8 +83,6 @@ export const JournalEntryDialog = ({
       return;
     }
 
-    // O 'content' agora é HTML gerado pelo Tiptap
-    // Se estiver vazio, salva como nulo
     const contentToSave = (content && content.trim() !== "<p></p>") ? content.trim() : null;
 
     if (isEditing) {
@@ -93,8 +90,8 @@ export const JournalEntryDialog = ({
         .from("journal_entries")
         .update({
           title: title.trim(),
-          content: contentToSave, // Salva o HTML
-          is_shared: isPlayerNote ? entry.is_shared : isShared,
+          content: contentToSave,
+          is_shared: canShare ? isShared : entry.is_shared, // Só atualiza se 'canShare'
         })
         .eq("id", entry.id);
 
@@ -106,24 +103,28 @@ export const JournalEntryDialog = ({
         setOpen(false);
       }
     } else {
-      let entryData;
+      // --- 3. LÓGICA DE CRIAÇÃO ATUALIZADA ---
+      const entryData: any = {
+        table_id: tableId,
+        title: title.trim(),
+        content: contentToSave,
+        is_shared: false,
+        player_id: null,
+        character_id: null,
+        npc_id: null,
+      };
+
       if (isPlayerNote) {
-        entryData = {
-          table_id: tableId,
-          title: title.trim(),
-          content: contentToSave, // Salva o HTML
-          is_shared: false,
-          player_id: user.id,
-        };
+        entryData.player_id = user.id;
+      } else if (characterId) {
+        entryData.character_id = characterId;
+      } else if (npcId) {
+        entryData.npc_id = npcId;
       } else {
-        entryData = {
-          table_id: tableId,
-          title: title.trim(),
-          content: contentToSave, // Salva o HTML
-          is_shared: isShared,
-          player_id: null,
-        };
+        // É uma nota do Mestre, verificar se é partilhada
+        entryData.is_shared = isShared;
       }
+      // --- FIM DA LÓGICA DE CRIAÇÃO ---
 
       const { error } = await supabase
         .from("journal_entries")
@@ -140,16 +141,26 @@ export const JournalEntryDialog = ({
     setLoading(false);
   };
 
+  const editorFallback = (
+    <div className="space-y-2">
+      <Skeleton className="h-9 w-full" />
+      <Skeleton className="h-[300px] w-full" />
+    </div>
+  )
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      {/* Ajustado para um tamanho melhor para um editor de texto */}
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar Entrada" : "Nova Entrada no Diário"}</DialogTitle>
           <DialogDescription>
             {isPlayerNote
               ? "Crie uma anotação privada. Apenas você e o Mestre podem vê-la."
+              : characterId
+              ? "Crie uma anotação para este personagem."
+              : npcId
+              ? "Crie uma anotação para este NPC."
               : "Crie uma nova entrada para o diário da mesa."}
           </DialogDescription>
         </DialogHeader>
@@ -166,41 +177,40 @@ export const JournalEntryDialog = ({
           </div>
           <div className="space-y-2">
             <Label>Conteúdo</Label>
-            
-            {/* --- 4. SUBSTITUIR TEXTAREA PELO EDITOR --- */}
-            <RichTextEditor
-              value={content}
-              onChange={setContent}
-              placeholder="Descreva aqui os eventos, regras da casa..."
-            />
-            {/* --- FIM DA SUBSTITUIÇÃO --- */}
-            
+            {/* --- 4. EDITOR COM CARREGAMENTO LAZY --- */}
+            <Suspense fallback={editorFallback}>
+              <RichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder="Descreva aqui os eventos, regras da casa..."
+              />
+            </Suspense>
+            {/* --- FIM DA ATUALIZAÇÃO --- */}
           </div>
         </div>
         
-        {/* --- 5. RODAPÉ SIMPLIFICADO (SEM UPLOAD) --- */}
         <div className="pt-4 mt-2 border-t border-border/50">
           <div className="flex justify-between items-center">
             
             <div className="flex gap-4 items-center">
-              {!isPlayerNote && (
+              {/* --- 5. LÓGICA DO SWITCH ATUALIZADA --- */}
+              {canShare && (
                 <div className="flex items-center space-x-2">
                   <Switch id="is-shared" checked={isShared} onCheckedChange={setIsShared} />
-                  <Label htmlFor="is-shared">Compartilhar</Label>
+                  <Label htmlFor="is-shared">Compartilhar com Jogadores</Label>
                 </div>
               )}
             </div>
             
             <Button 
               onClick={handleSave} 
-              disabled={loading} // Não precisa mais verificar 'isUploading'
+              disabled={loading}
               className="w-40"
             >
               {loading ? "Salvando..." : "Salvar Entrada"}
             </Button>
           </div>
         </div>
-        {/* --- FIM DA ATUALIZAÇÃO --- */}
       </DialogContent>
     </Dialog>
   );
