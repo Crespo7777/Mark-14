@@ -25,6 +25,9 @@ import { SkillsTab } from "./tabs/SkillsTab";
 import { EquipmentTab } from "./tabs/EquipmentTab";
 import { TraitsTab } from "./tabs/TraitsTab";
 import { BackpackTab } from "./tabs/BackpackTab";
+// --- NOVO ---
+import { ProjectilesTab } from "./tabs/ProjectilesTab"; // 1. IMPORTAR A NOVA ABA
+// --- FIM DO NOVO ---
 
 type Character = Database["public"]["Tables"]["characters"]["Row"];
 
@@ -126,6 +129,7 @@ const CharacterSheetInner = ({
           className="flex-1 overflow-y-auto"
         >
           <Tabs defaultValue="details" className="w-full">
+            {/* --- ATUALIZADO --- */}
             <TabsList className="m-4 ml-4">
               <TabsTrigger value="details">Detalhes</TabsTrigger>
               <TabsTrigger value="attributes">Atributos</TabsTrigger>
@@ -134,7 +138,10 @@ const CharacterSheetInner = ({
               <TabsTrigger value="traits">Traços</TabsTrigger>
               <TabsTrigger value="equipment">Equipamento</TabsTrigger>
               <TabsTrigger value="backpack">Mochila</TabsTrigger>
+              <TabsTrigger value="projectiles">Projéteis</TabsTrigger>{" "}
+              {/* 2. ADICIONAR O BOTÃO DA ABA */}
             </TabsList>
+            {/* --- FIM DA ATUALIZAÇÃO --- */}
 
             {/* ATUALIZADO: fieldset só desabilitado durante o envio */}
             <fieldset
@@ -162,6 +169,14 @@ const CharacterSheetInner = ({
               <TabsContent value="backpack">
                 <BackpackTab />
               </TabsContent>
+              
+              {/* --- NOVO --- */}
+              {/* 3. ADICIONAR O CONTEÚDO DA ABA */}
+              <TabsContent value="projectiles">
+                <ProjectilesTab />
+              </TabsContent>
+              {/* --- FIM DO NOVO --- */}
+
             </fieldset>
           </Tabs>
         </form>
@@ -186,13 +201,20 @@ export const CharacterSheet = ({
     ...defaults,
     ...(initialCharacter.data as any),
   };
-  mergedData.name = (initialCharacter.data as any)?.name || initialCharacter.name || defaults.name;
+  mergedData.name =
+    (initialCharacter.data as any)?.name ||
+    initialCharacter.name ||
+    defaults.name;
   mergedData.race = (initialCharacter.data as any)?.race || defaults.race;
-  mergedData.occupation = (initialCharacter.data as any)?.occupation || defaults.occupation;
+  mergedData.occupation =
+    (initialCharacter.data as any)?.occupation || defaults.occupation;
 
   const parsedData = characterSheetSchema.safeParse(mergedData);
   if (!parsedData.success) {
-    console.warn("Aviso ao parsear dados da Ficha (CharacterSheet).", parsedData.error.errors);
+    console.warn(
+      "Aviso ao parsear dados da Ficha (CharacterSheet).",
+      parsedData.error.errors,
+    );
   }
   initialCharacter.data = parsedData.success ? parsedData.data : mergedData;
   // *** FIM DA CORREÇÃO ***
@@ -221,10 +243,7 @@ export const CharacterSheet = ({
 
   return (
     // ATUALIZADO: Remover props 'isEditing' e 'setIsEditing'
-    <CharacterSheetProvider
-      character={initialCharacter}
-      onSave={handleSave}
-    >
+    <CharacterSheetProvider character={initialCharacter} onSave={handleSave}>
       <CharacterSheetInner onClose={onClose} onSave={handleSave} />
     </CharacterSheetProvider>
   );
