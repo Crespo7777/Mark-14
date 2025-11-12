@@ -12,7 +12,7 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/textarea"; // Textarea não é mais usada aqui, mas mantemos
 import {
   Select,
   SelectContent,
@@ -21,8 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Sword, Dices, Shield } from "lucide-react";
-import { getDefaultWeapon } from "@/features/character/character.schema";
+// --- ATUALIZADO ---
+import { getDefaultNpcWeapon } from "../npc.schema"; // Importa a arma de NPC
 import { getDefaultNpcArmor } from "../npc.schema";
+// --- FIM DA ATUALIZAÇÃO ---
 import { attributesList } from "@/features/character/character.constants";
 import {
   Accordion,
@@ -32,7 +34,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
-import { WeaponDamageDialog } from "@/components/WeaponDamageDialog";
+// import { WeaponDamageDialog } from "@/components/WeaponDamageDialog"; // REMOVIDO
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 
@@ -42,10 +44,7 @@ type AttackRollData = {
   attributeName: string;
   attributeValue: number;
 };
-type DamageRollData = {
-  weaponName: string;
-  damageString: string;
-};
+// type DamageRollData = { ... } // REMOVIDO
 
 export const NpcEquipmentTab = () => {
   const { form, npc } = useNpcSheet();
@@ -54,9 +53,7 @@ export const NpcEquipmentTab = () => {
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(
     null,
   );
-  const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(
-    null,
-  );
+  // const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null); // REMOVIDO
 
   // Field Array para ARMAS
   const {
@@ -86,10 +83,13 @@ export const NpcEquipmentTab = () => {
     const selectedAttr = attributesList.find(
       (attr) => attr.key === weapon.attackAttribute,
     );
-    
+
+    // --- ATUALIZADO ---
+    // Temos de ler o .value do objeto de atributo
     const attributeValue = selectedAttr
-      ? allAttributes[selectedAttr.key as keyof typeof allAttributes]
+      ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
       : 0;
+    // --- FIM DA ATUALIZAÇÃO ---
 
     if (attributeValue === 0 || !selectedAttr) {
       toast({
@@ -107,22 +107,11 @@ export const NpcEquipmentTab = () => {
     });
   };
 
-  // Abrir diálogo de Dano
-  const handleDamageClick = (index: number) => {
-    const weapon = form.getValues(`weapons.${index}`);
-    if (!weapon.damage) {
-      toast({ title: "Dano não definido", variant: "destructive" });
-      return;
-    }
-    setDamageRollData({
-      weaponName: weapon.name || "Arma",
-      damageString: weapon.damage,
-    });
-  };
+  // handleDamageClick REMOVIDO
 
   return (
     <>
-      <div className="space-y-6"> 
+      <div className="space-y-6">
         {/* Card de Armas (Layout Acordeão) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -132,7 +121,7 @@ export const NpcEquipmentTab = () => {
             <Button
               type="button"
               size="sm"
-              onClick={() => appendWeapon(getDefaultWeapon())}
+              onClick={() => appendWeapon(getDefaultNpcWeapon())} // ATUALIZADO
             >
               <Plus className="w-4 h-4 mr-2" /> Adicionar Arma
             </Button>
@@ -158,16 +147,26 @@ export const NpcEquipmentTab = () => {
                         </h4>
                         <div className="flex gap-1.5 flex-wrap">
                           <Badge variant="secondary" className="px-1.5 py-0.5">
-                            Dano: {form.watch(`weapons.${index}.damage`) || 'N/A'}
+                            Dano:{" "}
+                            {form.watch(`weapons.${index}.damage`) || "N/A"}
                           </Badge>
                           <Badge variant="outline" className="px-1.5 py-0.5">
-                            Atq: {attributesList.find(
-                              (a) => a.key === form.watch(`weapons.${index}.attackAttribute`)
+                            Atq:{" "}
+                            {attributesList.find(
+                              (a) =>
+                                a.key ===
+                                form.watch(
+                                  `weapons.${index}.attackAttribute`,
+                                ),
                             )?.label || "N/A"}
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex gap-1 pl-2" onClick={(e) => e.stopPropagation()}>
+                      {/* --- ATUALIZADO: Botão de Dano removido --- */}
+                      <div
+                        className="flex gap-1 pl-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Button
                           type="button"
                           size="sm"
@@ -177,15 +176,7 @@ export const NpcEquipmentTab = () => {
                           <Dices className="w-4 h-4" />
                           <span className="hidden sm:inline ml-2">Atacar</span>
                         </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => handleDamageClick(index)}
-                        >
-                          <Dices className="w-4 h-4" />
-                          <span className="hidden sm:inline ml-2">Dano</span>
-                        </Button>
+                        {/* Botão de Dano (vermelho) foi removido daqui */}
                         <Button
                           type="button"
                           size="icon"
@@ -196,9 +187,11 @@ export const NpcEquipmentTab = () => {
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
+                      {/* --- FIM DA ATUALIZAÇÃO --- */}
                     </div>
                   </AccordionTrigger>
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                    {/* --- ATUALIZADO: Formulário simplificado --- */}
                     <div className="space-y-4">
                       <FormField
                         control={form.control}
@@ -212,18 +205,27 @@ export const NpcEquipmentTab = () => {
                           </FormItem>
                         )}
                       />
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-3 gap-4">
                         <FormField
                           control={form.control}
                           name={`weapons.${index}.attackAttribute`}
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Atributo de Ataque</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                              <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione..." />
+                                  </SelectTrigger>
+                                </FormControl>
                                 <SelectContent>
                                   {attributesList.map((attr) => (
-                                    <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>
+                                    <SelectItem key={attr.key} value={attr.key}>
+                                      {attr.label}
+                                    </SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -235,20 +237,10 @@ export const NpcEquipmentTab = () => {
                           name={`weapons.${index}.damage`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Dano</FormLabel>
-                              <FormControl><Input placeholder="1d8" {...field} /></FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`weapons.${index}.attribute`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Atributo de Dano</FormLabel>
-                              <FormControl><Input placeholder="Vigoroso" {...field} /></FormControl>
+                              <FormLabel>Dano (Fixo)</FormLabel>
+                              <FormControl>
+                                <Input placeholder="5" {...field} />
+                              </FormControl>
                             </FormItem>
                           )}
                         />
@@ -258,22 +250,16 @@ export const NpcEquipmentTab = () => {
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Qualidades</FormLabel>
-                              <FormControl><Input placeholder="Precisa" {...field} /></FormControl>
+                              <FormControl>
+                                <Input placeholder="Precisa" {...field} />
+                              </FormControl>
                             </FormItem>
                           )}
                         />
                       </div>
-                      <FormField
-                        control={form.control}
-                        name={`weapons.${index}.quality_desc`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Descrição das Qualidades (Notas)</FormLabel>
-                            <FormControl><Textarea placeholder="Precisa: +1d4 no dano..." {...field} className="min-h-[60px] text-sm" /></FormControl>
-                          </FormItem>
-                        )}
-                      />
+                      {/* Campos 'Atributo de Dano' e 'Descrição Qualidade' removidos */}
                     </div>
+                    {/* --- FIM DA ATUALIZAÇÃO --- */}
                   </AccordionContent>
                 </AccordionItem>
               ))}
@@ -301,8 +287,7 @@ export const NpcEquipmentTab = () => {
                 Nenhuma armadura anotada.
               </p>
             )}
-            
-            {/* Usamos Acordeão aqui também para consistência de layout */}
+
             <Accordion type="multiple" className="space-y-4">
               {armorFields.map((field, index) => (
                 <AccordionItem
@@ -314,15 +299,20 @@ export const NpcEquipmentTab = () => {
                     <div className="flex justify-between items-center w-full">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate">
-                          {form.watch(`armors.${index}.name`) || "Nova Armadura"}
+                          {form.watch(`armors.${index}.name`) ||
+                            "Nova Armadura"}
                         </h4>
                         <div className="flex gap-1.5 flex-wrap">
                           <Badge variant="secondary" className="px-1.5 py-0.5">
-                            Proteção: {form.watch(`armors.${index}.protection`) || '0'}
+                            Proteção:{" "}
+                            {form.watch(`armors.${index}.protection`) || "0"}
                           </Badge>
                         </div>
                       </div>
-                      <div className="flex pl-2" onClick={(e) => e.stopPropagation()}>
+                      <div
+                        className="flex pl-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <Button
                           type="button"
                           size="icon"
@@ -394,15 +384,7 @@ export const NpcEquipmentTab = () => {
           {...attackRollData}
         />
       )}
-      {damageRollData && (
-        <WeaponDamageDialog
-          open={!!damageRollData}
-          onOpenChange={(open) => !open && setDamageRollData(null)}
-          characterName={npc.name}
-          tableId={npc.table_id}
-          {...damageRollData}
-        />
-      )}
+      {/* O WeaponDamageDialog foi removido */}
     </>
   );
 };
