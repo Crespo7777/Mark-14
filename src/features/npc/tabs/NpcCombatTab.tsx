@@ -13,8 +13,9 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Heart, Shield, Dices } from "lucide-react";
+import { Heart, Shield, Dices, ShieldAlert } from "lucide-react"; // Importar ShieldAlert
 import { DefenseRollDialog } from "@/components/DefenseRollDialog";
+import { useToast } from "@/hooks/use-toast"; // 1. IMPORTAR O TOAST
 
 /**
  * Componente de UI reutilizável para aplicar dano/cura
@@ -53,24 +54,60 @@ const DamageHealControl = ({
 export const NpcCombatTab = () => {
   const { form, npc } = useNpcSheet(); // ATUALIZADO: Pegar o 'npc'
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
+  const { toast } = useToast(); // 2. INICIAR O TOAST
 
   // Observa os valores do formulário para os cálculos
   const currentToughness = form.watch("combat.toughness_current");
   const maxToughness = form.watch("combat.toughness_max");
-  const armorRD = form.watch("combat.armor_rd");
   const defenseValue = form.watch("combat.defense");
 
-  // Lógica de Dano (com Redução de Armadura)
+  // 3. ATUALIZAR A LÓGICA DE DANO
   const handleDamage = (rawDamage: number) => {
-    const netDamage = Math.max(0, rawDamage - (armorRD || 0));
+    // Lê os valores atuais do formulário
+    const armorRD = form.getValues("combat.armor_rd") || 0;
+    const painThreshold = form.getValues("combat.pain_threshold") || 0;
+    const currentToughness = form.getValues("combat.toughness_current");
+
+    // Calcula o dano líquido (Dano Bruto - Armadura, mínimo 0)
+    const netDamage = Math.max(0, rawDamage - armorRD);
+
+    // Aplica o dano líquido
     const newValue = Math.max(0, currentToughness - netDamage);
     form.setValue("combat.toughness_current", newValue, { shouldDirty: true });
+
+    // Envia o Toast de Dano
+    toast({
+      title: "Dano Recebido!",
+      description: `${npc.name} sofreu ${netDamage} de dano (Dano Bruto: ${rawDamage}, Armadura: ${armorRD}).`,
+    });
+
+    // VERIFICA O LIMIAR DE DOR
+    if (netDamage > 0 && netDamage >= painThreshold) {
+      toast({
+        title: "Limiar de Dor Ultrapassado!",
+        description: `${npc.name} sofreu ${netDamage} de dano (Limiar: ${painThreshold}) e pode precisar fazer um teste!`,
+        variant: "destructive", // Destaque
+        action: (
+          <div className="flex items-center gap-2 text-destructive-foreground/80">
+            <ShieldAlert className="w-4 h-4" /> Aviso
+          </div>
+        ),
+      });
+    }
   };
 
-  // Lógica de Cura
+  // Lógica de Cura (sem alteração, mas adicionei um toast)
   const handleHeal = (healAmount: number) => {
+    const currentToughness = form.getValues("combat.toughness_current");
+    const maxToughness = form.getValues("combat.toughness_max");
+
     const newValue = Math.min(maxToughness, currentToughness + healAmount);
     form.setValue("combat.toughness_current", newValue, { shouldDirty: true });
+
+    toast({
+      title: "Cura Recebida",
+      description: `${npc.name} recuperou ${healAmount} de vitalidade.`,
+    });
   };
 
   return (
@@ -129,27 +166,51 @@ export const NpcCombatTab = () => {
               value={(currentToughness / (maxToughness || 10)) * 100}
               className="h-2"
             />
-            
-            <FormField
-              control={form.control}
-              name="combat.armor_rd"
-              render={({ field }) => (
-                <FormItem className="space-y-2 pt-2">
-                  <FormLabel>Armadura (Redução de Dano Fixo)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      className="text-lg h-10 w-24"
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseInt(e.target.value, 10) || 0)
-                      }
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+
+            <div className="grid grid-cols-2 gap-4 pt-2">
+              <FormField
+                control={form.control}
+                name="combat.armor_rd"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Armadura (Redução)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        className="text-lg h-10"
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* --- 4. NOVO CAMPO DE UI --- */}
+              <FormField
+                control={form.control}
+                name="combat.pain_threshold"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    <FormLabel>Limiar de Dor</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        className="text-lg h-10"
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {/* --- FIM DO NOVO CAMPO --- */}
+            </div>
 
             {/* Controles de Dano/Cura */}
             <div className="flex flex-wrap gap-4 pt-4">
@@ -180,7 +241,7 @@ export const NpcCombatTab = () => {
               name="combat.defense"
               render={({ field }) => (
                 <FormItem className="space-y-2">
-                  <FormLabel>Defesa (Valor Fixo)</FormLabel>
+                  <FormLabel>Defesa (Alvo do Atacante)</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
@@ -197,7 +258,8 @@ export const NpcCombatTab = () => {
               )}
             />
             <p className="text-xs text-muted-foreground">
-              Este é o valor alvo para o teste de Defesa (1d20). Pode ser negativo (ex: -3) ou positivo (ex: +2).
+              Este é o valor alvo para o teste de Defesa (1d20). Pode ser
+              negativo (ex: -3) ou positivo (ex: +2).
             </p>
             <Button
               type="button"
@@ -217,7 +279,7 @@ export const NpcCombatTab = () => {
         open={isDefenseRollOpen}
         onOpenChange={setIsDefenseRollOpen}
         defenseValue={defenseValue}
-        characterName={npc.name} 
+        characterName={npc.name}
         tableId={npc.table_id}
       />
     </>
