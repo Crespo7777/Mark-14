@@ -44,7 +44,7 @@ type AttackRollData = {
   weaponName: string;
   attributeName: string;
   attributeValue: number;
-  projectileId?: string; // --- ATUALIZADO ---
+  projectileId?: string;
 };
 type DamageRollData = {
   weaponName: string;
@@ -55,11 +55,7 @@ export const EquipmentTab = () => {
   const { form, character } = useCharacterSheet();
   const { totalDefense, quick } = useCharacterCalculations();
   const { toast } = useToast();
-
-  // --- NOVO ---
-  // Observa a lista de projéteis para usar no dropdown
   const projectiles = form.watch("projectiles");
-  // --- FIM DO NOVO ---
 
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(
     null,
@@ -68,6 +64,10 @@ export const EquipmentTab = () => {
     null,
   );
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
+
+  // <-- MUDANÇA: Estados para os acordeões
+  const [openWeapons, setOpenWeapons] = useState<string[]>([]);
+  const [openArmors, setOpenArmors] = useState<string[]>([]);
 
   const {
     fields: weaponFields,
@@ -87,7 +87,6 @@ export const EquipmentTab = () => {
     name: "armors",
   });
 
-  // --- ATUALIZADO ---
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -109,10 +108,9 @@ export const EquipmentTab = () => {
       weaponName: weapon.name || "Arma",
       attributeName: selectedAttr?.label || "N/D",
       attributeValue: attributeValue,
-      projectileId: weapon.projectileId, // Passa o ID do projétil
+      projectileId: weapon.projectileId,
     });
   };
-  // --- FIM DA ATUALIZAÇÃO ---
 
   const handleDamageClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
@@ -160,7 +158,6 @@ export const EquipmentTab = () => {
   return (
     <>
       <div className="space-y-6">
-        {/* Card de Armas */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -181,14 +178,21 @@ export const EquipmentTab = () => {
               </p>
             )}
 
-            <Accordion type="multiple" className="space-y-4">
+            {/* <-- MUDANÇA: Acordeão controlado --> */}
+            <Accordion
+              type="multiple"
+              className="space-y-4"
+              value={openWeapons}
+              onValueChange={setOpenWeapons}
+            >
               {weaponFields.map((field, index) => (
                 <AccordionItem
                   key={field.id}
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  <div className="flex justify-between items-center w-full gap-2">
+                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+                  <div className="flex justify-between items-center w-full gap-2 p-0">
                     <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate shrink-0">
@@ -210,7 +214,6 @@ export const EquipmentTab = () => {
                                 form.watch(`weapons.${index}.attackAttribute`),
                             )?.label || "N/A"}
                           </Badge>
-                          {/* --- NOVO: Badge de Projétil --- */}
                           {form.watch(`weapons.${index}.projectileId`) && (
                             <Badge
                               variant="destructive"
@@ -224,12 +227,14 @@ export const EquipmentTab = () => {
                               )?.name || "N/A"}
                             </Badge>
                           )}
-                          {/* --- FIM DO NOVO --- */}
                         </div>
                       </div>
                     </AccordionTrigger>
-                    {/* Estes botões estão FORA do Trigger */}
-                    <div className="flex items-center gap-1 pl-2 flex-shrink-0">
+
+                    <div
+                      className="flex items-center gap-1 pl-2 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Button
                         type="button"
                         size="sm"
@@ -259,10 +264,10 @@ export const EquipmentTab = () => {
                       </Button>
                     </div>
                   </div>
+                  {/* --- FIM DA CORREÇÃO --- */}
 
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
-                      {/* Campos de Edição da Arma */}
                       <FormField
                         control={form.control}
                         name={`weapons.${index}.name`}
@@ -315,8 +320,6 @@ export const EquipmentTab = () => {
                           )}
                         />
                       </div>
-                      
-                      {/* --- NOVO CAMPO: GASTA PROJÉTIL --- */}
                       <FormField
                         control={form.control}
                         name={`weapons.${index}.projectileId`}
@@ -349,8 +352,6 @@ export const EquipmentTab = () => {
                           </FormItem>
                         )}
                       />
-                      {/* --- FIM DO NOVO CAMPO --- */}
-
                       <div className="grid grid-cols-2 gap-4">
                         <FormField
                           control={form.control}
@@ -403,7 +404,6 @@ export const EquipmentTab = () => {
           </CardContent>
         </Card>
 
-        {/* Card de Armaduras */}
         <Card>
           <CardHeader>
             <div className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -418,7 +418,6 @@ export const EquipmentTab = () => {
                 <Plus className="w-4 h-4 mr-2" /> Adicionar Armadura
               </Button>
             </div>
-
             <div className="pt-4 space-y-2">
               <span className="text-3xl font-bold">
                 Defesa Total: {totalDefense}
@@ -444,14 +443,21 @@ export const EquipmentTab = () => {
               </p>
             )}
 
-            <Accordion type="multiple" className="space-y-4">
+            {/* <-- MUDANÇA: Acordeão controlado --> */}
+            <Accordion
+              type="multiple"
+              className="space-y-4"
+              value={openArmors}
+              onValueChange={setOpenArmors}
+            >
               {armorFields.map((field, index) => (
                 <AccordionItem
                   key={field.id}
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  <div className="flex justify-between items-center w-full gap-2">
+                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+                  <div className="flex justify-between items-center w-full gap-2 p-0">
                     <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate shrink-0">
@@ -473,8 +479,11 @@ export const EquipmentTab = () => {
                         </div>
                       </div>
                     </AccordionTrigger>
-                    {/* Estes botões estão FORA do Trigger */}
-                    <div className="flex items-center gap-1 pl-2 flex-shrink-0">
+
+                    <div
+                      className="flex items-center gap-1 pl-2 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <Button
                         type="button"
                         size="sm"
@@ -495,10 +504,10 @@ export const EquipmentTab = () => {
                       </Button>
                     </div>
                   </div>
+                  {/* --- FIM DA CORREÇÃO --- */}
 
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
-                      {/* Campos de Edição da Armadura */}
                       <FormField
                         control={form.control}
                         name={`armors.${index}.name`}
@@ -580,8 +589,6 @@ export const EquipmentTab = () => {
                           </FormItem>
                         )}
                       />
-
-                      {/* O Checkbox "Equipada" permanece aqui, seguro */}
                       <FormField
                         control={form.control}
                         name={`armors.${index}.equipped`}
@@ -606,7 +613,6 @@ export const EquipmentTab = () => {
         </Card>
       </div>
 
-      {/* Diálogos de Rolagem (ATUALIZADO) */}
       {attackRollData && (
         <WeaponAttackDialog
           open={!!attackRollData}
@@ -614,7 +620,7 @@ export const EquipmentTab = () => {
           characterName={character.name}
           tableId={character.table_id}
           {...attackRollData}
-          projectileId={attackRollData?.projectileId} // 4. Passa a nova prop
+          projectileId={attackRollData?.projectileId}
         />
       )}
       {damageRollData && (
