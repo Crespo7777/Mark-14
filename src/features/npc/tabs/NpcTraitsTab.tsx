@@ -1,5 +1,6 @@
 // src/features/npc/tabs/NpcTraitsTab.tsx
 
+import { useState } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -21,8 +22,6 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Sparkles } from "lucide-react";
 import { getDefaultTrait } from "@/features/character/character.schema";
-
-// --- NOVOS IMPORTS ---
 import {
   Accordion,
   AccordionContent,
@@ -30,10 +29,12 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-// --- FIM DOS NOVOS IMPORTS ---
 
 export const NpcTraitsTab = () => {
   const { form } = useNpcSheet();
+  
+  // <-- MUDANÇA: Controlar o estado do acordeão
+  const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
     fields: traitFields,
@@ -65,19 +66,22 @@ export const NpcTraitsTab = () => {
           </p>
         )}
 
-        {/* --- INÍCIO DA MUDANÇA PARA ACORDEÃO --- */}
-        <Accordion type="multiple" className="space-y-4">
+        {/* <-- MUDANÇA: Acordeão controlado --> */}
+        <Accordion
+          type="multiple"
+          className="space-y-4"
+          value={openItems}
+          onValueChange={setOpenItems}
+        >
           {traitFields.map((field, index) => (
             <AccordionItem
               key={field.id}
               value={field.id}
               className="p-3 rounded-md border bg-muted/20"
             >
-              {/* O Trigger é o cabeçalho visível */}
-              <AccordionTrigger className="p-0 hover:no-underline">
-                <div className="flex justify-between items-center w-full">
-                  
-                  {/* Informações Principais */}
+              {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+              <div className="flex justify-between items-center w-full p-0">
+                <AccordionTrigger className="p-0 hover:no-underline flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                     <h4 className="font-semibold text-base text-primary-foreground truncate">
                       {form.watch(`traits.${index}.name`) || "Novo Traço"}
@@ -86,24 +90,25 @@ export const NpcTraitsTab = () => {
                       {form.watch(`traits.${index}.type`)}
                     </Badge>
                   </div>
+                </AccordionTrigger>
 
-                  {/* Botão de Ação (Excluir) */}
-                  <div className="flex pl-2" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => removeTrait(index)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-
+                <div
+                  className="flex pl-2 flex-shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => removeTrait(index)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-              </AccordionTrigger>
+              </div>
+              {/* --- FIM DA CORREÇÃO --- */}
 
-              {/* O Content são os campos de edição e descrição */}
               <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -147,7 +152,6 @@ export const NpcTraitsTab = () => {
                       )}
                     />
                   </div>
-
                   <FormField
                     control={form.control}
                     name={`traits.${index}.description`}
@@ -169,8 +173,6 @@ export const NpcTraitsTab = () => {
             </AccordionItem>
           ))}
         </Accordion>
-        {/* --- FIM DA MUDANÇA PARA ACORDEÃO --- */}
-        
       </CardContent>
     </Card>
   );
