@@ -1,5 +1,6 @@
 // src/features/character/tabs/ProjectilesTab.tsx
 
+import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, Crosshair } from "lucide-react"; // Importa o ícone Crosshair
+import { Plus, Trash2, Crosshair } from "lucide-react";
 import { getDefaultProjectile } from "../character.schema";
 import {
   Accordion,
@@ -23,6 +24,9 @@ import { Badge } from "@/components/ui/badge";
 
 export const ProjectilesTab = () => {
   const { form } = useCharacterSheet();
+  
+  // <-- MUDANÇA: Controlar o estado do acordeão
+  const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
     fields: projectileFields,
@@ -54,46 +58,53 @@ export const ProjectilesTab = () => {
           </p>
         )}
 
-        <Accordion type="multiple" className="space-y-4">
+        {/* <-- MUDANÇA: Acordeão controlado --> */}
+        <Accordion
+          type="multiple"
+          className="space-y-4"
+          value={openItems}
+          onValueChange={setOpenItems}
+        >
           {projectileFields.map((field, index) => (
             <AccordionItem
               key={field.id}
               value={field.id}
               className="p-3 rounded-md border bg-muted/20"
             >
-              <AccordionTrigger className="p-0 hover:no-underline">
-                <div className="flex justify-between items-center w-full">
-                  {/* Informações Principais */}
+              {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+              <div className="flex justify-between items-center w-full p-0">
+                <AccordionTrigger className="p-0 hover:no-underline flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                     <h4 className="font-semibold text-base text-primary-foreground truncate">
-                      {form.watch(`projectiles.${index}.name`) || "Novo Projétil"}
+                      {form.watch(`projectiles.${index}.name`) ||
+                        "Novo Projétil"}
                     </h4>
                     <div className="flex gap-1.5 flex-wrap">
                       <Badge variant="secondary" className="px-1.5 py-0.5">
-                        Qtd: {form.watch(`projectiles.${index}.quantity`) || 0}
+                        Qtd:{" "}
+                        {form.watch(`projectiles.${index}.quantity`) || 0}
                       </Badge>
                     </div>
                   </div>
+                </AccordionTrigger>
 
-                  {/* Botão de Excluir */}
-                  <div
-                    className="flex pl-2"
-                    onClick={(e) => e.stopPropagation()}
+                <div
+                  className="flex pl-2 flex-shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => removeProjectile(index)}
                   >
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => removeProjectile(index)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-              </AccordionTrigger>
+              </div>
+              {/* --- FIM DA CORREÇÃO --- */}
 
-              {/* Conteúdo (Campos de Edição) */}
               <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -120,7 +131,9 @@ export const ProjectilesTab = () => {
                               type="number"
                               {...field}
                               onChange={(e) =>
-                                field.onChange(parseInt(e.target.value) || 0)
+                                field.onChange(
+                                  parseInt(e.target.value) || 0,
+                                )
                               }
                             />
                           </FormControl>
