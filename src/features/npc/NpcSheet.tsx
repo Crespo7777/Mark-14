@@ -1,13 +1,25 @@
 // src/features/npc/NpcSheet.tsx
 
-import { useEffect, useRef } from "react"; // 1. IMPORTAR useEffect e useRef
+import { useEffect, useRef, useState } from "react";
 import { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Save, X, RotateCcw } from "lucide-react";
+import { X, Save } from "lucide-react"; // <-- MUDANÇA: Importar 'Save'
 import { Form } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 import {
   NpcSheetData,
@@ -25,8 +37,7 @@ import { NpcSkillsTab } from "./tabs/NpcSkillsTab";
 import { NpcTraitsTab } from "./tabs/NpcTraitsTab";
 import { NpcEquipmentTab } from "./tabs/NpcEquipmentTab";
 import { NpcBackpackTab } from "./tabs/NpcBackpackTab";
-import { NpcJournalTab } from "./tabs/NpcJournalTab"; 
-
+import { NpcJournalTab } from "./tabs/NpcJournalTab";
 
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 
@@ -39,15 +50,17 @@ interface NpcSheetProps {
 const NpcSheetInner = ({
   onClose,
   onSave,
+  initialData,
 }: {
   onClose: () => void;
   onSave: (data: NpcSheetData) => Promise<void>;
+  initialData: NpcSheetData;
 }) => {
-  const { form, npc } = useNpcSheet();
+  const { form } = useNpcSheet();
   const { toast } = useToast();
-  
-  // 2. OBSERVAR O ESTADO DO FORMULÁRIO
+
   const { isDirty, isSubmitting } = form.formState;
+  const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
 
   const [name, race, occupation] = form.watch([
     "name",
@@ -57,11 +70,13 @@ const NpcSheetInner = ({
 
   const { isMaster } = useTableContext();
 
-  // 3. FUNÇÃO DE SUBMISSÃO (AGORA USADA PELO AUTO-SAVE)
+  // --- MUDANÇA CRUCIAL: 'form.reset(data)' VOLTOU! ---
   const onSubmit = async (data: NpcSheetData) => {
     await onSave(data);
-    form.reset(data); 
+    form.reset(data); // <-- ISTO É O CORRETO
+    toast({ title: "Ficha de NPC Salva!" }); // <-- MUDANÇA: Adicionar feedback
   };
+  // --- FIM DA MUDANÇA ---
 
   const onInvalid = (errors: any) => {
     console.error("Erros de validação do NPC:", errors);
@@ -72,126 +87,165 @@ const NpcSheetInner = ({
     });
   };
 
-  // 4. LÓGICA DE AUTO-SAVE (DEBOUNCING)
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-  const watchedData = form.watch(); // Observa TODAS as mudanças
+  // --- MUDANÇA: O 'useEffect' do auto-save (debounce) foi REMOVIDO ---
 
-  useEffect(() => {
-    // Apenas o mestre pode salvar
+  // --- Lógica para o botão "Fechar" (Popup) ---
+  const handleCloseClick = () => {
     if (isDirty && isMaster) {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-
-      debounceTimer.current = setTimeout(() => {
-        form.handleSubmit(onSubmit, onInvalid)();
-      }, 1500); // Salva 1.5 segundos após a última alteração
+      setIsCloseAlertOpen(true);
+    } else {
+      onClose();
     }
+  };
 
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, [watchedData, isDirty, isMaster, form, onSubmit, onInvalid]); // Dependências do useEffect
+  const handleSaveAndClose = async () => {
+    await form.handleSubmit(onSubmit, onInvalid)();
+    setIsCloseAlertOpen(false);
+    onClose();
+  };
 
+  const handleCloseWithoutSaving = () => {
+    form.reset(initialData);
+    setIsCloseAlertOpen(false);
+    onClose();
+  };
+  // --- Fim da lógica de fecho ---
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border/50 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">{name}</h2>
-          <p className="text-sm text-muted-foreground">
-            {race} | {occupation}
-          </p>
+    <>
+      <div className="flex flex-col h-full">
+        <div className="p-4 border-b border-border/50 flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold">{name}</h2>
+            <p className="text-sm text-muted-foreground">
+              {race} | {occupation}
+            </p>
+          </div>
+
+          {/* --- MUDANÇA: Botão Salvar Adicionado --- */}
+          <div className="flex gap-2 items-center">
+            {isMaster && (
+              <div
+                className={cn(
+                  "text-sm transition-opacity duration-300",
+                  isDirty ? "text-amber-500" : "text-muted-foreground/70",
+                )}
+              >
+                {isSubmitting
+                  ? "Salvando..."
+                  : isDirty
+                  ? "Alterações não salvas"
+                  : "Salvo"}
+              </div>
+            )}
+
+            {/* O Mestre vê o botão "Salvar", o Jogador não */}
+            {isMaster && (
+              <Button
+                size="sm"
+                variant="default"
+                onClick={form.handleSubmit(onSubmit, onInvalid)}
+                disabled={!isDirty || isSubmitting}
+              >
+                <Save className="w-4 h-4 mr-2" />
+                Salvar
+              </Button>
+            )}
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCloseClick}
+              disabled={isSubmitting}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Fechar
+            </Button>
+          </div>
+          {/* --- FIM DA MUDANÇA --- */}
         </div>
-        
-        {/* --- 5. LÓGICA DE BOTÕES ATUALIZADA --- */}
-        <div className="flex gap-2 items-center">
-          
-          {/* Mostra indicador de salvamento APENAS para o Mestre */}
-          {isMaster && (
-            <div className="text-sm text-muted-foreground transition-opacity duration-300">
-              {isSubmitting ? (
-                <span>Salvando...</span>
-              ) : !isDirty ? (
-                <span className="opacity-70">Salvo</span>
-              ) : (
-                <span className="opacity-50 italic">...</span> 
-              )}
-            </div>
-          )}
-          
-          {/* Botões "Salvar" e "Reverter" REMOVIDOS */}
-          
-          {/* Botão Fechar (desabilitado enquanto salva) */}
-          <Button size="sm" variant="outline" onClick={onClose} disabled={isSubmitting}>
-            <X className="w-4 h-4 mr-2" />
-            Fechar
-          </Button>
-        </div>
-        {/* --- FIM DA LÓGICA DE BOTÕES --- */}
+
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            className="flex-1 overflow-y-auto"
+          >
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="m-4 ml-4">
+                <TabsTrigger value="details">Detalhes</TabsTrigger>
+                <TabsTrigger value="attributes">Atributos</TabsTrigger>
+                <TabsTrigger value="combat">Combate</TabsTrigger>
+                <TabsTrigger value="traits">Traços</TabsTrigger>
+                <TabsTrigger value="skills">Habilidades</TabsTrigger>
+                <TabsTrigger value="equipment">Equipamento</TabsTrigger>
+                <TabsTrigger value="backpack">Mochila</TabsTrigger>
+                <TabsTrigger value="journal">Diário</TabsTrigger>
+              </TabsList>
+
+              <fieldset
+                disabled={isSubmitting || !isMaster}
+                className="p-4 pt-0 space-y-4"
+              >
+                <TabsContent value="details">
+                  <NpcDetailsTab />
+                </TabsContent>
+                <TabsContent value="attributes">
+                  <NpcAttributesTab />
+                </TabsContent>
+                <TabsContent value="combat">
+                  <NpcCombatTab />
+                </TabsContent>
+                <TabsContent value="traits">
+                  <NpcTraitsTab />
+                </TabsContent>
+                <TabsContent value="skills">
+                  <NpcSkillsTab />
+                </TabsContent>
+                <TabsContent value="equipment">
+                  <NpcEquipmentTab />
+                </TabsContent>
+                <TabsContent value="backpack">
+                  <NpcBackpackTab />
+                </TabsContent>
+                <TabsContent value="journal">
+                  <NpcJournalTab />
+                </TabsContent>
+              </fieldset>
+            </Tabs>
+          </form>
+        </Form>
       </div>
 
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit, onInvalid)}
-          className="flex-1 overflow-y-auto"
-        >
-          <Tabs defaultValue="details" className="w-full"> 
-            
-            {/* --- 6. ORDEM DAS ABAS ATUALIZADA --- */}
-            <TabsList className="m-4 ml-4">
-              <TabsTrigger value="details">Detalhes</TabsTrigger>
-              <TabsTrigger value="attributes">Atributos</TabsTrigger>
-              <TabsTrigger value="combat">Combate</TabsTrigger>
-              <TabsTrigger value="traits">Traços</TabsTrigger> {/* VEIO PRIMEIRO */}
-              <TabsTrigger value="skills">Habilidades</TabsTrigger> {/* VEIO DEPOIS */}
-              <TabsTrigger value="equipment">Equipamento</TabsTrigger>
-              <TabsTrigger value="backpack">Mochila</TabsTrigger>
-              <TabsTrigger value="journal">Diário</TabsTrigger>
-            </TabsList>
-            {/* --- FIM DA ATUALIZAÇÃO --- */}
-            
-            <fieldset
-              // Desabilita TUDO se for Jogador, ou se o Mestre estiver salvando
-              disabled={isSubmitting || !isMaster}
-              className="p-4 pt-0 space-y-4"
+      <AlertDialog
+        open={isCloseAlertOpen}
+        onOpenChange={setIsCloseAlertOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair sem Salvar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Existem alterações não salvas. O que queres fazer?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={handleCloseWithoutSaving}
             >
-              <TabsContent value="details">
-                <NpcDetailsTab />
-              </TabsContent>
-              <TabsContent value="attributes">
-                 <NpcAttributesTab />
-              </TabsContent>
-              <TabsContent value="combat">
-                <NpcCombatTab />
-              </TabsContent>
-
-              {/* --- 7. ORDEM DO CONTEÚDO ATUALIZADA --- */}
-              <TabsContent value="traits">
-                 <NpcTraitsTab />
-              </TabsContent>
-              <TabsContent value="skills">
-                 <NpcSkillsTab />
-              </TabsContent>
-              {/* --- FIM DA ATUALIZAÇÃO --- */}
-
-              <TabsContent value="equipment">
-                 <NpcEquipmentTab />
-              </TabsContent>
-              <TabsContent value="backpack">
-                 <NpcBackpackTab />
-              </TabsContent>
-              <TabsContent value="journal">
-                 <NpcJournalTab />
-              </TabsContent>
-              
-            </fieldset>
-          </Tabs>
-        </form>
-      </Form>
-    </div>
+              Sair Sem Salvar
+            </Button>
+            <AlertDialogAction
+              className={cn(buttonVariants({ variant: "default" }))}
+              onClick={handleSaveAndClose}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Salvando..." : "Salvar e Sair"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 
@@ -200,7 +254,7 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const { toast } = useToast();
 
   const defaults = getDefaultNpcSheetData(initialNpc.name);
-  
+
   const mergedData = {
     ...defaults,
     ...(initialNpc.data as any),
@@ -212,26 +266,34 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
       ...defaults.combat,
       ...((initialNpc.data as any)?.combat || {}),
     },
-    armors: (initialNpc.data as any)?.armors || defaults.armors, 
+    armors: (initialNpc.data as any)?.armors || defaults.armors,
     inventory: (initialNpc.data as any)?.inventory || defaults.inventory,
   };
 
-  mergedData.name = (initialNpc.data as any)?.name || initialNpc.name || defaults.name;
+  mergedData.name =
+    (initialNpc.data as any)?.name || initialNpc.name || defaults.name;
   mergedData.race = (initialNpc.data as any)?.race || defaults.race;
-  mergedData.occupation = (initialNpc.data as any)?.occupation || defaults.occupation;
-  
+  mergedData.occupation =
+    (initialNpc.data as any)?.occupation || defaults.occupation;
+
   mergedData.shadow = (initialNpc.data as any)?.shadow || defaults.shadow;
-  mergedData.personalGoal = (initialNpc.data as any)?.personalGoal || defaults.personalGoal;
-  mergedData.importantAllies = (initialNpc.data as any)?.importantAllies || defaults.importantAllies;
+  mergedData.personalGoal =
+    (initialNpc.data as any)?.personalGoal || defaults.personalGoal;
+  mergedData.importantAllies =
+    (initialNpc.data as any)?.importantAllies || defaults.importantAllies;
   mergedData.notes = (initialNpc.data as any)?.notes || defaults.notes;
-  
+
   const parsedData = npcSheetSchema.safeParse(mergedData);
-  
+
   if (!parsedData.success) {
-    console.warn("Aviso ao parsear dados da Ficha (NpcSheet). Aplicando dados mesclados/padrão:", parsedData.error.errors);
+    console.warn(
+      "Aviso ao parsear dados da Ficha (NpcSheet). Aplicando dados mesclados/padrão:",
+      parsedData.error.errors,
+    );
   }
-  
-  initialNpc.data = parsedData.success ? parsedData.data : mergedData;
+
+  const validatedData = parsedData.success ? parsedData.data : mergedData;
+  initialNpc.data = validatedData;
 
   const handleSave = async (data: NpcSheetData) => {
     const { error } = await supabase
@@ -245,19 +307,16 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      // O indicador de UI é suficiente, não precisamos de toast.
-      // toast({
-      //   title: "NPC Salvo!",
-      //   description: `${data.name} foi atualizado.`,
-      // });
-      initialNpc.name = data.name;
     }
   };
 
   return (
     <NpcSheetProvider npc={initialNpc}>
-      <NpcSheetInner onClose={onClose} onSave={handleSave} />
+      <NpcSheetInner
+        onClose={onClose}
+        onSave={handleSave}
+        initialData={validatedData as NpcSheetData}
+      />
     </NpcSheetProvider>
   );
 };
