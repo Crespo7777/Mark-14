@@ -1,7 +1,7 @@
 // src/features/npc/tabs/NpcSkillsTab.tsx
 
 import { useState } from "react";
-import { useNpcSheet } from "../NpcSheetContext"; // <-- USA O HOOK DO NPC
+import { useNpcSheet } from "../NpcSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Zap, Dices } from "lucide-react";
-// O schema do NPC importa o 'abilitySchema' correto
 import { getDefaultAbility } from "@/features/character/character.schema";
 import { attributesList } from "@/features/character/character.constants";
 import { Separator } from "@/components/ui/separator";
@@ -33,9 +32,8 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog"; // <-- USA O DIÁLOGO DO NPC
+import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 
-// Tipo para os dados da rolagem (sem corrupção)
 type AbilityRollData = {
   abilityName: string;
   attributeName: string;
@@ -43,10 +41,12 @@ type AbilityRollData = {
 };
 
 export const NpcSkillsTab = () => {
-  // <-- Nome do Componente
-  const { form, npc } = useNpcSheet(); // <-- USA O HOOK DO NPC
+  const { form, npc } = useNpcSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] =
     useState<AbilityRollData | null>(null);
+  
+  // <-- MUDANÇA: Controlar o estado do acordeão
+  const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
     fields: abilityFields,
@@ -65,18 +65,14 @@ export const NpcSkillsTab = () => {
       (attr) => attr.key === ability.associatedAttribute,
     );
 
-    // --- ATUALIZADO ---
-    // Temos de ler o .value do objeto de atributo
     const attributeValue = selectedAttr
       ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
       : 0;
-    // --- FIM DA ATUALIZAÇÃO ---
 
     setSelectedAbilityRoll({
       abilityName: ability.name || "Habilidade",
       attributeName: selectedAttr?.label || "Nenhum",
       attributeValue: attributeValue,
-      // corruptionCost removido
     });
   };
 
@@ -102,15 +98,22 @@ export const NpcSkillsTab = () => {
             </p>
           )}
 
-          <Accordion type="multiple" className="space-y-4">
+          {/* <-- MUDANÇA: Acordeão controlado --> */}
+          <Accordion
+            type="multiple"
+            className="space-y-4"
+            value={openItems}
+            onValueChange={setOpenItems}
+          >
             {abilityFields.map((field, index) => (
               <AccordionItem
                 key={field.id}
                 value={field.id}
                 className="p-3 rounded-md border bg-muted/20"
               >
-                <AccordionTrigger className="p-0 hover:no-underline">
-                  <div className="flex justify-between items-center w-full">
+                {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+                <div className="flex justify-between items-center w-full p-0">
+                  <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                       <h4 className="font-semibold text-base text-primary-foreground truncate">
                         {form.watch(`abilities.${index}.name`) ||
@@ -129,39 +132,39 @@ export const NpcSkillsTab = () => {
                               ),
                           )?.label || "N/A"}
                         </Badge>
-                        {/* Badge de Custo de Corrupção REMOVIDO */}
                       </div>
                     </div>
+                  </AccordionTrigger>
 
-                    <div
-                      className="flex gap-1 pl-2"
-                      onClick={(e) => e.stopPropagation()}
+                  <div
+                    className="flex gap-1 pl-2 flex-shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => handleRollClick(index)}
+                      disabled={
+                        form.watch(
+                          `abilities.${index}.associatedAttribute`,
+                        ) === "Nenhum"
+                      }
                     >
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => handleRollClick(index)}
-                        disabled={
-                          form.watch(
-                            `abilities.${index}.associatedAttribute`,
-                          ) === "Nenhum"
-                        }
-                      >
-                        <Dices className="w-4 h-4" />
-                        <span className="hidden sm:inline ml-2">Rolar</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => removeAbility(index)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                      <Dices className="w-4 h-4" />
+                      <span className="hidden sm:inline ml-2">Rolar</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeAbility(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                </AccordionTrigger>
+                </div>
+                {/* --- FIM DA CORREÇÃO --- */}
 
                 <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                   <div className="space-y-4">
@@ -232,8 +235,6 @@ export const NpcSkillsTab = () => {
                         )}
                       />
                     </div>
-
-                    {/* Campo Custo Corrupção REMOVIDO */}
                     <FormField
                       control={form.control}
                       name={`abilities.${index}.associatedAttribute`}
@@ -264,7 +265,6 @@ export const NpcSkillsTab = () => {
                         </FormItem>
                       )}
                     />
-
                     <FormField
                       control={form.control}
                       name={`abilities.${index}.description`}
@@ -289,7 +289,6 @@ export const NpcSkillsTab = () => {
         </CardContent>
       </Card>
 
-      {/* Chama o NOVO diálogo de rolagem do NPC */}
       {selectedAbilityRoll && (
         <NpcAbilityRollDialog
           open={!!selectedAbilityRoll}
