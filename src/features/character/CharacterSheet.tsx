@@ -1,6 +1,6 @@
 // src/features/character/CharacterSheet.tsx
 
-import { useEffect, useRef } from "react"; // 1. IMPORTAR useEffect e useRef
+import { useEffect, useRef, useState } from "react";
 import { Database } from "@/integrations/supabase/types";
 import {
   CharacterSheetProvider,
@@ -12,11 +12,22 @@ import {
   getDefaultCharacterSheetData,
 } from "./character.schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Save, X, RotateCcw } from "lucide-react"; // Os ícones antigos ainda são usados (ou podemos removê-los)
+import { X, Save } from "lucide-react"; // <-- MUDANÇA: Importar 'Save'
 import { Form } from "@/components/ui/form";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils"; // <-- MUDANÇA: Importar 'cn'
 
 import { DetailsTab } from "./tabs/DetailsTab";
 import { AttributesTab } from "./tabs/AttributesTab";
@@ -25,8 +36,8 @@ import { SkillsTab } from "./tabs/SkillsTab";
 import { EquipmentTab } from "./tabs/EquipmentTab";
 import { TraitsTab } from "./tabs/TraitsTab";
 import { BackpackTab } from "./tabs/BackpackTab";
-import { ProjectilesTab } from "./tabs/ProjectilesTab"; 
-import { CharacterJournalTab } from "./tabs/CharacterJournalTab"; 
+import { ProjectilesTab } from "./tabs/ProjectilesTab";
+import { CharacterJournalTab } from "./tabs/CharacterJournalTab";
 
 type Character = Database["public"]["Tables"]["characters"]["Row"];
 
@@ -39,15 +50,17 @@ interface CharacterSheetProps {
 const CharacterSheetInner = ({
   onClose,
   onSave,
+  initialData,
 }: {
   onClose: () => void;
   onSave: (data: CharacterSheetData) => Promise<void>;
+  initialData: CharacterSheetData;
 }) => {
-  const { form, character } = useCharacterSheet();
+  const { form } = useCharacterSheet();
   const { toast } = useToast();
 
-  // 2. OBSERVAR O ESTADO DO FORMULÁRIO
   const { isDirty, isSubmitting } = form.formState;
+  const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
 
   const [name, race, occupation] = form.watch([
     "name",
@@ -55,10 +68,11 @@ const CharacterSheetInner = ({
     "occupation",
   ]);
 
-  // 3. FUNÇÃO DE SUBMISSÃO (AGORA USADA PELO AUTO-SAVE)
+  // Esta função é chamada pelo botão "Salvar" e pelo "Salvar e Sair"
   const onSubmit = async (data: CharacterSheetData) => {
-    await onSave(data); // Salva no Supabase (vem do PAI)
-    form.reset(data); // Reseta o form para limpar o 'isDirty'
+    await onSave(data);
+    form.reset(data); // Reseta o form para "limpo" (isDirty = false)
+    toast({ title: "Ficha Salva!" }); // <-- MUDANÇA: Adicionar feedback
   };
 
   const onInvalid = (errors: any) => {
@@ -70,130 +84,164 @@ const CharacterSheetInner = ({
     });
   };
 
-  // 4. LÓGICA DE AUTO-SAVE (DEBOUNCING)
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-  const watchedData = form.watch(); // Observa TODAS as mudanças
+  // --- MUDANÇA: O 'useEffect' do auto-save (debounce) foi REMOVIDO ---
 
-  useEffect(() => {
-    // Se o formulário tiver mudanças (isDirty)
+  // --- Lógica para o botão "Fechar" (Popup) ---
+  const handleCloseClick = () => {
     if (isDirty) {
-      // Limpa qualquer timer anterior
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-
-      // Inicia um novo timer
-      debounceTimer.current = setTimeout(() => {
-        // Aciona o submit do react-hook-form, que chama 'onSubmit' ou 'onInvalid'
-        form.handleSubmit(onSubmit, onInvalid)();
-      }, 1500); // Salva 1.5 segundos após a última alteração
+      setIsCloseAlertOpen(true);
+    } else {
+      onClose();
     }
+  };
 
-    // Limpa o timer se o componente for desmontado
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, [watchedData, isDirty, form, onSubmit, onInvalid]); // Dependências do useEffect
+  const handleSaveAndClose = async () => {
+    await form.handleSubmit(onSubmit, onInvalid)();
+    setIsCloseAlertOpen(false);
+    onClose();
+  };
 
+  const handleCloseWithoutSaving = () => {
+    form.reset(initialData);
+    setIsCloseAlertOpen(false);
+    onClose();
+  };
+  // --- Fim da lógica de fecho ---
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-border/50 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold">{name}</h2>
-          <p className="text-sm text-muted-foreground">
-            {race} | {occupation}
-          </p>
+    <>
+      <div className="flex flex-col h-full">
+        <div className="p-4 border-b border-border/50 flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold">{name}</h2>
+            <p className="text-sm text-muted-foreground">
+              {race} | {occupation}
+            </p>
+          </div>
+
+          {/* --- MUDANÇA: Botão Salvar Adicionado --- */}
+          <div className="flex gap-2 items-center">
+            <div
+              className={cn(
+                "text-sm transition-opacity duration-300",
+                isDirty ? "text-amber-500" : "text-muted-foreground/70",
+              )}
+            >
+              {isSubmitting
+                ? "Salvando..."
+                : isDirty
+                ? "Alterações não salvas"
+                : "Salvo"}
+            </div>
+
+            <Button
+              size="sm"
+              variant="default" // Botão principal de salvar
+              onClick={form.handleSubmit(onSubmit, onInvalid)}
+              disabled={!isDirty || isSubmitting}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Salvar
+            </Button>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleCloseClick}
+              disabled={isSubmitting}
+            >
+              <X className="w-4 h-4 mr-2" />
+              Fechar
+            </Button>
+          </div>
+          {/* --- FIM DA MUDANÇA --- */}
         </div>
 
-        {/* --- 5. LÓGICA DE BOTÕES ATUALIZADA --- */}
-        <div className="flex gap-2 items-center">
-          
-          {/* Indicador de Salvamento */}
-          <div className="text-sm text-muted-foreground transition-opacity duration-300">
-            {isSubmitting ? (
-              <span>Salvando...</span>
-            ) : !isDirty ? (
-              <span className="opacity-70">Salvo</span>
-            ) : (
-              <span className="opacity-50 italic">...</span> 
-            )}
-          </div>
-          
-          {/* Botões "Salvar" e "Reverter" REMOVIDOS */}
-          
-          {/* Botão Fechar (desabilitado enquanto salva) */}
-          <Button size="sm" variant="outline" onClick={onClose} disabled={isSubmitting}>
-            <X className="w-4 h-4 mr-2" />
-            Fechar
-          </Button>
-        </div>
-        {/* --- FIM DA LÓGICA DE BOTÕES --- */}
+        <Form {...form}>
+          <form
+            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            className="flex-1 overflow-y-auto"
+          >
+            <Tabs defaultValue="details" className="w-full">
+              <TabsList className="m-4 ml-4">
+                <TabsTrigger value="details">Detalhes</TabsTrigger>
+                <TabsTrigger value="attributes">Atributos</TabsTrigger>
+                <TabsTrigger value="combat">Combate</TabsTrigger>
+                <TabsTrigger value="traits">Traços</TabsTrigger>
+                <TabsTrigger value="skills">Habilidades</TabsTrigger>
+                <TabsTrigger value="equipment">Equipamento</TabsTrigger>
+                <TabsTrigger value="backpack">Mochila</TabsTrigger>
+                <TabsTrigger value="projectiles">Projéteis</TabsTrigger>
+                <TabsTrigger value="journal">Diário</TabsTrigger>
+              </TabsList>
+
+              <fieldset
+                disabled={form.formState.isSubmitting}
+                className="p-4 pt-0 space-y-4"
+              >
+                <TabsContent value="details">
+                  <DetailsTab />
+                </TabsContent>
+                <TabsContent value="attributes">
+                  <AttributesTab />
+                </TabsContent>
+                <TabsContent value="combat">
+                  <CombatTab />
+                </TabsContent>
+                <TabsContent value="traits">
+                  <TraitsTab />
+                </TabsContent>
+                <TabsContent value="skills">
+                  <SkillsTab />
+                </TabsContent>
+                <TabsContent value="equipment">
+                  <EquipmentTab />
+                </TabsContent>
+                <TabsContent value="backpack">
+                  <BackpackTab />
+                </TabsContent>
+                <TabsContent value="projectiles">
+                  <ProjectilesTab />
+                </TabsContent>
+                <TabsContent value="journal">
+                  <CharacterJournalTab />
+                </TabsContent>
+              </fieldset>
+            </Tabs>
+          </form>
+        </Form>
       </div>
 
-      <Form {...form}>
-        <form
-          onSubmit={form.handleSubmit(onSubmit, onInvalid)}
-          className="flex-1 overflow-y-auto"
-        >
-          <Tabs defaultValue="details" className="w-full">
-            
-            {/* --- 6. ORDEM DAS ABAS ATUALIZADA --- */}
-            <TabsList className="m-4 ml-4">
-              <TabsTrigger value="details">Detalhes</TabsTrigger>
-              <TabsTrigger value="attributes">Atributos</TabsTrigger>
-              <TabsTrigger value="combat">Combate</TabsTrigger>
-              <TabsTrigger value="traits">Traços</TabsTrigger> {/* VEIO PRIMEIRO */}
-              <TabsTrigger value="skills">Habilidades</TabsTrigger> {/* VEIO DEPOIS */}
-              <TabsTrigger value="equipment">Equipamento</TabsTrigger>
-              <TabsTrigger value="backpack">Mochila</TabsTrigger>
-              <TabsTrigger value="projectiles">Projéteis</TabsTrigger>
-              <TabsTrigger value="journal">Diário</TabsTrigger> 
-            </TabsList>
-            {/* --- FIM DA ATUALIZAÇÃO --- */}
-
-            <fieldset
-              disabled={form.formState.isSubmitting}
-              className="p-4 pt-0 space-y-4"
+      <AlertDialog
+        open={isCloseAlertOpen}
+        onOpenChange={setIsCloseAlertOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair sem Salvar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Existem alterações não salvas. O que queres fazer?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={handleCloseWithoutSaving}
             >
-              <TabsContent value="details">
-                <DetailsTab />
-              </TabsContent>
-              <TabsContent value="attributes">
-                <AttributesTab />
-              </TabsContent>
-              <TabsContent value="combat">
-                <CombatTab />
-              </TabsContent>
-
-              {/* --- 7. ORDEM DO CONTEÚDO ATUALIZADA --- */}
-              <TabsContent value="traits">
-                <TraitsTab />
-              </TabsContent>
-              <TabsContent value="skills">
-                <SkillsTab />
-              </TabsContent>
-              {/* --- FIM DA ATUALIZAÇÃO --- */}
-
-              <TabsContent value="equipment">
-                <EquipmentTab />
-              </TabsContent>
-              <TabsContent value="backpack">
-                <BackpackTab />
-              </TabsContent>
-              <TabsContent value="projectiles">
-                <ProjectilesTab />
-              </TabsContent>
-              <TabsContent value="journal">
-                <CharacterJournalTab />
-              </TabsContent>
-            </fieldset>
-          </Tabs>
-        </form>
-      </Form>
-    </div>
+              Sair Sem Salvar
+            </Button>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "default" })}
+              onClick={handleSaveAndClose}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Salvando..." : "Salvar e Sair"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 };
 
@@ -205,12 +253,12 @@ export const CharacterSheet = ({
   const { toast } = useToast();
 
   const defaults = getDefaultCharacterSheetData(initialCharacter.name);
-  
+
   const mergedData = {
     ...defaults,
     ...(initialCharacter.data as any),
   };
-  
+
   mergedData.name =
     (initialCharacter.data as any)?.name ||
     initialCharacter.name ||
@@ -218,11 +266,13 @@ export const CharacterSheet = ({
   mergedData.race = (initialCharacter.data as any)?.race || defaults.race;
   mergedData.occupation =
     (initialCharacter.data as any)?.occupation || defaults.occupation;
-  
+
   mergedData.shadow = (initialCharacter.data as any)?.shadow || defaults.shadow;
-  mergedData.personalGoal = (initialCharacter.data as any)?.personalGoal || defaults.personalGoal;
-  mergedData.importantAllies = (initialCharacter.data as any)?.importantAllies || defaults.importantAllies;
-  mergedData.notes = (initialCharacter.data as any)?.notes || defaults.notes; 
+  mergedData.personalGoal =
+    (initialCharacter.data as any)?.personalGoal || defaults.personalGoal;
+  mergedData.importantAllies =
+    (initialCharacter.data as any)?.importantAllies || defaults.importantAllies;
+  mergedData.notes = (initialCharacter.data as any)?.notes || defaults.notes;
 
   const parsedData = characterSheetSchema.safeParse(mergedData);
   if (!parsedData.success) {
@@ -231,7 +281,9 @@ export const CharacterSheet = ({
       parsedData.error.errors,
     );
   }
-  initialCharacter.data = parsedData.success ? parsedData.data : mergedData;
+
+  const validatedData = parsedData.success ? parsedData.data : mergedData;
+  initialCharacter.data = validatedData;
 
   const handleSave = async (data: CharacterSheetData) => {
     const { error } = await supabase
@@ -245,19 +297,16 @@ export const CharacterSheet = ({
         description: error.message,
         variant: "destructive",
       });
-    } else {
-      // Já não mostramos o toast "Salvo!", o indicador de UI é suficiente
-      // toast({
-      //   title: "Ficha Salva!",
-      //   description: `${data.name} foi atualizado.`,
-      // });
-      initialCharacter.name = data.name;
     }
   };
 
   return (
     <CharacterSheetProvider character={initialCharacter} onSave={handleSave}>
-      <CharacterSheetInner onClose={onClose} onSave={handleSave} />
+      <CharacterSheetInner
+        onClose={onClose}
+        onSave={handleSave}
+        initialData={validatedData as CharacterSheetData}
+      />
     </CharacterSheetProvider>
   );
 };
