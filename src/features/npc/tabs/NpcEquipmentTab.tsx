@@ -12,7 +12,7 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea"; // Textarea não é mais usada aqui, mas mantemos
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -21,10 +21,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Sword, Dices, Shield } from "lucide-react";
-// --- ATUALIZADO ---
-import { getDefaultNpcWeapon } from "../npc.schema"; // Importa a arma de NPC
+import { getDefaultNpcWeapon } from "../npc.schema";
 import { getDefaultNpcArmor } from "../npc.schema";
-// --- FIM DA ATUALIZAÇÃO ---
 import { attributesList } from "@/features/character/character.constants";
 import {
   Accordion,
@@ -33,18 +31,16 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
-// import { WeaponDamageDialog } from "@/components/WeaponDamageDialog"; // REMOVIDO
+// <-- MUDANÇA: Trocar o diálogo de ataque
+import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 
-// Tipos para os estados dos diálogos
 type AttackRollData = {
-  weaponName: string;
+  abilityName: string;
   attributeName: string;
   attributeValue: number;
 };
-// type DamageRollData = { ... } // REMOVIDO
 
 export const NpcEquipmentTab = () => {
   const { form, npc } = useNpcSheet();
@@ -53,9 +49,11 @@ export const NpcEquipmentTab = () => {
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(
     null,
   );
-  // const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null); // REMOVIDO
+  
+  // <-- MUDANÇA: Estados para os acordeões
+  const [openWeapons, setOpenWeapons] = useState<string[]>([]);
+  const [openArmors, setOpenArmors] = useState<string[]>([]);
 
-  // Field Array para ARMAS
   const {
     fields: weaponFields,
     append: appendWeapon,
@@ -65,7 +63,6 @@ export const NpcEquipmentTab = () => {
     name: "weapons",
   });
 
-  // Field Array para ARMADURAS
   const {
     fields: armorFields,
     append: appendArmor,
@@ -75,7 +72,6 @@ export const NpcEquipmentTab = () => {
     name: "armors",
   });
 
-  // Abrir diálogo de Ataque
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -84,12 +80,9 @@ export const NpcEquipmentTab = () => {
       (attr) => attr.key === weapon.attackAttribute,
     );
 
-    // --- ATUALIZADO ---
-    // Temos de ler o .value do objeto de atributo
     const attributeValue = selectedAttr
       ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
       : 0;
-    // --- FIM DA ATUALIZAÇÃO ---
 
     if (attributeValue === 0 || !selectedAttr) {
       toast({
@@ -101,18 +94,16 @@ export const NpcEquipmentTab = () => {
     }
 
     setAttackRollData({
-      weaponName: weapon.name || "Arma",
+      // <-- MUDANÇA: Adaptar ao NpcAbilityRollDialog
+      abilityName: weapon.name || "Ataque com Arma",
       attributeName: selectedAttr.label,
       attributeValue: attributeValue,
     });
   };
 
-  // handleDamageClick REMOVIDO
-
   return (
     <>
       <div className="space-y-6">
-        {/* Card de Armas (Layout Acordeão) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -121,7 +112,7 @@ export const NpcEquipmentTab = () => {
             <Button
               type="button"
               size="sm"
-              onClick={() => appendWeapon(getDefaultNpcWeapon())} // ATUALIZADO
+              onClick={() => appendWeapon(getDefaultNpcWeapon())}
             >
               <Plus className="w-4 h-4 mr-2" /> Adicionar Arma
             </Button>
@@ -132,15 +123,22 @@ export const NpcEquipmentTab = () => {
                 Nenhuma arma adicionada.
               </p>
             )}
-            <Accordion type="multiple" className="space-y-4">
+            {/* <-- MUDANÇA: Acordeão controlado --> */}
+            <Accordion
+              type="multiple"
+              className="space-y-4"
+              value={openWeapons}
+              onValueChange={setOpenWeapons}
+            >
               {weaponFields.map((field, index) => (
                 <AccordionItem
                   key={field.id}
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  <AccordionTrigger className="p-0 hover:no-underline">
-                    <div className="flex justify-between items-center w-full">
+                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+                  <div className="flex justify-between items-center w-full p-0">
+                    <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate">
                           {form.watch(`weapons.${index}.name`) || "Nova Arma"}
@@ -162,36 +160,35 @@ export const NpcEquipmentTab = () => {
                           </Badge>
                         </div>
                       </div>
-                      {/* --- ATUALIZADO: Botão de Dano removido --- */}
-                      <div
-                        className="flex gap-1 pl-2"
-                        onClick={(e) => e.stopPropagation()}
+                    </AccordionTrigger>
+
+                    <div
+                      className="flex gap-1 pl-2 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleAttackClick(index)}
                       >
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleAttackClick(index)}
-                        >
-                          <Dices className="w-4 h-4" />
-                          <span className="hidden sm:inline ml-2">Atacar</span>
-                        </Button>
-                        {/* Botão de Dano (vermelho) foi removido daqui */}
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => removeWeapon(index)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                      {/* --- FIM DA ATUALIZAÇÃO --- */}
+                        <Dices className="w-4 h-4" />
+                        <span className="hidden sm:inline ml-2">Atacar</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeWeapon(index)}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                  </AccordionTrigger>
+                  </div>
+                  {/* --- FIM DA CORREÇÃO --- */}
+
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
-                    {/* --- ATUALIZADO: Formulário simplificado --- */}
                     <div className="space-y-4">
                       <FormField
                         control={form.control}
@@ -257,9 +254,7 @@ export const NpcEquipmentTab = () => {
                           )}
                         />
                       </div>
-                      {/* Campos 'Atributo de Dano' e 'Descrição Qualidade' removidos */}
                     </div>
-                    {/* --- FIM DA ATUALIZAÇÃO --- */}
                   </AccordionContent>
                 </AccordionItem>
               ))}
@@ -267,7 +262,6 @@ export const NpcEquipmentTab = () => {
           </CardContent>
         </Card>
 
-        {/* Card de Armaduras (Anotação) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -288,15 +282,22 @@ export const NpcEquipmentTab = () => {
               </p>
             )}
 
-            <Accordion type="multiple" className="space-y-4">
+            {/* <-- MUDANÇA: Acordeão controlado --> */}
+            <Accordion
+              type="multiple"
+              className="space-y-4"
+              value={openArmors}
+              onValueChange={setOpenArmors}
+            >
               {armorFields.map((field, index) => (
                 <AccordionItem
                   key={field.id}
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  <AccordionTrigger className="p-0 hover:no-underline">
-                    <div className="flex justify-between items-center w-full">
+                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+                  <div className="flex justify-between items-center w-full p-0">
+                    <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                         <h4 className="font-semibold text-base text-primary-foreground truncate">
                           {form.watch(`armors.${index}.name`) ||
@@ -309,22 +310,25 @@ export const NpcEquipmentTab = () => {
                           </Badge>
                         </div>
                       </div>
-                      <div
-                        className="flex pl-2"
-                        onClick={(e) => e.stopPropagation()}
+                    </AccordionTrigger>
+
+                    <div
+                      className="flex pl-2 flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeArmor(index)}
                       >
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => removeArmor(index)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
-                  </AccordionTrigger>
+                  </div>
+                  {/* --- FIM DA CORREÇÃO --- */}
+
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -374,17 +378,14 @@ export const NpcEquipmentTab = () => {
         </Card>
       </div>
 
-      {/* --- Diálogos --- */}
+      {/* <-- MUDANÇA: Usar NpcAbilityRollDialog --> */}
       {attackRollData && (
-        <WeaponAttackDialog
+        <NpcAbilityRollDialog
           open={!!attackRollData}
           onOpenChange={(open) => !open && setAttackRollData(null)}
-          characterName={npc.name}
-          tableId={npc.table_id}
           {...attackRollData}
         />
       )}
-      {/* O WeaponDamageDialog foi removido */}
     </>
   );
 };
