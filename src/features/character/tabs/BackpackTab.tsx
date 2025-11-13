@@ -38,8 +38,6 @@ import {
 } from "lucide-react";
 import { getDefaultInventoryItem } from "../character.schema";
 import { Separator } from "@/components/ui/separator";
-
-// --- NOVOS IMPORTS ---
 import {
   Accordion,
   AccordionContent,
@@ -47,10 +45,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-// --- FIM DOS NOVOS IMPORTS ---
 
-
-// Sub-componente para gerenciar o dinheiro (sem alterações)
 const MoneyManager = () => {
   const {
     form: { setValue, getValues },
@@ -78,7 +73,7 @@ const MoneyManager = () => {
       totalOrtegas += amountInOrtegas;
     }
 
-    if (totalOrtegas < 0) totalOrtegas = 0; 
+    if (totalOrtegas < 0) totalOrtegas = 0;
 
     const newTaler = Math.floor(totalOrtegas / 100);
     const newShekel = Math.floor((totalOrtegas % 100) / 10);
@@ -145,6 +140,9 @@ export const BackpackTab = () => {
     currentExperience,
     vigorous,
   } = useCharacterCalculations();
+  
+  // <-- MUDANÇA: Controlar o estado do acordeão
+  const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
     fields: inventoryFields,
@@ -160,14 +158,12 @@ export const BackpackTab = () => {
     "money.shekel",
     "money.ortega",
   ]);
-  
-  const totalOrtegas = (taler * 100) + (shekel * 10) + ortega;
+
+  const totalOrtegas = taler * 100 + shekel * 10 + ortega;
 
   return (
     <div className="space-y-6">
-      {/* 3 Colunas Superiores (sem alteração) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Coluna 1: Dinheiro */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -246,7 +242,6 @@ export const BackpackTab = () => {
           </CardContent>
         </Card>
 
-        {/* Coluna 2: Experiência */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -294,7 +289,6 @@ export const BackpackTab = () => {
           </CardContent>
         </Card>
 
-        {/* Coluna 3: Carga & Peso */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -334,7 +328,6 @@ export const BackpackTab = () => {
         </Card>
       </div>
 
-      {/* Linha 2: Inventário (MODIFICADO) */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -355,18 +348,22 @@ export const BackpackTab = () => {
             </p>
           )}
 
-          {/* --- INÍCIO DA MUDANÇA PARA ACORDEÃO --- */}
-          <Accordion type="multiple" className="space-y-4">
+          {/* <-- MUDANÇA: Acordeão controlado --> */}
+          <Accordion
+            type="multiple"
+            className="space-y-4"
+            value={openItems}
+            onValueChange={setOpenItems}
+          >
             {inventoryFields.map((field, index) => (
               <AccordionItem
                 key={field.id}
                 value={field.id}
                 className="p-3 rounded-md border bg-muted/20"
               >
-                <AccordionTrigger className="p-0 hover:no-underline">
-                  <div className="flex justify-between items-center w-full">
-                    
-                    {/* Informações Principais */}
+                {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+                <div className="flex justify-between items-center w-full p-0">
+                  <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                       <h4 className="font-semibold text-base text-primary-foreground truncate">
                         {form.watch(`inventory.${index}.name`) || "Novo Item"}
@@ -380,24 +377,25 @@ export const BackpackTab = () => {
                         </Badge>
                       </div>
                     </div>
-                    
-                    {/* Botão de Excluir */}
-                    <div className="flex pl-2" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => removeItem(index)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  </AccordionTrigger>
 
+                  <div
+                    className="flex pl-2 flex-shrink-0"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="text-destructive hover:text-destructive"
+                      onClick={() => removeItem(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
-                </AccordionTrigger>
-                
-                {/* Conteúdo (Campos de Edição) */}
+                </div>
+                {/* --- FIM DA CORREÇÃO --- */}
+
                 <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -424,7 +422,9 @@ export const BackpackTab = () => {
                                 type="number"
                                 {...field}
                                 onChange={(e) =>
-                                  field.onChange(parseInt(e.target.value) || 0)
+                                  field.onChange(
+                                    parseInt(e.target.value) || 0,
+                                  )
                                 }
                               />
                             </FormControl>
@@ -442,7 +442,9 @@ export const BackpackTab = () => {
                                 type="number"
                                 {...field}
                                 onChange={(e) =>
-                                  field.onChange(parseInt(e.target.value) || 0)
+                                  field.onChange(
+                                    parseInt(e.target.value) || 0,
+                                  )
                                 }
                               />
                             </FormControl>
@@ -450,7 +452,6 @@ export const BackpackTab = () => {
                         )}
                       />
                     </div>
-
                     <FormField
                       control={form.control}
                       name={`inventory.${index}.description`}
@@ -472,8 +473,6 @@ export const BackpackTab = () => {
               </AccordionItem>
             ))}
           </Accordion>
-          {/* --- FIM DA MUDANÇA PARA ACORDEÃO --- */}
-          
         </CardContent>
       </Card>
     </div>
