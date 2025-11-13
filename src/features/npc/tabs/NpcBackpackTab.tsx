@@ -1,5 +1,6 @@
 // src/features/npc/tabs/NpcBackpackTab.tsx
 
+import { useState } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,9 @@ import { Badge } from "@/components/ui/badge";
 
 export const NpcBackpackTab = () => {
   const { form } = useNpcSheet();
+  
+  // <-- MUDANÇA: Controlar o estado do acordeão
+  const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
     fields: inventoryFields,
@@ -55,15 +59,22 @@ export const NpcBackpackTab = () => {
           </p>
         )}
 
-        <Accordion type="multiple" className="space-y-4">
+        {/* <-- MUDANÇA: Acordeão controlado --> */}
+        <Accordion
+          type="multiple"
+          className="space-y-4"
+          value={openItems}
+          onValueChange={setOpenItems}
+        >
           {inventoryFields.map((field, index) => (
             <AccordionItem
               key={field.id}
               value={field.id}
               className="p-3 rounded-md border bg-muted/20"
             >
-              <AccordionTrigger className="p-0 hover:no-underline">
-                <div className="flex justify-between items-center w-full">
+              {/* --- INÍCIO DA CORREÇÃO HTML --- */}
+              <div className="flex justify-between items-center w-full p-0">
+                <AccordionTrigger className="p-0 hover:no-underline flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                     <h4 className="font-semibold text-base text-primary-foreground truncate">
                       {form.watch(`inventory.${index}.name`) || "Novo Item"}
@@ -77,19 +88,25 @@ export const NpcBackpackTab = () => {
                       </Badge>
                     </div>
                   </div>
-                  <div className="flex pl-2" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => removeItem(index)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+                </AccordionTrigger>
+
+                <div
+                  className="flex pl-2 flex-shrink-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => removeItem(index)}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-              </AccordionTrigger>
+              </div>
+              {/* --- FIM DA CORREÇÃO --- */}
+
               <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -142,7 +159,6 @@ export const NpcBackpackTab = () => {
                       )}
                     />
                   </div>
-
                   <FormField
                     control={form.control}
                     name={`inventory.${index}.description`}
