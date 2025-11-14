@@ -1,6 +1,5 @@
 // src/features/character/CharacterSheet.tsx
 
-// --- MUDANÇA: Importar useEffect e useRef ---
 import { useState, useEffect, useRef } from "react";
 import { Database } from "@/integrations/supabase/types";
 import {
@@ -63,17 +62,24 @@ const CharacterSheetInner = ({
   const { isDirty, isSubmitting } = form.formState;
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
   
-  // --- INÍCIO DA CORREÇÃO (CAMADAS 1 E 2) ---
-
   // Ref para o timer do auto-save
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   
   // Observa todos os valores do formulário
   const watchedValues = form.watch(); 
   
-  // Estado para o callback de "Salvar e Sair" (da correção anterior)
+  // Estado para o callback de "Salvar e Sair"
   const [onSaveSuccessCallback, setOnSaveSuccessCallback] =
     useState<(() => void) | null>(null);
+
+  // --- INÍCIO DA CORREÇÃO ---
+  // Esta linha estava faltando!
+  const [name, race, occupation] = form.watch([
+    "name",
+    "race",
+    "occupation",
+  ]);
+  // --- FIM DA CORREÇÃO ---
 
   // Esta é a ÚNICA função que salva
   const onSubmit = async (data: CharacterSheetData) => {
@@ -107,61 +113,41 @@ const CharacterSheetInner = ({
     }
   };
 
-
   // --- CAMADA 1: AUTO-SAVE (O "Cinto de Segurança") ---
   useEffect(() => {
-    // Só ativa se houver alterações E se não estiver já a salvar
     if (isDirty && !isSubmitting) {
-      
-      // Se o utilizador continuar a digitar, cancela o timer anterior
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
-
-      // Inicia um novo timer de 2.5 segundos
       debounceTimer.current = setTimeout(() => {
         console.log("Auto-save: Disparando o salvamento...");
-        // Dispara o submit (sem callback, pois não queremos fechar)
         form.handleSubmit(onSubmit, onInvalid)();
-      }, 2500); // 2.5 segundos de espera
+      }, 2500);
     }
-
-    // Limpa o timer se o componente for fechado
     return () => {
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
     };
-  
-  // Depende dos valores, do estado 'dirty' e do 'submitting'
   }, [watchedValues, isDirty, isSubmitting, form.handleSubmit, onSubmit, onInvalid]);
-
 
   // --- CAMADA 2: AVISO DE FECHO DE ABA (O "Airbag") ---
   useEffect(() => {
-    // Função que diz ao navegador para mostrar o aviso
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
-      // (Standard para a maioria dos navegadores)
       event.returnValue = ""; 
       return "";
     };
 
     if (isDirty) {
-      // Se a ficha tem alterações, ativa o aviso
       window.addEventListener("beforeunload", handleBeforeUnload);
     } else {
-      // Se a ficha está salva, remove o aviso
       window.removeEventListener("beforeunload", handleBeforeUnload);
     }
-
-    // Limpa o aviso quando o componente é fechado
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [isDirty]); // Só depende se a ficha tem alterações
-
-  // --- FIM DA CORREÇÃO ---
+  }, [isDirty]); 
 
 
   // --- Lógica para o botão "Fechar" (Popup) ---
@@ -173,32 +159,30 @@ const CharacterSheetInner = ({
     }
   };
 
-  // Lógica para "Salvar e Sair" (agora funciona com o onSubmit)
+  // Lógica para "Salvar e Sair"
   const handleSaveAndClose = () => {
-    // 1. Define a ação de fecho para o 'onSubmit' executar
     setOnSaveSuccessCallback(() => {
       return () => {
         setIsCloseAlertOpen(false);
         onClose();
       };
     });
-    // 2. Dispara o submit
     form.handleSubmit(onSubmit, onInvalid)();
   };
 
   // Lógica para "Sair Sem Salvar"
   const handleCloseWithoutSaving = () => {
-    form.reset(initialData); // Reverte as alterações
+    form.reset(initialData); 
     setIsCloseAlertOpen(false);
     onClose();
   };
-  // --- Fim da lógica de fecho ---
 
   return (
     <>
       <div className="flex flex-col h-full">
         <div className="p-4 border-b border-border/50 flex justify-between items-center">
           <div>
+            {/* Agora 'name', 'race' e 'occupation' existem */}
             <h2 className="text-2xl font-bold">{name}</h2>
             <p className="text-sm text-muted-foreground">
               {race} | {occupation}
@@ -206,7 +190,7 @@ const CharacterSheetInner = ({
           </div>
 
           <div className="flex gap-2 items-center">
-            {/* Indicador de "Salvando..." (agora unificado) */}
+            {/* Indicador de "Salvando..." */}
             <div
               className={cn(
                 "text-sm transition-opacity duration-300",
@@ -236,7 +220,7 @@ const CharacterSheetInner = ({
               size="sm"
               variant="outline"
               onClick={handleCloseClick}
-              disabled={isSubmitting} // Desativado se estiver salvando
+              disabled={isSubmitting} 
             >
               <X className="w-4 h-4 mr-2" />
               Fechar
@@ -263,7 +247,7 @@ const CharacterSheetInner = ({
               </TabsList>
 
               <fieldset
-                disabled={isSubmitting} // Desativa a ficha toda enquanto salva
+                disabled={isSubmitting} 
                 className="p-4 pt-0 space-y-4"
               >
                 <TabsContent value="details">
@@ -325,7 +309,7 @@ const CharacterSheetInner = ({
             <AlertDialogAction
               className={buttonVariants({ variant: "default" })}
               onClick={handleSaveAndClose}
-              disabled={isSubmitting} // Usa o estado de loading nativo
+              disabled={isSubmitting} 
             >
               {isSubmitting ? "Salvando..." : "Salvar e Sair"}
             </AlertDialogAction>
@@ -345,7 +329,6 @@ export const CharacterSheet = ({
 
   const defaults = getDefaultCharacterSheetData(initialCharacter.name);
 
-  // ... (lógica de merge de dados) ...
   const mergedData = {
     ...defaults,
     ...(initialCharacter.data as any),
@@ -374,7 +357,6 @@ export const CharacterSheet = ({
   const validatedData = parsedData.success ? parsedData.data : mergedData;
   initialCharacter.data = validatedData;
   
-  // Função de salvar principal
   const handleSave = async (data: CharacterSheetData) => {
     const { error } = await supabase
       .from("characters")
@@ -387,7 +369,6 @@ export const CharacterSheet = ({
         description: error.message,
         variant: "destructive",
       });
-      // Lança o erro para o 'onSubmit' saber que falhou
       throw new Error(error.message);
     }
   };
