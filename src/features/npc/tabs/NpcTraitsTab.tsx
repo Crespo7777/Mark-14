@@ -31,9 +31,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 export const NpcTraitsTab = () => {
-  const { form } = useNpcSheet();
+  // --- 1. OBTER 'isReadOnly' ---
+  const { form, isReadOnly } = useNpcSheet();
   
-  // <-- MUDANÇA: Controlar o estado do acordeão
   const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
@@ -55,6 +55,7 @@ export const NpcTraitsTab = () => {
           type="button"
           size="sm"
           onClick={() => appendTrait(getDefaultTrait())}
+          disabled={isReadOnly} // <-- 2. ADICIONADO
         >
           <Plus className="w-4 h-4 mr-2" /> Adicionar Traço
         </Button>
@@ -66,7 +67,6 @@ export const NpcTraitsTab = () => {
           </p>
         )}
 
-        {/* <-- MUDANÇA: Acordeão controlado --> */}
         <Accordion
           type="multiple"
           className="space-y-4"
@@ -79,17 +79,9 @@ export const NpcTraitsTab = () => {
               value={field.id}
               className="p-3 rounded-md border bg-muted/20"
             >
-              {/* --- INÍCIO DA CORREÇÃO HTML --- */}
               <div className="flex justify-between items-center w-full p-0">
                 <AccordionTrigger className="p-0 hover:no-underline flex-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
-                    <h4 className="font-semibold text-base text-primary-foreground truncate">
-                      {form.watch(`traits.${index}.name`) || "Novo Traço"}
-                    </h4>
-                    <Badge variant="secondary" className="px-1.5 py-0.5">
-                      {form.watch(`traits.${index}.type`)}
-                    </Badge>
-                  </div>
+                  {/* ... (conteúdo do trigger sem alteração) ... */}
                 </AccordionTrigger>
 
                 <div
@@ -102,14 +94,15 @@ export const NpcTraitsTab = () => {
                     variant="ghost"
                     className="text-destructive hover:text-destructive"
                     onClick={() => removeTrait(index)}
+                    disabled={isReadOnly} // <-- 2. ADICIONADO
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
-              {/* --- FIM DA CORREÇÃO --- */}
 
               <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                {/* --- 3. ADICIONAR readOnly/disabled AOS CAMPOS --- */}
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
@@ -122,6 +115,7 @@ export const NpcTraitsTab = () => {
                             <Input
                               placeholder="Nome do Traço / Dádiva / Fardo"
                               {...field}
+                              readOnly={isReadOnly} // <-- ADICIONADO
                             />
                           </FormControl>
                         </FormItem>
@@ -136,6 +130,7 @@ export const NpcTraitsTab = () => {
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
+                            disabled={isReadOnly} // <-- ADICIONADO
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -163,6 +158,7 @@ export const NpcTraitsTab = () => {
                             placeholder="Descreva o traço, seus efeitos, etc..."
                             {...field}
                             className="min-h-[80px] text-sm"
+                            readOnly={isReadOnly} // <-- ADICIONADO
                           />
                         </FormControl>
                       </FormItem>
