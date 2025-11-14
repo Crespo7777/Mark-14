@@ -1,6 +1,6 @@
 // src/features/character/CharacterSheet.tsx
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react"; // useRef foi removido
 import { Database } from "@/integrations/supabase/types";
 import {
   CharacterSheetProvider,
@@ -46,92 +46,39 @@ interface CharacterSheetProps {
   onClose: () => void;
 }
 
-// Componente "Interno"
+// Componente "Interno" (Agora muito mais simples)
 const CharacterSheetInner = ({
   onClose,
-  onSave,
-  initialData,
+  initialData, // Usado para reverter "Sair Sem Salvar"
 }: {
   onClose: () => void;
-  onSave: (data: CharacterSheetData) => Promise<void>;
   initialData: CharacterSheetData;
 }) => {
-  const { form } = useCharacterSheet();
-  const { toast } = useToast();
+  // 1. Obter tudo do contexto
+  const { form, isDirty, isSaving, saveSheet } = useCharacterSheet();
+  const { toast } = useToast(); // Apenas para o onInvalid (se precisasse)
 
-  const { isDirty, isSubmitting } = form.formState;
+  // 2. Remover todos os states e refs de salvamento
+  // const { isDirty, isSubmitting } = form.formState; // REMOVIDO
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
-  
-  // Ref para o timer do auto-save
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-  
-  // Observa todos os valores do formulário
-  const watchedValues = form.watch(); 
-  
-  // Estado para o callback de "Salvar e Sair"
-  const [onSaveSuccessCallback, setOnSaveSuccessCallback] =
-    useState<(() => void) | null>(null);
+  // const debounceTimer = useRef<NodeJS.Timeout | null>(null); // REMOVIDO
+  // const watchedValues = form.watch(); // REMOVIDO
+  // const [onSaveSuccessCallback, setOnSaveSuccessCallback] = useState... // REMOVIDO
 
-  // --- INÍCIO DA CORREÇÃO ---
-  // Esta linha estava faltando!
   const [name, race, occupation] = form.watch([
     "name",
     "race",
     "occupation",
   ]);
-  // --- FIM DA CORREÇÃO ---
 
-  // Esta é a ÚNICA função que salva
-  const onSubmit = async (data: CharacterSheetData) => {
-    try {
-      await onSave(data);
-      form.reset(data); // "Limpa" o formulário (isDirty = false)
-      toast({ title: "Ficha Salva!" });
+  // 3. Remover 'onSubmit' e 'onInvalid' locais
+  // REMOVIDOS
 
-      if (onSaveSuccessCallback) {
-        onSaveSuccessCallback();
-        setOnSaveSuccessCallback(null); // Limpa a ação
-      }
-    } catch (error) {
-      console.error("Falha no submit:", error);
-      if (onSaveSuccessCallback) {
-        setOnSaveSuccessCallback(null);
-      }
-    }
-  };
+  // 4. Remover 'useEffect[watchedValues]' (O auto-save)
+  // REMOVIDO
 
-  // Função chamada em caso de erro de validação (Zod)
-  const onInvalid = (errors: any) => {
-    console.error("Erros de validação:", errors);
-    toast({
-      title: "Erro de Validação",
-      description: "Verifique os campos em vermelho.",
-      variant: "destructive",
-    });
-    if (onSaveSuccessCallback) {
-      setOnSaveSuccessCallback(null);
-    }
-  };
-
-  // --- CAMADA 1: AUTO-SAVE (O "Cinto de Segurança") ---
-  useEffect(() => {
-    if (isDirty && !isSubmitting) {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-      debounceTimer.current = setTimeout(() => {
-        console.log("Auto-save: Disparando o salvamento...");
-        form.handleSubmit(onSubmit, onInvalid)();
-      }, 2500);
-    }
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, [watchedValues, isDirty, isSubmitting, form.handleSubmit, onSubmit, onInvalid]);
-
-  // --- CAMADA 2: AVISO DE FECHO DE ABA (O "Airbag") ---
+  // 5. Manter 'useEffect[isDirty]' (Aviso de fechar a aba)
+  // Este é o "airbag" de segurança.
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -147,10 +94,10 @@ const CharacterSheetInner = ({
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [isDirty]); 
+  }, [isDirty]); // Agora só depende do 'isDirty'
 
 
-  // --- Lógica para o botão "Fechar" (Popup) ---
+  // 6. Simplificar lógicas de fechar
   const handleCloseClick = () => {
     if (isDirty) {
       setIsCloseAlertOpen(true);
@@ -159,20 +106,16 @@ const CharacterSheetInner = ({
     }
   };
 
-  // Lógica para "Salvar e Sair"
-  const handleSaveAndClose = () => {
-    setOnSaveSuccessCallback(() => {
-      return () => {
-        setIsCloseAlertOpen(false);
-        onClose();
-      };
-    });
-    form.handleSubmit(onSubmit, onInvalid)();
+  const handleSaveAndClose = async () => {
+    await saveSheet(); // 1. Salva
+    // A função 'saveSheet' já faz o form.reset()
+    // Então o 'isDirty' ficará falso.
+    setIsCloseAlertOpen(false); // 2. Fecha o pop-up
+    onClose(); // 3. Fecha o sheet
   };
 
-  // Lógica para "Sair Sem Salvar"
   const handleCloseWithoutSaving = () => {
-    form.reset(initialData); 
+    form.reset(initialData); // Reseta para os dados originais
     setIsCloseAlertOpen(false);
     onClose();
   };
@@ -182,7 +125,6 @@ const CharacterSheetInner = ({
       <div className="flex flex-col h-full">
         <div className="p-4 border-b border-border/50 flex justify-between items-center">
           <div>
-            {/* Agora 'name', 'race' e 'occupation' existem */}
             <h2 className="text-2xl font-bold">{name}</h2>
             <p className="text-sm text-muted-foreground">
               {race} | {occupation}
@@ -190,37 +132,36 @@ const CharacterSheetInner = ({
           </div>
 
           <div className="flex gap-2 items-center">
-            {/* Indicador de "Salvando..." */}
+            {/* 7. Ligar indicador ao contexto */}
             <div
               className={cn(
                 "text-sm transition-opacity duration-300",
                 isDirty ? "text-amber-500" : "text-muted-foreground/70",
               )}
             >
-              {isSubmitting
+              {isSaving
                 ? "Salvando..."
                 : isDirty
                 ? "Alterações não salvas"
                 : "Salvo"}
             </div>
 
-            {/* Botão "Salvar" Manual */}
+            {/* 8. Ligar botões ao contexto */}
             <Button
               size="sm"
               variant="default"
-              onClick={form.handleSubmit(onSubmit, onInvalid)}
-              disabled={!isDirty || isSubmitting}
+              onClick={saveSheet}
+              disabled={!isDirty || isSaving}
             >
               <Save className="w-4 h-4 mr-2" />
               Salvar
             </Button>
 
-            {/* Botão "Fechar" */}
             <Button
               size="sm"
               variant="outline"
               onClick={handleCloseClick}
-              disabled={isSubmitting} 
+              disabled={isSaving} 
             >
               <X className="w-4 h-4 mr-2" />
               Fechar
@@ -230,7 +171,7 @@ const CharacterSheetInner = ({
 
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            onSubmit={(e) => e.preventDefault()} // Não precisamos de submit HTML
             className="flex-1 overflow-y-auto"
           >
             <Tabs defaultValue="details" className="w-full">
@@ -247,7 +188,7 @@ const CharacterSheetInner = ({
               </TabsList>
 
               <fieldset
-                disabled={isSubmitting} 
+                disabled={isSaving} // Desabilita tudo enquanto salva
                 className="p-4 pt-0 space-y-4"
               >
                 <TabsContent value="details">
@@ -283,7 +224,7 @@ const CharacterSheetInner = ({
         </Form>
       </div>
 
-      {/* Diálogo de Confirmação para Fechar */}
+      {/* 9. Ligar AlertDialog ao 'isSaving' */}
       <AlertDialog
         open={isCloseAlertOpen}
         onOpenChange={setIsCloseAlertOpen}
@@ -296,22 +237,22 @@ const CharacterSheetInner = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>
+            <AlertDialogCancel disabled={isSaving}>
               Cancelar
             </AlertDialogCancel>
             <Button
               variant="outline"
               onClick={handleCloseWithoutSaving}
-              disabled={isSubmitting}
+              disabled={isSaving}
             >
               Sair Sem Salvar
             </Button>
             <AlertDialogAction
               className={buttonVariants({ variant: "default" })}
               onClick={handleSaveAndClose}
-              disabled={isSubmitting} 
+              disabled={isSaving} 
             >
-              {isSubmitting ? "Salvando..." : "Salvar e Sair"}
+              {isSaving ? "Salvando..." : "Salvar e Sair"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -320,15 +261,15 @@ const CharacterSheetInner = ({
   );
 };
 
-// Componente "Pai"
+// Componente "Pai" (Wrapper)
 export const CharacterSheet = ({
   initialCharacter,
   onClose,
 }: CharacterSheetProps) => {
   const { toast } = useToast();
 
+  // (Lógica de merge de dados permanece idêntica)
   const defaults = getDefaultCharacterSheetData(initialCharacter.name);
-
   const mergedData = {
     ...defaults,
     ...(initialCharacter.data as any),
@@ -357,6 +298,7 @@ export const CharacterSheet = ({
   const validatedData = parsedData.success ? parsedData.data : mergedData;
   initialCharacter.data = validatedData;
   
+  // 10. Esta é a função que o Contexto usará para salvar
   const handleSave = async (data: CharacterSheetData) => {
     const { error } = await supabase
       .from("characters")
@@ -364,11 +306,7 @@ export const CharacterSheet = ({
       .eq("id", initialCharacter.id);
 
     if (error) {
-      toast({
-        title: "Erro ao salvar",
-        description: error.message,
-        variant: "destructive",
-      });
+      // O 'toast' de erro já é disparado pelo contexto
       throw new Error(error.message);
     }
   };
@@ -377,7 +315,6 @@ export const CharacterSheet = ({
     <CharacterSheetProvider character={initialCharacter} onSave={handleSave}>
       <CharacterSheetInner
         onClose={onClose}
-        onSave={handleSave}
         initialData={validatedData as CharacterSheetData}
       />
     </CharacterSheetProvider>
