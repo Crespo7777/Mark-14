@@ -11,7 +11,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Plus, Trash2, BookOpen, Edit, Users, UserSquare } from "lucide-react";
+import { Plus, Trash2, BookOpen, Edit, Users, UserSquare, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CreatePlayerCharacterDialog } from "./CreatePlayerCharacterDialog";
 import {
@@ -28,7 +28,7 @@ import { Database } from "@/integrations/supabase/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JournalRenderer } from "./JournalRenderer";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTableContext } from "@/features/table/TableContext"; // Importar o contexto
+import { useTableContext } from "@/features/table/TableContext"; 
 
 // Lazy loading
 const CharacterSheetSheet = lazy(() =>
@@ -72,31 +72,25 @@ type MyCharacter = {
   player_id: string;
 };
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
-
-// --- ATUALIZADO: TIPO DE ENTRADA DO DIÁRIO ---
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"] & {
   player: { display_name: string } | null;
   character: { name: string } | null;
   npc: { name: string } | null;
 };
-// --- FIM DA ATUALIZAÇÃO ---
 
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([]);
-  
-  // --- ATUALIZADO: Usar o userId do contexto ---
   const { userId } = useTableContext(); 
-  // --- FIM DA ATUALIZAÇÃO ---
-
   const { toast } = useToast();
   const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(null);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const [sharedNpcs, setSharedNpcs] = useState<Npc[]>([]);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
+  const [duplicating, setDuplicating] = useState(false);
 
   useEffect(() => {
-    if (userId) { // Só carrega se o userId estiver pronto
+    if (userId) { 
       loadData();
     }
   
@@ -122,22 +116,18 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tableId, userId]); // Adiciona userId às dependências
+  }, [tableId, userId]); 
 
-  // --- ATUALIZADO: loadData AGORA INCLUI JOINS ---
   const loadData = async () => {
-    if (!userId) return; // Proteção extra
+    if (!userId) return; 
 
     try {
-      // 1. Query de Personagens (inclui personagens partilhados E os do jogador)
       const [charsRes, journalRes, npcsRes] = await Promise.all([
         supabase
           .from("characters")
           .select("*, player:profiles!characters_player_id_fkey(display_name)")
-          .eq("table_id", tableId)
-          .or(`player_id.eq.${userId},is_shared.eq.true`), // Pega os meus OU os partilhados
+          .eq("table_id", tableId),
 
-        // 2. Query de Diário (Usa a RLS do Supabase para filtrar)
         supabase
           .from("journal_entries")
           .select(`
@@ -149,20 +139,16 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           .eq("table_id", tableId)
           .order("created_at", { ascending: false }),
         
-        // 3. Query de NPCs (só os partilhados)
         supabase
           .from("npcs")
           .select("*")
           .eq("table_id", tableId)
-          .eq("is_shared", true)
           .order("name", { ascending: true }),
       ]);
 
       if (charsRes.error) throw charsRes.error;
-      // Filtra os personagens para separar os "meus"
       const allChars = (charsRes.data as any) || [];
       setMyCharacters(allChars.filter((c: MyCharacter) => c.player_id === userId));
-      // (Poderíamos ter um state para 'sharedCharacters' se quiséssemos, mas não é pedido)
 
       if (journalRes.error) throw journalRes.error;
       setJournalEntries((journalRes.data as any) || []);
@@ -182,12 +168,10 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       setSharedNpcs([]);
     }
   };
-  // --- FIM DA ATUALIZAÇÃO ---
 
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
     
-    // Antes de deletar o Personagem, atualize as entradas de diário
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
 
     const { error } = await supabase
@@ -220,6 +204,45 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     }
   };
   
+  const handleDuplicateCharacter = async (charToDuplicate: MyCharacter) => {
+    if (!userId) return; 
+    setDuplicating(true);
+
+    const newName = `Cópia de ${charToDuplicate.name}`;
+    
+    const { data: fullCharData, error: fetchError } = await supabase
+      .from("characters")
+      .select("data")
+      .eq("id", charToDuplicate.id)
+      .single();
+
+    if (fetchError || !fullCharData) {
+      toast({ title: "Erro ao carregar dados", description: fetchError?.message || "Ficha não encontrada.", variant: "destructive" });
+      setDuplicating(false);
+      return;
+    }
+    
+    const newData = JSON.parse(JSON.stringify(fullCharData.data || {}));
+    newData.name = newName;
+
+    const { error } = await supabase.from("characters").insert({
+      table_id: tableId,
+      player_id: userId, 
+      name: newName,
+      data: newData,
+      is_shared: false,
+      shared_with_players: [],
+    });
+
+    if (error) {
+      toast({ title: "Erro ao duplicar Ficha", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Ficha Duplicada!", description: `${newName} foi criada.` });
+      loadData();
+    }
+    setDuplicating(false);
+  };
+  
   return (
     <div className="space-y-6">
       <div>
@@ -245,7 +268,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           </TabsTrigger>
         </TabsList>
 
-        {/* ... (Aba Minhas Fichas e NPCs Compartilhados permanecem iguais) ... */}
         <TabsContent value="characters" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Minhas Fichas</h3>
@@ -281,11 +303,25 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                           </p>
                         </CardContent>
                       </div>
-                      <CardFooter className="p-4 pt-0">
+                      <CardFooter className="p-4 pt-0 flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          disabled={duplicating}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDuplicateCharacter(char);
+                          }}
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          Duplicar
+                        </Button>
                         <Button
                           variant="destructive"
                           size="sm"
                           className="w-full"
+                          disabled={duplicating}
                           onClick={(e) => {
                             e.stopPropagation();
                             setCharacterToDelete(char);
@@ -338,7 +374,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           </div>
         </TabsContent>
 
-        {/* --- ATUALIZAÇÃO: Aba do Diário --- */}
         <TabsContent value="journal" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Diário & Anotações</h3>
@@ -346,7 +381,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
               <JournalEntryDialog
                 tableId={tableId}
                 onEntrySaved={loadData}
-                isPlayerNote={true} // Botão principal sempre cria nota de JOGADOR
+                isPlayerNote={true} 
               >
                 <Button size="sm">
                   <Plus className="w-4 h-4 mr-2" />
@@ -362,20 +397,20 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
               </p>
             ) : (
               journalEntries.map((entry) => {
-                // Determina o "dono" da anotação
                 let description = "Anotação Pública do Mestre";
-                let isMyEntry = false; // Posso editar?
+                let isMyEntry = false; 
 
                 if (entry.player) {
                   description = "Sua Anotação Pessoal";
                   isMyEntry = true;
                 } else if (entry.character) {
                   description = `Diário de: ${entry.character.name}`;
-                  isMyEntry = true; // RLS garante que só vejo as minhas
+                  isMyEntry = true; 
+                } else if (entry.shared_with_players.includes(userId!)) {
+                  description = "Compartilhado com você pelo Mestre";
+                  // isMyEntry continua false, pois não posso editar
                 }
                 
-                // (Notas de NPC não devem aparecer aqui, RLS filtra)
-
                 return (
                   <Card key={entry.id} className="border-border/50 flex flex-col">
                     <CardHeader>
@@ -387,7 +422,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                     <CardContent className="flex-1">
                       <JournalRenderer content={entry.content} className="line-clamp-4" />
                     </CardContent>
-                    {/* Só mostra botões de editar/excluir se for minha */}
                     {isMyEntry && (
                       <CardFooter className="flex justify-end items-center gap-2">
                         <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
@@ -418,11 +452,9 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
             )}
           </div>
         </TabsContent>
-        {/* --- FIM DA ATUALIZAÇÃO --- */}
       </Tabs>
 
-      {/* ... (AlertDialogs permanecem iguais) ... */}
-       <AlertDialog
+      <AlertDialog
         open={!!characterToDelete}
         onOpenChange={(open) => !open && setCharacterToDelete(null)}
       >
