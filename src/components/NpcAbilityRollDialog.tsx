@@ -24,12 +24,14 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
 
+// --- 1. ADICIONAR NOVA PROP 'buttonText' ---
 interface NpcAbilityRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   abilityName: string;
   attributeName: string;
   attributeValue: number;
+  buttonText?: string; // <-- ADICIONADO
 }
 
 export const NpcAbilityRollDialog = ({
@@ -38,6 +40,7 @@ export const NpcAbilityRollDialog = ({
   abilityName,
   attributeName,
   attributeValue,
+  buttonText = "Usar Habilidade", // <-- 2. VALOR PADRÃO ADICIONADO
 }: NpcAbilityRollDialogProps) => {
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -77,7 +80,7 @@ export const NpcAbilityRollDialog = ({
       abilityName,
       attributeName,
       result,
-      0, // Custo de corrupção é sempre 0 para NPCs
+      0, 
     );
 
     if (isHidden && isMaster) {
@@ -156,7 +159,8 @@ export const NpcAbilityRollDialog = ({
             disabled={loading}
           >
             {loading ? "Rolando..." : <Dices className="w-4 h-4 mr-2" />}
-            Usar Habilidade
+            {/* --- 3. USAR A PROP 'buttonText' --- */}
+            {buttonText}
           </Button>
         </DialogFooter>
       </DialogContent>
