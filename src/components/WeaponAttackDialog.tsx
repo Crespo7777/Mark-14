@@ -16,14 +16,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dices, Crosshair } from "lucide-react"; // 1. Importar Crosshair
+import { Dices, Crosshair } from "lucide-react"; 
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
-// --- NOVO ---
-import { useCharacterSheet } from "@/features/character/CharacterSheetContext"; // 2. Importar o hook da ficha
-// --- FIM DO NOVO ---
+// --- 1. IMPORTAR O HOOK DA FICHA ---
+import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
 
-// --- ATUALIZADO ---
 interface WeaponAttackDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -32,9 +30,8 @@ interface WeaponAttackDialogProps {
   attributeValue: number;
   characterName: string;
   tableId: string;
-  projectileId?: string; // 3. Adicionar projectileId
+  projectileId?: string;
 }
-// --- FIM DA ATUALIZAÇÃO ---
 
 export const WeaponAttackDialog = ({
   open,
@@ -44,7 +41,7 @@ export const WeaponAttackDialog = ({
   attributeValue,
   characterName,
   tableId,
-  projectileId, // 3. Receber o projectileId
+  projectileId,
 }: WeaponAttackDialogProps) => {
   const [withAdvantage, setWithAdvantage] = useState(false);
   const [modifier, setModifier] = useState(0);
@@ -57,14 +54,11 @@ export const WeaponAttackDialog = ({
   } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
 
-  // --- NOVO ---
-  // 4. Obter o formulário da ficha de personagem
-  const { form } = useCharacterSheet();
-  // --- FIM DO NOVO ---
+  // --- 2. OBTER O 'form' E O 'programmaticSave' ---
+  const { form, programmaticSave, isSaving } = useCharacterSheet();
 
   const handleRoll = async () => {
-    // --- LÓGICA DE MUNIÇÃO (INÍCIO) ---
-    // 5. Adicionar a lógica de verificação e gasto de munição
+    // --- 3. LÓGICA DE MUNIÇÃO (INÍCIO) ---
     if (projectileId && form) {
       const projectiles = form.getValues("projectiles");
       const projectileIndex = projectiles.findIndex(
@@ -78,7 +72,7 @@ export const WeaponAttackDialog = ({
           description: "A munição ligada a esta arma não foi encontrada.",
           variant: "destructive",
         });
-        return; // Para a execução
+        return; 
       }
 
       if (projectile.quantity <= 0) {
@@ -87,16 +81,14 @@ export const WeaponAttackDialog = ({
           description: `Você não tem mais ${projectile.name} para disparar.`,
           variant: "destructive",
         });
-        return; // Para a execução
+        return;
       }
 
-      // Se chegou aqui, tem munição. Vamos gastar.
       const newQuantity = projectile.quantity - 1;
       form.setValue(`projectiles.${projectileIndex}.quantity`, newQuantity, {
-        shouldDirty: true, // Marca a ficha como "modificada"
+        shouldDirty: true, 
       });
 
-      // Toast de sucesso (não-destrutivo)
       toast({
         title: "Disparou!",
         description: (
@@ -106,6 +98,10 @@ export const WeaponAttackDialog = ({
           </div>
         ),
       });
+
+      // 4. SALVAR A MUDANÇA DE MUNIÇÃO
+      await programmaticSave();
+
     }
     // --- LÓGICA DE MUNIÇÃO (FIM) ---
 
@@ -151,6 +147,7 @@ export const WeaponAttackDialog = ({
       result,
     );
 
+    // ... (lógica de envio de chat) ...
     if (isHidden && isMaster) {
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
@@ -231,10 +228,10 @@ export const WeaponAttackDialog = ({
             type="button"
             className="w-full"
             onClick={handleRoll}
-            disabled={loading}
+            // 5. Desabilitar se a rolagem local ESTIVER acontecendo OU a ficha ESTIVER salvando
+            disabled={loading || isSaving}
           >
-            {loading ? "Rolando..." : <Dices className="w-4 h-4 mr-2" />}
-            Rolar Ataque
+            {loading ? "Rolando..." : (isSaving ? "Salvando..." : <><Dices className="w-4 h-4 mr-2" /> Rolar Ataque</>)}
           </Button>
         </DialogFooter>
       </DialogContent>
