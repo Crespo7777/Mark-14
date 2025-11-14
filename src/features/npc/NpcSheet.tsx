@@ -1,6 +1,5 @@
 // src/features/npc/NpcSheet.tsx
 
-// --- MUDANÇA: Importar useEffect e useRef ---
 import { useEffect, useRef, useState } from "react";
 import { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -29,7 +28,9 @@ import {
 } from "./npc.schema";
 import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
 
-import { useTableContext } from "@/features/table/TableContext";
+// useTableContext não é mais necessário aqui em NpcSheet, 
+// pois NpcSheetProvider agora cuida disso.
+// import { useTableContext } from "@/features/table/TableContext";
 
 import { NpcCombatTab } from "./tabs/NpcCombatTab";
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
@@ -57,21 +58,16 @@ const NpcSheetInner = ({
   onSave: (data: NpcSheetData) => Promise<void>;
   initialData: NpcSheetData;
 }) => {
-  const { form } = useNpcSheet();
+  // --- 1. OBTER 'isReadOnly' DO NOVO CONTEXTO ---
+  const { form, isReadOnly } = useNpcSheet();
   const { toast } = useToast();
 
   const { isDirty, isSubmitting } = form.formState;
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
-
-  // --- INÍCIO DA CORREÇÃO (LÓGICA IDÊNTICA À DO CHARACTER) ---
   
-  // Ref para o timer do auto-save
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-  
-  // Observa todos os valores do formulário
   const watchedValues = form.watch(); 
   
-  // Estado para o callback de "Salvar e Sair"
   const [onSaveSuccessCallback, setOnSaveSuccessCallback] =
     useState<(() => void) | null>(null);
     
@@ -81,18 +77,20 @@ const NpcSheetInner = ({
     "occupation",
   ]);
 
-  const { isMaster } = useTableContext();
+  // 'isMaster' agora é 'isReadOnly'
+  // const { isMaster } = useTableContext(); 
 
-  // Esta é a ÚNICA função que salva
   const onSubmit = async (data: NpcSheetData) => {
+    // Só salva se não for ReadOnly
+    if (isReadOnly) return;
     try {
       await onSave(data);
-      form.reset(data); // "Limpa" o formulário (isDirty = false)
+      form.reset(data); 
       toast({ title: "Ficha de NPC Salva!" });
 
       if (onSaveSuccessCallback) {
         onSaveSuccessCallback();
-        setOnSaveSuccessCallback(null); // Limpa a ação
+        setOnSaveSuccessCallback(null);
       }
     } catch (error) {
       console.error("Falha no submit do NPC:", error);
@@ -102,7 +100,6 @@ const NpcSheetInner = ({
     }
   };
 
-  // Função chamada em caso de erro de validação (Zod)
   const onInvalid = (errors: any) => {
     console.error("Erros de validação do NPC:", errors);
     toast({
@@ -115,32 +112,27 @@ const NpcSheetInner = ({
     }
   };
 
-
-  // --- CAMADA 1: AUTO-SAVE (O "Cinto de Segurança") ---
+  // Auto-save
   useEffect(() => {
-    // O Mestre é o único que pode salvar
-    if (isDirty && !isSubmitting && isMaster) {
-      
+    // --- 2. USAR '!isReadOnly' EM VEZ DE 'isMaster' ---
+    if (isDirty && !isSubmitting && !isReadOnly) { 
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
-
       debounceTimer.current = setTimeout(() => {
         console.log("Auto-save (NPC): Disparando o salvamento...");
         form.handleSubmit(onSubmit, onInvalid)();
-      }, 2500); // 2.5 segundos de espera
+      }, 2500);
     }
-
     return () => {
       if (debounceTimer.current) {
         clearTimeout(debounceTimer.current);
       }
     };
-  
-  }, [watchedValues, isDirty, isSubmitting, isMaster, form.handleSubmit, onSubmit, onInvalid]);
+  }, [watchedValues, isDirty, isSubmitting, isReadOnly, form.handleSubmit, onSubmit, onInvalid]);
 
 
-  // --- CAMADA 2: AVISO DE FECHO DE ABA (O "Airbag") ---
+  // Aviso de Fecho de Aba
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -148,50 +140,42 @@ const NpcSheetInner = ({
       return "";
     };
 
-    // Só ativa o aviso se for o Mestre E a ficha tiver alterações
-    if (isDirty && isMaster) {
+    // --- 3. USAR '!isReadOnly' EM VEZ DE 'isMaster' ---
+    if (isDirty && !isReadOnly) {
       window.addEventListener("beforeunload", handleBeforeUnload);
     } else {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     }
-
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [isDirty, isMaster]); // Depende se a ficha tem alterações E se é o Mestre
-
-  // --- FIM DA CORREÇÃO ---
-
+  }, [isDirty, isReadOnly]); 
 
   // --- Lógica para o botão "Fechar" (Popup) ---
   const handleCloseClick = () => {
-    if (isDirty && isMaster) { // Só o Mestre vê o popup
+    // --- 4. USAR '!isReadOnly' EM VEZ DE 'isMaster' ---
+    if (isDirty && !isReadOnly) { 
       setIsCloseAlertOpen(true);
     } else {
       onClose();
     }
   };
 
-  // Lógica para "Salvar e Sair" (agora funciona com o onSubmit)
+  // (handleSaveAndClose, handleCloseWithoutSaving... sem alterações)
   const handleSaveAndClose = () => {
-    // 1. Define a ação de fecho
     setOnSaveSuccessCallback(() => {
       return () => {
         setIsCloseAlertOpen(false);
         onClose();
       };
     });
-    // 2. Dispara o submit
     form.handleSubmit(onSubmit, onInvalid)();
   };
-
-  // Lógica para "Sair Sem Salvar"
   const handleCloseWithoutSaving = () => {
     form.reset(initialData);
     setIsCloseAlertOpen(false);
     onClose();
   };
-  // --- Fim da lógica de fecho ---
 
   return (
     <>
@@ -205,7 +189,8 @@ const NpcSheetInner = ({
           </div>
 
           <div className="flex gap-2 items-center">
-            {isMaster && ( // Só mostra o indicador para o Mestre
+            {/* --- 5. USAR '!isReadOnly' --- */}
+            {!isReadOnly && (
               <div
                 className={cn(
                   "text-sm transition-opacity duration-300",
@@ -220,7 +205,7 @@ const NpcSheetInner = ({
               </div>
             )}
 
-            {isMaster && ( // Só mostra o botão "Salvar" para o Mestre
+            {!isReadOnly && (
               <Button
                 size="sm"
                 variant="default"
@@ -261,8 +246,12 @@ const NpcSheetInner = ({
                 <TabsTrigger value="journal">Diário</TabsTrigger>
               </TabsList>
 
+              {/* --- 6. ATUALIZAR FIELDSET ---
+                O fieldset agora só desativa durante o 'submitting'.
+                A lógica 'isReadOnly' será passada para cada aba.
+              --- */}
               <fieldset
-                disabled={isSubmitting || !isMaster} // Desativa se estiver salvando OU se não for o Mestre
+                disabled={isSubmitting}
                 className="p-4 pt-0 space-y-4"
               >
                 <TabsContent value="details">
@@ -295,6 +284,7 @@ const NpcSheetInner = ({
         </Form>
       </div>
 
+      {/* (AlertDialog... sem alterações) */}
       <AlertDialog
         open={isCloseAlertOpen}
         onOpenChange={setIsCloseAlertOpen}
@@ -320,7 +310,7 @@ const NpcSheetInner = ({
             <AlertDialogAction
               className={cn(buttonVariants({ variant: "default" }))}
               onClick={handleSaveAndClose}
-              disabled={isSubmitting} // Usa o estado de loading nativo
+              disabled={isSubmitting}
             >
               {isSubmitting ? "Salvando..." : "Salvar e Sair"}
             </AlertDialogAction>
@@ -337,7 +327,7 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
 
   const defaults = getDefaultNpcSheetData(initialNpc.name);
 
-  // ... (toda a lógica de merge de dados permanece igual) ...
+  // (Lógica de merge de dados... sem alterações)
   const mergedData = {
     ...defaults,
     ...(initialNpc.data as any),
@@ -374,7 +364,6 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const validatedData = parsedData.success ? parsedData.data : mergedData;
   initialNpc.data = validatedData;
   
-  // Função de salvar principal
   const handleSave = async (data: NpcSheetData) => {
     const { error } = await supabase
       .from("npcs")
@@ -387,12 +376,12 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
         description: error.message,
         variant: "destructive",
       });
-      // Lança o erro para o 'onSubmit' saber que falhou
       throw new Error(error.message);
     }
   };
 
   return (
+    // NpcSheetProvider agora está ciente se é ReadOnly ou não
     <NpcSheetProvider npc={initialNpc}>
       <NpcSheetInner
         onClose={onClose}
