@@ -1,10 +1,11 @@
 // src/features/npc/NpcSheet.tsx
 
+// --- MUDANÇA: Importar useEffect e useRef ---
 import { useEffect, useRef, useState } from "react";
 import { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Save } from "lucide-react"; // <-- MUDANÇA: Importar 'Save'
+import { X, Save } from "lucide-react";
 import { Form } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -62,6 +63,18 @@ const NpcSheetInner = ({
   const { isDirty, isSubmitting } = form.formState;
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
 
+  // --- INÍCIO DA CORREÇÃO (LÓGICA IDÊNTICA À DO CHARACTER) ---
+  
+  // Ref para o timer do auto-save
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  // Observa todos os valores do formulário
+  const watchedValues = form.watch(); 
+  
+  // Estado para o callback de "Salvar e Sair"
+  const [onSaveSuccessCallback, setOnSaveSuccessCallback] =
+    useState<(() => void) | null>(null);
+    
   const [name, race, occupation] = form.watch([
     "name",
     "race",
@@ -70,14 +83,26 @@ const NpcSheetInner = ({
 
   const { isMaster } = useTableContext();
 
-  // --- MUDANÇA CRUCIAL: 'form.reset(data)' VOLTOU! ---
+  // Esta é a ÚNICA função que salva
   const onSubmit = async (data: NpcSheetData) => {
-    await onSave(data);
-    form.reset(data); // <-- ISTO É O CORRETO
-    toast({ title: "Ficha de NPC Salva!" }); // <-- MUDANÇA: Adicionar feedback
-  };
-  // --- FIM DA MUDANÇA ---
+    try {
+      await onSave(data);
+      form.reset(data); // "Limpa" o formulário (isDirty = false)
+      toast({ title: "Ficha de NPC Salva!" });
 
+      if (onSaveSuccessCallback) {
+        onSaveSuccessCallback();
+        setOnSaveSuccessCallback(null); // Limpa a ação
+      }
+    } catch (error) {
+      console.error("Falha no submit do NPC:", error);
+      if (onSaveSuccessCallback) {
+        setOnSaveSuccessCallback(null);
+      }
+    }
+  };
+
+  // Função chamada em caso de erro de validação (Zod)
   const onInvalid = (errors: any) => {
     console.error("Erros de validação do NPC:", errors);
     toast({
@@ -85,25 +110,82 @@ const NpcSheetInner = ({
       description: "Verifique os campos em vermelho.",
       variant: "destructive",
     });
+    if (onSaveSuccessCallback) {
+      setOnSaveSuccessCallback(null);
+    }
   };
 
-  // --- MUDANÇA: O 'useEffect' do auto-save (debounce) foi REMOVIDO ---
+
+  // --- CAMADA 1: AUTO-SAVE (O "Cinto de Segurança") ---
+  useEffect(() => {
+    // O Mestre é o único que pode salvar
+    if (isDirty && !isSubmitting && isMaster) {
+      
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+
+      debounceTimer.current = setTimeout(() => {
+        console.log("Auto-save (NPC): Disparando o salvamento...");
+        form.handleSubmit(onSubmit, onInvalid)();
+      }, 2500); // 2.5 segundos de espera
+    }
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  
+  }, [watchedValues, isDirty, isSubmitting, isMaster, form.handleSubmit, onSubmit, onInvalid]);
+
+
+  // --- CAMADA 2: AVISO DE FECHO DE ABA (O "Airbag") ---
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = ""; 
+      return "";
+    };
+
+    // Só ativa o aviso se for o Mestre E a ficha tiver alterações
+    if (isDirty && isMaster) {
+      window.addEventListener("beforeunload", handleBeforeUnload);
+    } else {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    }
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [isDirty, isMaster]); // Depende se a ficha tem alterações E se é o Mestre
+
+  // --- FIM DA CORREÇÃO ---
+
 
   // --- Lógica para o botão "Fechar" (Popup) ---
   const handleCloseClick = () => {
-    if (isDirty && isMaster) {
+    if (isDirty && isMaster) { // Só o Mestre vê o popup
       setIsCloseAlertOpen(true);
     } else {
       onClose();
     }
   };
 
-  const handleSaveAndClose = async () => {
-    await form.handleSubmit(onSubmit, onInvalid)();
-    setIsCloseAlertOpen(false);
-    onClose();
+  // Lógica para "Salvar e Sair" (agora funciona com o onSubmit)
+  const handleSaveAndClose = () => {
+    // 1. Define a ação de fecho
+    setOnSaveSuccessCallback(() => {
+      return () => {
+        setIsCloseAlertOpen(false);
+        onClose();
+      };
+    });
+    // 2. Dispara o submit
+    form.handleSubmit(onSubmit, onInvalid)();
   };
 
+  // Lógica para "Sair Sem Salvar"
   const handleCloseWithoutSaving = () => {
     form.reset(initialData);
     setIsCloseAlertOpen(false);
@@ -122,9 +204,8 @@ const NpcSheetInner = ({
             </p>
           </div>
 
-          {/* --- MUDANÇA: Botão Salvar Adicionado --- */}
           <div className="flex gap-2 items-center">
-            {isMaster && (
+            {isMaster && ( // Só mostra o indicador para o Mestre
               <div
                 className={cn(
                   "text-sm transition-opacity duration-300",
@@ -139,8 +220,7 @@ const NpcSheetInner = ({
               </div>
             )}
 
-            {/* O Mestre vê o botão "Salvar", o Jogador não */}
-            {isMaster && (
+            {isMaster && ( // Só mostra o botão "Salvar" para o Mestre
               <Button
                 size="sm"
                 variant="default"
@@ -162,7 +242,6 @@ const NpcSheetInner = ({
               Fechar
             </Button>
           </div>
-          {/* --- FIM DA MUDANÇA --- */}
         </div>
 
         <Form {...form}>
@@ -183,7 +262,7 @@ const NpcSheetInner = ({
               </TabsList>
 
               <fieldset
-                disabled={isSubmitting || !isMaster}
+                disabled={isSubmitting || !isMaster} // Desativa se estiver salvando OU se não for o Mestre
                 className="p-4 pt-0 space-y-4"
               >
                 <TabsContent value="details">
@@ -228,17 +307,20 @@ const NpcSheetInner = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel disabled={isSubmitting}>
+              Cancelar
+            </AlertDialogCancel>
             <Button
               variant="outline"
               onClick={handleCloseWithoutSaving}
+              disabled={isSubmitting}
             >
               Sair Sem Salvar
             </Button>
             <AlertDialogAction
               className={cn(buttonVariants({ variant: "default" }))}
               onClick={handleSaveAndClose}
-              disabled={isSubmitting}
+              disabled={isSubmitting} // Usa o estado de loading nativo
             >
               {isSubmitting ? "Salvando..." : "Salvar e Sair"}
             </AlertDialogAction>
@@ -255,6 +337,7 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
 
   const defaults = getDefaultNpcSheetData(initialNpc.name);
 
+  // ... (toda a lógica de merge de dados permanece igual) ...
   const mergedData = {
     ...defaults,
     ...(initialNpc.data as any),
@@ -269,13 +352,11 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
     armors: (initialNpc.data as any)?.armors || defaults.armors,
     inventory: (initialNpc.data as any)?.inventory || defaults.inventory,
   };
-
   mergedData.name =
     (initialNpc.data as any)?.name || initialNpc.name || defaults.name;
   mergedData.race = (initialNpc.data as any)?.race || defaults.race;
   mergedData.occupation =
     (initialNpc.data as any)?.occupation || defaults.occupation;
-
   mergedData.shadow = (initialNpc.data as any)?.shadow || defaults.shadow;
   mergedData.personalGoal =
     (initialNpc.data as any)?.personalGoal || defaults.personalGoal;
@@ -284,17 +365,16 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   mergedData.notes = (initialNpc.data as any)?.notes || defaults.notes;
 
   const parsedData = npcSheetSchema.safeParse(mergedData);
-
   if (!parsedData.success) {
     console.warn(
       "Aviso ao parsear dados da Ficha (NpcSheet). Aplicando dados mesclados/padrão:",
       parsedData.error.errors,
     );
   }
-
   const validatedData = parsedData.success ? parsedData.data : mergedData;
   initialNpc.data = validatedData;
-
+  
+  // Função de salvar principal
   const handleSave = async (data: NpcSheetData) => {
     const { error } = await supabase
       .from("npcs")
@@ -307,6 +387,8 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
         description: error.message,
         variant: "destructive",
       });
+      // Lança o erro para o 'onSubmit' saber que falhou
+      throw new Error(error.message);
     }
   };
 
