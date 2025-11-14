@@ -31,10 +31,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-// <-- MUDANÇA: Trocar o diálogo de ataque
 import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils"; // <-- 1. IMPORTAR O 'cn'
 
 type AttackRollData = {
   abilityName: string;
@@ -49,8 +49,7 @@ export const NpcEquipmentTab = () => {
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(
     null,
   );
-  
-  // <-- MUDANÇA: Estados para os acordeões
+
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
 
@@ -72,6 +71,7 @@ export const NpcEquipmentTab = () => {
     name: "armors",
   });
 
+  // Função 'handleAttackClick' (sem alterações)
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -94,7 +94,6 @@ export const NpcEquipmentTab = () => {
     }
 
     setAttackRollData({
-      // <-- MUDANÇA: Adaptar ao NpcAbilityRollDialog
       abilityName: weapon.name || "Ataque com Arma",
       attributeName: selectedAttr.label,
       attributeValue: attributeValue,
@@ -104,6 +103,7 @@ export const NpcEquipmentTab = () => {
   return (
     <>
       <div className="space-y-6">
+        {/* Card de Armas (sem alterações no Header) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -123,145 +123,192 @@ export const NpcEquipmentTab = () => {
                 Nenhuma arma adicionada.
               </p>
             )}
-            {/* <-- MUDANÇA: Acordeão controlado --> */}
             <Accordion
               type="multiple"
               className="space-y-4"
               value={openWeapons}
               onValueChange={setOpenWeapons}
             >
-              {weaponFields.map((field, index) => (
-                <AccordionItem
-                  key={field.id}
-                  value={field.id}
-                  className="p-3 rounded-md border bg-muted/20"
-                >
-                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
-                  <div className="flex justify-between items-center w-full p-0">
-                    <AccordionTrigger className="p-0 hover:no-underline flex-1">
-                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
-                        <h4 className="font-semibold text-base text-primary-foreground truncate">
-                          {form.watch(`weapons.${index}.name`) || "Nova Arma"}
-                        </h4>
-                        <div className="flex gap-1.5 flex-wrap">
-                          <Badge variant="secondary" className="px-1.5 py-0.5">
-                            Dano:{" "}
-                            {form.watch(`weapons.${index}.damage`) || "N/A"}
-                          </Badge>
-                          <Badge variant="outline" className="px-1.5 py-0.5">
-                            Atq:{" "}
-                            {attributesList.find(
-                              (a) =>
-                                a.key ===
-                                form.watch(
-                                  `weapons.${index}.attackAttribute`,
-                                ),
-                            )?.label || "N/A"}
-                          </Badge>
+              {weaponFields.map((field, index) => {
+                // --- INÍCIO DA MUDANÇA (LÓGICA DO MODIFICADOR) ---
+
+                // 2. Observa o atributo de ataque selecionado para ESTA arma
+                const selectedAttrKey = form.watch(
+                  `weapons.${index}.attackAttribute`,
+                );
+                // 3. Observa TODOS os atributos da ficha do NPC
+                const allAttributes = form.watch("attributes");
+
+                // 4. Calcula o modificador
+                let mod = 0;
+                let modString = "";
+                
+                // Verificamos se uma chave válida foi selecionada
+                if (selectedAttrKey && allAttributes[selectedAttrKey]) {
+                  const value = allAttributes[selectedAttrKey].value || 0;
+                  mod = value - 10;
+                  modString = mod > 0 ? `(+${mod})` : `(${mod})`;
+                }
+                
+                // --- FIM DA MUDANÇA (LÓGICA DO MODIFICADOR) ---
+
+                return (
+                  <AccordionItem
+                    key={field.id}
+                    value={field.id}
+                    className="p-3 rounded-md border bg-muted/20"
+                  >
+                    {/* O Trigger do Acordeão (sem alterações) */}
+                    <div className="flex justify-between items-center w-full p-0">
+                      <AccordionTrigger className="p-0 hover:no-underline flex-1">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
+                          <h4 className="font-semibold text-base text-primary-foreground truncate">
+                            {form.watch(`weapons.${index}.name`) || "Nova Arma"}
+                          </h4>
+                          <div className="flex gap-1.5 flex-wrap">
+                            <Badge
+                              variant="secondary"
+                              className="px-1.5 py-0.5"
+                            >
+                              Dano:{" "}
+                              {form.watch(`weapons.${index}.damage`) || "N/A"}
+                            </Badge>
+                            <Badge variant="outline" className="px-1.5 py-0.5">
+                              Atq:{" "}
+                              {attributesList.find(
+                                (a) =>
+                                  a.key ===
+                                  form.watch(
+                                    `weapons.${index}.attackAttribute`,
+                                  ),
+                              )?.label || "N/A"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </AccordionTrigger>
+                      <div
+                        className="flex gap-1 pl-2 flex-shrink-0"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAttackClick(index)}
+                        >
+                          <Dices className="w-4 h-4" />
+                          <span className="hidden sm:inline ml-2">Atacar</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => removeWeapon(index)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                      <div className="space-y-4">
+                        <FormField
+                          control={form.control}
+                          name={`weapons.${index}.name`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Nome</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Espada Longa" {...field} />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <div className="grid grid-cols-3 gap-4">
+                          {/* --- INÍCIO DA MUDANÇA (LABEL DO ATRIBUTO) --- */}
+                          <FormField
+                            control={form.control}
+                            name={`weapons.${index}.attackAttribute`}
+                            render={({ field }) => (
+                              <FormItem>
+                                {/* 5. Adiciona um contêiner flex para o Label e o Modificador */}
+                                <div className="flex justify-between items-baseline">
+                                  <FormLabel>Atributo de Ataque</FormLabel>
+                                  {/* 6. Renderiza o modificador calculado */}
+                                  {modString && (
+                                    <span
+                                      className={cn(
+                                        "text-sm font-bold",
+                                        mod > 0 && "text-primary",
+                                        mod < 0 && "text-destructive",
+                                        mod === 0 && "text-muted-foreground",
+                                      )}
+                                    >
+                                      {modString}
+                                    </span>
+                                  )}
+                                </div>
+                                <Select
+                                  onValueChange={field.onChange}
+                                  value={field.value}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione..." />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {attributesList.map((attr) => (
+                                      <SelectItem
+                                        key={attr.key}
+                                        value={attr.key}
+                                      >
+                                        {attr.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </FormItem>
+                            )}
+                          />
+                          {/* --- FIM DA MUDANÇA (LABEL DO ATRIBUTO) --- */}
+
+                          <FormField
+                            control={form.control}
+                            name={`weapons.${index}.damage`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Dano (Fixo)</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="5" {...field} />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name={`weapons.${index}.quality`}
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Qualidades</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Precisa" {...field} />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
                         </div>
                       </div>
-                    </AccordionTrigger>
-
-                    <div
-                      className="flex gap-1 pl-2 flex-shrink-0"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleAttackClick(index)}
-                      >
-                        <Dices className="w-4 h-4" />
-                        <span className="hidden sm:inline ml-2">Atacar</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        size="icon"
-                        variant="ghost"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => removeWeapon(index)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  {/* --- FIM DA CORREÇÃO --- */}
-
-                  <AccordionContent className="pt-4 mt-3 border-t border-border/50">
-                    <div className="space-y-4">
-                      <FormField
-                        control={form.control}
-                        name={`weapons.${index}.name`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Nome</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Espada Longa" {...field} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-3 gap-4">
-                        <FormField
-                          control={form.control}
-                          name={`weapons.${index}.attackAttribute`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Atributo de Ataque</FormLabel>
-                              <Select
-                                onValueChange={field.onChange}
-                                value={field.value}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecione..." />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {attributesList.map((attr) => (
-                                    <SelectItem key={attr.key} value={attr.key}>
-                                      {attr.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name={`weapons.${index}.damage`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Dano (Fixo)</FormLabel>
-                              <FormControl>
-                                <Input placeholder="5" {...field} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={form.control}
-                          name={`weapons.${index}.quality`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Qualidades</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Precisa" {...field} />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </div>
-                  </AccordionContent>
-                </AccordionItem>
-              ))}
+                    </AccordionContent>
+                  </AccordionItem>
+                );
+              })}
             </Accordion>
           </CardContent>
         </Card>
 
+        {/* Card de Armaduras (sem alterações) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -282,7 +329,6 @@ export const NpcEquipmentTab = () => {
               </p>
             )}
 
-            {/* <-- MUDANÇA: Acordeão controlado --> */}
             <Accordion
               type="multiple"
               className="space-y-4"
@@ -295,7 +341,6 @@ export const NpcEquipmentTab = () => {
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
                   <div className="flex justify-between items-center w-full p-0">
                     <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
@@ -327,7 +372,6 @@ export const NpcEquipmentTab = () => {
                       </Button>
                     </div>
                   </div>
-                  {/* --- FIM DA CORREÇÃO --- */}
 
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
@@ -378,7 +422,7 @@ export const NpcEquipmentTab = () => {
         </Card>
       </div>
 
-      {/* <-- MUDANÇA: Usar NpcAbilityRollDialog --> */}
+      {/* Diálogo de Rolagem (sem alterações) */}
       {attackRollData && (
         <NpcAbilityRollDialog
           open={!!attackRollData}
