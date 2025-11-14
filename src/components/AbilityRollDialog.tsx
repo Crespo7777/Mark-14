@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dices, ShieldAlert } from "lucide-react";
+// --- 1. IMPORTAR O HOOK DA FICHA ---
 import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -48,8 +49,9 @@ export const AbilityRollDialog = ({
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { form } = useCharacterSheet();
-  const { isMaster, masterId, userId, tableId: contextTableId } = useTableContext();
+  // --- 2. OBTER O 'form' E O 'programmaticSave' ---
+  const { form, programmaticSave, isSaving } = useCharacterSheet();
+  const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
 
   const handleRoll = async () => {
@@ -61,14 +63,21 @@ export const AbilityRollDialog = ({
       return;
     }
 
+    // --- 3. LÓGICA DE SALVAMENTO IMEDIATO ---
     if (corruptionCost > 0) {
       const currentCorruption = form.getValues("corruption.temporary");
       form.setValue(
         "corruption.temporary",
         currentCorruption + corruptionCost,
-        { shouldDirty: true },
+        { shouldDirty: true }, // Marca como "sujo"
       );
+      
+      // Salva programaticamente
+      // Não precisamos de 'await' se não quisermos bloquear a UI
+      // Mas vamos adicionar para garantir que salvou antes de rolar
+      await programmaticSave(); 
     }
+    // --- FIM DA LÓGICA DE SALVAMENTO ---
 
     const result = rollAttributeTest({
       attributeValue,
@@ -178,10 +187,10 @@ export const AbilityRollDialog = ({
             type="button"
             className="w-full"
             onClick={handleRoll}
-            disabled={loading}
+            // 4. Desabilitar se a rolagem local ESTIVER acontecendo OU a ficha ESTIVER salvando
+            disabled={loading || isSaving}
           >
-            {loading ? "Rolando..." : <Dices className="w-4 h-4 mr-2" />}
-            Usar Habilidade
+            {loading ? "Rolando..." : (isSaving ? "Salvando..." : <><Dices className="w-4 h-4 mr-2" /> Usar Habilidade</>)}
           </Button>
         </DialogFooter>
       </DialogContent>
