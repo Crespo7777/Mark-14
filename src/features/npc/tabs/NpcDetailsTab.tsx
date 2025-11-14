@@ -1,6 +1,6 @@
 // src/features/npc/tabs/NpcDetailsTab.tsx
 
-import { useNpcSheet } from "../NpcSheetContext";
+import { useNpcSheet } from "../NpcSheetContext"; 
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,10 +10,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/textarea"; 
 
-export const NpcDetailsTab = () => {
-  const { form } = useNpcSheet();
+export const NpcDetailsTab = () => { 
+  // --- 1. OBTER 'isReadOnly' DO CONTEXTO ---
+  const { form, isReadOnly } = useNpcSheet(); 
 
   return (
     <div className="space-y-6">
@@ -22,7 +23,6 @@ export const NpcDetailsTab = () => {
           <CardTitle>Detalhes do NPC</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Campo Nome (sem alterações) */}
           <FormField
             control={form.control}
             name="name"
@@ -33,15 +33,15 @@ export const NpcDetailsTab = () => {
                   <Input
                     placeholder="Nome do NPC"
                     {...field}
+                    readOnly={isReadOnly} // <-- ADICIONADO
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
-
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Campo Raça (sem alterações) */}
             <FormField
               control={form.control}
               name="race"
@@ -49,35 +49,34 @@ export const NpcDetailsTab = () => {
                 <FormItem>
                   <FormLabel>Raça</FormLabel>
                   <FormControl>
-                    <Input placeholder="Criatura" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            {/* --- INÍCIO DA MUDANÇA 1 --- */}
-            <FormField
-              control={form.control}
-              name="occupation" // O 'name' (ID interno) permanece o mesmo
-              render={({ field }) => (
-                <FormItem>
-                  {/* O Label foi alterado */}
-                  <FormLabel>Resistência</FormLabel> 
-                  <FormControl>
-                    <Input
-                      // O Placeholder foi alterado
-                      placeholder="Ex: Normal, Forte, Fraco" 
-                      {...field}
+                    <Input 
+                      placeholder="Criatura" 
+                      {...field} 
+                      readOnly={isReadOnly} // <-- ADICIONADO
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            {/* --- FIM DA MUDANÇA 1 --- */}
-
-            {/* --- INÍCIO DA MUDANÇA 2 --- */}
+            <FormField
+              control={form.control}
+              name="occupation"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Resistência</FormLabel> 
+                  <FormControl>
+                    <Input
+                      placeholder="Ex: Normal, Forte, Fraco" 
+                      {...field}
+                      readOnly={isReadOnly} // <-- ADICIONADO
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
             <FormField
               control={form.control}
               name="shadow"
@@ -85,20 +84,17 @@ export const NpcDetailsTab = () => {
                 <FormItem>
                   <FormLabel>Sombra (Aparência)</FormLabel>
                   <FormControl>
-                    {/* Alterado de <Input> para <Textarea> */}
                     <Textarea
-                      placeholder="Ex: Negro-carvão, com bordas puídas e um brilho avermelhado..."
-                      className="min-h-[80px]" // Define uma altura mínima
+                      placeholder="Ex: Negro-carvão, com bordas puídas..."
+                      className="min-h-[80px]"
                       {...field}
+                      readOnly={isReadOnly} // <-- ADICIONADO
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            {/* --- FIM DA MUDANÇA 2 --- */}
-
-            {/* --- INÍCIO DA MUDANÇA 3 --- */}
             <FormField
               control={form.control}
               name="personalGoal"
@@ -106,24 +102,21 @@ export const NpcDetailsTab = () => {
                 <FormItem>
                   <FormLabel>Objetivo Pessoal / Motivação</FormLabel>
                   <FormControl>
-                    {/* Alterado de <Input> para <Textarea> */}
                     <Textarea
-                      placeholder="Ex: Proteger o ninho a todo custo, acumular ouro para seu mestre, encontrar a cura para sua aflição..."
-                      className="min-h-[80px]" // Define uma altura mínima
+                      placeholder="Ex: Proteger o ninho a todo custo..."
+                      className="min-h-[80px]"
                       {...field}
+                      readOnly={isReadOnly} // <-- ADICIONADO
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            {/* --- FIM DA MUDANÇA 3 --- */}
-            
           </div>
         </CardContent>
       </Card>
 
-      {/* Card "Pessoas e Aliados" (sem alterações) */}
       <Card>
         <CardHeader>
           <CardTitle>Pessoas e Aliados Importantes</CardTitle>
@@ -140,6 +133,7 @@ export const NpcDetailsTab = () => {
                     placeholder="Ex: O líder da tribo, a bruxa que o controla..."
                     className="min-h-[150px]"
                     {...field}
+                    readOnly={isReadOnly} // <-- ADICIONADO
                   />
                 </FormControl>
                 <FormMessage />
@@ -149,7 +143,6 @@ export const NpcDetailsTab = () => {
         </CardContent>
       </Card>
       
-      {/* Card "Anotações Gerais" (sem alterações) */}
       <Card>
         <CardHeader>
           <CardTitle>Anotações Gerais (Mestre)</CardTitle>
@@ -168,6 +161,7 @@ export const NpcDetailsTab = () => {
                     placeholder="Lembretes, táticas, etc..."
                     className="min-h-[150px]"
                     {...field}
+                    readOnly={isReadOnly} // <-- ADICIONADO
                   />
                 </FormControl>
                 <FormMessage />
