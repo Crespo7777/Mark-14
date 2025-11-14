@@ -28,7 +28,7 @@ import { Database } from "@/integrations/supabase/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { JournalRenderer } from "./JournalRenderer";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useTableContext } from "@/features/table/TableContext"; 
+import { useTableContext } from "@/features/table/TableContext";
 
 // Lazy loading
 const CharacterSheetSheet = lazy(() =>
@@ -81,7 +81,7 @@ type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"] & {
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([]);
-  const { userId } = useTableContext(); 
+  const { userId } = useTableContext();
   const { toast } = useToast();
   const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(null);
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
@@ -90,10 +90,10 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const [duplicating, setDuplicating] = useState(false);
 
   useEffect(() => {
-    if (userId) { 
+    if (userId) {
       loadData();
     }
-  
+
     const channel = supabase
       .channel(`player-view:${tableId}`)
       .on(
@@ -112,39 +112,45 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         (payload) => loadData()
       )
       .subscribe();
-  
+
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tableId, userId]); 
+  }, [tableId, userId]);
 
   const loadData = async () => {
-    if (!userId) return; 
+    if (!userId) return;
 
     try {
+      // --- INÍCIO DA CORREÇÃO (loadData) ---
+      // Adicionamos 'shared_with_players' aos selects
       const [charsRes, journalRes, npcsRes] = await Promise.all([
         supabase
           .from("characters")
-          .select("*, player:profiles!characters_player_id_fkey(display_name)")
+          .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
           .eq("table_id", tableId),
 
         supabase
           .from("journal_entries")
-          .select(`
+          .select(
+            `
             *,
+            shared_with_players,
             player:profiles!journal_entries_player_id_fkey(display_name),
             character:characters!journal_entries_character_id_fkey(name),
             npc:npcs!journal_entries_npc_id_fkey(name)
-          `)
+          `,
+          )
           .eq("table_id", tableId)
           .order("created_at", { ascending: false }),
-        
+
         supabase
           .from("npcs")
-          .select("*")
+          .select("*, shared_with_players")
           .eq("table_id", tableId)
           .order("name", { ascending: true }),
       ]);
+      // --- FIM DA CORREÇÃO ---
 
       if (charsRes.error) throw charsRes.error;
       const allChars = (charsRes.data as any) || [];
@@ -171,7 +177,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
 
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
-    
+
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
 
     const { error } = await supabase
@@ -203,13 +209,13 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       loadData();
     }
   };
-  
+
   const handleDuplicateCharacter = async (charToDuplicate: MyCharacter) => {
-    if (!userId) return; 
+    if (!userId) return;
     setDuplicating(true);
 
     const newName = `Cópia de ${charToDuplicate.name}`;
-    
+
     const { data: fullCharData, error: fetchError } = await supabase
       .from("characters")
       .select("data")
@@ -221,13 +227,13 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       setDuplicating(false);
       return;
     }
-    
+
     const newData = JSON.parse(JSON.stringify(fullCharData.data || {}));
     newData.name = newName;
 
     const { error } = await supabase.from("characters").insert({
       table_id: tableId,
-      player_id: userId, 
+      player_id: userId,
       name: newName,
       data: newData,
       is_shared: false,
@@ -242,7 +248,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     }
     setDuplicating(false);
   };
-  
+
   return (
     <div className="space-y-6">
       <div>
@@ -255,12 +261,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       <Tabs defaultValue="characters" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="characters">
-             <UserSquare className="w-4 h-4 mr-2" />
-             Minhas Fichas
+            <UserSquare className="w-4 h-4 mr-2" />
+            Minhas Fichas
           </TabsTrigger>
           <TabsTrigger value="npcs">
-             <Users className="w-4 h-4 mr-2" />
-             NPCs Compartilhados
+            <Users className="w-4 h-4 mr-2" />
+            NPCs Compartilhados
           </TabsTrigger>
           <TabsTrigger value="journal">
             <BookOpen className="w-4 h-4 mr-2" />
@@ -381,7 +387,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
               <JournalEntryDialog
                 tableId={tableId}
                 onEntrySaved={loadData}
-                isPlayerNote={true} 
+                isPlayerNote={true}
               >
                 <Button size="sm">
                   <Plus className="w-4 h-4 mr-2" />
@@ -398,19 +404,24 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
             ) : (
               journalEntries.map((entry) => {
                 let description = "Anotação Pública do Mestre";
-                let isMyEntry = false; 
+                let isMyEntry = false;
 
                 if (entry.player) {
                   description = "Sua Anotação Pessoal";
                   isMyEntry = true;
                 } else if (entry.character) {
                   description = `Diário de: ${entry.character.name}`;
-                  isMyEntry = true; 
-                } else if (entry.shared_with_players.includes(userId!)) {
+                  isMyEntry = true;
+                // --- INÍCIO DA CORREÇÃO (DESCRIÇÃO) ---
+                } else if ((entry.shared_with_players || []).includes(userId!)) {
                   description = "Compartilhado com você pelo Mestre";
-                  // isMyEntry continua false, pois não posso editar
+                } else if (!entry.is_shared) {
+                  // Se não for pública e nem compartilhada comigo, não deveria aparecer
+                  // Mas caso a RLS falhe, escondemos (embora RLS deva cuidar disso)
+                  return null; 
                 }
-                
+                // --- FIM DA CORREÇÃO ---
+
                 return (
                   <Card key={entry.id} className="border-border/50 flex flex-col">
                     <CardHeader>
@@ -479,7 +490,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
       <AlertDialog
         open={!!entryToDelete}
         onOpenChange={(open) => !open && setEntryToDelete(null)}
@@ -504,7 +515,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
+
     </div>
   );
 };
