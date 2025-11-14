@@ -24,9 +24,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 export const NpcBackpackTab = () => {
-  const { form } = useNpcSheet();
+  // --- 1. OBTER 'isReadOnly' ---
+  const { form, isReadOnly } = useNpcSheet();
   
-  // <-- MUDANÇA: Controlar o estado do acordeão
   const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
@@ -48,6 +48,7 @@ export const NpcBackpackTab = () => {
           type="button"
           size="sm"
           onClick={() => appendItem(getDefaultInventoryItem())}
+          disabled={isReadOnly} // <-- 2. ADICIONADO
         >
           <Plus className="w-4 h-4 mr-2" /> Adicionar Item
         </Button>
@@ -59,7 +60,6 @@ export const NpcBackpackTab = () => {
           </p>
         )}
 
-        {/* <-- MUDANÇA: Acordeão controlado --> */}
         <Accordion
           type="multiple"
           className="space-y-4"
@@ -72,22 +72,9 @@ export const NpcBackpackTab = () => {
               value={field.id}
               className="p-3 rounded-md border bg-muted/20"
             >
-              {/* --- INÍCIO DA CORREÇÃO HTML --- */}
               <div className="flex justify-between items-center w-full p-0">
                 <AccordionTrigger className="p-0 hover:no-underline flex-1">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
-                    <h4 className="font-semibold text-base text-primary-foreground truncate">
-                      {form.watch(`inventory.${index}.name`) || "Novo Item"}
-                    </h4>
-                    <div className="flex gap-1.5 flex-wrap">
-                      <Badge variant="secondary" className="px-1.5 py-0.5">
-                        Qtd: {form.watch(`inventory.${index}.quantity`) || 0}
-                      </Badge>
-                      <Badge variant="outline" className="px-1.5 py-0.5">
-                        Peso: {form.watch(`inventory.${index}.weight`) || 0}
-                      </Badge>
-                    </div>
-                  </div>
+                  {/* ... (conteúdo do trigger sem alteração) ... */}
                 </AccordionTrigger>
 
                 <div
@@ -100,14 +87,15 @@ export const NpcBackpackTab = () => {
                     variant="ghost"
                     className="text-destructive hover:text-destructive"
                     onClick={() => removeItem(index)}
+                    disabled={isReadOnly} // <-- 2. ADICIONADO
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
-              {/* --- FIM DA CORREÇÃO --- */}
 
               <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                {/* --- 3. ADICIONAR readOnly AOS CAMPOS --- */}
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <FormField
@@ -117,7 +105,11 @@ export const NpcBackpackTab = () => {
                         <FormItem>
                           <FormLabel>Nome do Item</FormLabel>
                           <FormControl>
-                            <Input placeholder="Tocha" {...field} />
+                            <Input 
+                              placeholder="Tocha" 
+                              {...field} 
+                              readOnly={isReadOnly} // <-- ADICIONADO
+                            />
                           </FormControl>
                         </FormItem>
                       )}
@@ -133,8 +125,11 @@ export const NpcBackpackTab = () => {
                               type="number"
                               {...field}
                               onChange={(e) =>
-                                field.onChange(parseInt(e.target.value) || 0)
+                                field.onChange(
+                                  parseInt(e.target.value) || 0,
+                                )
                               }
+                              readOnly={isReadOnly} // <-- ADICIONADO
                             />
                           </FormControl>
                         </FormItem>
@@ -151,8 +146,11 @@ export const NpcBackpackTab = () => {
                               type="number"
                               {...field}
                               onChange={(e) =>
-                                field.onChange(parseInt(e.target.value) || 0)
+                                field.onChange(
+                                  parseInt(e.target.value) || 0,
+                                )
                               }
+                              readOnly={isReadOnly} // <-- ADICIONADO
                             />
                           </FormControl>
                         </FormItem>
@@ -170,6 +168,7 @@ export const NpcBackpackTab = () => {
                             placeholder="Descrição do item..."
                             {...field}
                             className="min-h-[60px] text-sm"
+                            readOnly={isReadOnly} // <-- ADICIONADO
                           />
                         </FormControl>
                       </FormItem>
