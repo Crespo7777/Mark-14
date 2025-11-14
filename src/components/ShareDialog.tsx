@@ -17,7 +17,8 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTableContext } from "@/features/table/TableContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { UserCheck } from "lucide-react";
+import { UserCheck, Users } from "lucide-react";
+import { Separator } from "@/components/ui/separator"; // <-- 1. IMPORTAR SEPARATOR
 
 interface ShareDialogProps {
   children: React.ReactNode;
@@ -39,10 +40,21 @@ export const ShareDialog = ({
   const [loading, setLoading] = useState(false);
   const { members } = useTableContext();
 
-  // Filtra apenas jogadores (remove o mestre)
   const players = members.filter(m => !m.isMaster);
 
-  // Sincroniza o estado interno se as props mudarem
+  // --- 2. LÓGICA DO "SELECIONAR TODOS" ---
+  const allPlayerIds = players.map(p => p.id);
+  const isAllSelected = players.length > 0 && selectedPlayers.length === players.length;
+
+  const handleSelectAllChange = (checked: boolean) => {
+    if (checked) {
+      setSelectedPlayers(allPlayerIds);
+    } else {
+      setSelectedPlayers([]);
+    }
+  };
+  // --- FIM DA LÓGICA ---
+
   useEffect(() => {
     if (open) {
       setSelectedPlayers(currentSharedWith || []);
@@ -72,10 +84,31 @@ export const ShareDialog = ({
           <DialogTitle>Compartilhar: {itemTitle}</DialogTitle>
           <DialogDescription>
             Selecione com quais jogadores você quer compartilhar este item.
-            O Mestre sempre tem acesso.
           </DialogDescription>
         </DialogHeader>
         
+        {/* --- 3. ADICIONAR CHECKBOX "COMPARTILHAR COM TODOS" --- */}
+        {players.length > 0 && (
+          <>
+            <div className="flex items-center space-x-3 p-2 rounded-md bg-muted/50">
+              <Checkbox
+                id="share-all"
+                checked={isAllSelected}
+                onCheckedChange={(checked) => handleSelectAllChange(checked as boolean)}
+              />
+              <Label 
+                htmlFor="share-all" 
+                className="flex-1 cursor-pointer flex items-center gap-2 font-semibold"
+              >
+                <Users className="w-4 h-4" />
+                Compartilhar com Todos
+              </Label>
+            </div>
+            <Separator />
+          </>
+        )}
+        {/* --- FIM DA ADIÇÃO --- */}
+
         <ScrollArea className="max-h-[300px] pr-4">
           <div className="space-y-4">
             {players.length === 0 && (
