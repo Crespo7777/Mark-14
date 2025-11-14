@@ -1,6 +1,6 @@
 // src/components/MasterView.tsx
 
-import { useEffect, useState, lazy, Suspense } from "react"; 
+import { useEffect, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Card,
@@ -20,9 +20,9 @@ import {
   BookOpen,
   Edit,
   UserX,
-  Copy, 
-  MoreVertical, 
-  Share2, 
+  Copy,
+  MoreVertical,
+  Share2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -31,7 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ShareDialog } from "./ShareDialog"; 
+import { ShareDialog } from "./ShareDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -44,8 +44,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreateCharacterDialog } from "./CreateCharacterDialog";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
+// import { Switch } from "@/components/ui/switch"; // Removido
+// import { Label } from "@/components/ui/label"; // Removido
 
 import { Database } from "@/integrations/supabase/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -101,15 +101,15 @@ interface MasterViewProps {
 export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   const [characters, setCharacters] = useState<Character[]>([]);
   const [npcs, setNpcs] = useState<Npc[]>([]);
-  
-  const { members } = useTableContext(); 
-  
+
+  const { members } = useTableContext();
+
   const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState("characters");
   const [playerFilter, setPlayerFilter] = useState<string | null>(null);
-  const [playerToRemove, setPlayerToRemove] = useState<any | null>(null); 
+  const [playerToRemove, setPlayerToRemove] = useState<any | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [npcToDelete, setNpcToDelete] = useState<Npc | null>(null);
   const [characterToDelete, setCharacterToDelete] = useState<Character | null>(
@@ -140,7 +140,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "table_members" },
-        (payload) => loadData(), 
+        (payload) => loadData(),
       )
       .subscribe();
 
@@ -150,23 +150,29 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   }, [tableId]);
 
   const loadData = async () => {
+    // --- INÍCIO DA CORREÇÃO (loadData) ---
+    // Adicionamos 'shared_with_players' aos selects
     const [charsRes, npcsRes, journalRes] = await Promise.all([
       supabase
         .from("characters")
-        .select("*, player:profiles!characters_player_id_fkey(display_name)")
+        .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
         .eq("table_id", tableId),
-      supabase.from("npcs").select("*").eq("table_id", tableId),
+      supabase.from("npcs").select("*, shared_with_players").eq("table_id", tableId),
       supabase
         .from("journal_entries")
-        .select(`
+        .select(
+          `
           *,
+          shared_with_players,
           player:profiles!journal_entries_player_id_fkey(display_name),
           character:characters!journal_entries_character_id_fkey(name),
           npc:npcs!journal_entries_npc_id_fkey(name)
-        `)
+        `,
+        )
         .eq("table_id", tableId)
         .order("created_at", { ascending: false }),
     ]);
+    // --- FIM DA CORREÇÃO ---
 
     if (charsRes.data) setCharacters(charsRes.data as any);
     if (npcsRes.data) setNpcs(npcsRes.data);
@@ -179,71 +185,34 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       .from("table_members")
       .delete()
       .eq("table_id", tableId)
-      .eq("user_id", playerToRemove.id); 
+      .eq("user_id", playerToRemove.id);
 
     if (memberError) {
       toast({ title: "Erro ao remover jogador", description: memberError.message, variant: "destructive" });
       setPlayerToRemove(null);
       return;
     }
-    
+
     const { error: charError } = await supabase
       .from("characters")
       .delete()
       .eq("table_id", tableId)
-      .eq("player_id", playerToRemove.id); 
+      .eq("player_id", playerToRemove.id);
 
     if (charError) {
-       toast({ title: "Erro ao limpar fichas", description: `O jogador foi removido, mas houve um erro ao deletar suas fichas: ${charError.message}`, variant: "destructive" });
+      toast({ title: "Erro ao limpar fichas", description: `O jogador foi removido, mas houve um erro ao deletar suas fichas: ${charError.message}`, variant: "destructive" });
     } else {
       toast({ title: "Jogador removido", description: `${playerToRemove.display_name} foi removido da mesa e suas fichas foram limpas.` });
     }
     window.location.reload();
     setPlayerToRemove(null);
   };
-  
-  const handleShareJournal = async (entryId: string, is_shared: boolean) => {
-    const { error } = await supabase
-      .from("journal_entries")
-      .update({ is_shared })
-      .eq("id", entryId);
-    if (error) toast({ title: "Erro", variant: "destructive" });
-    else {
-      toast({ title: "Visibilidade do Diário atualizada!" });
-      setJournalEntries((prev) =>
-        prev.map((e) => (e.id === entryId ? { ...e, is_shared } : e)),
-      );
-    }
-  };
-  const handleShareNpc = async (npcId: string, is_shared: boolean) => {
-    const { error } = await supabase
-      .from("npcs")
-      .update({ is_shared })
-      .eq("id", npcId);
-    if (error) toast({ title: "Erro", variant: "destructive" });
-    else {
-      toast({ title: "Visibilidade do NPC atualizada!" });
-      setNpcs((prev) =>
-        prev.map((n) => (n.id === npcId ? { ...n, is_shared } : n)),
-      );
-    }
-  };
-  const handleShareCharacter = async (charId: string, is_shared: boolean) => {
-    const { error } = await supabase
-      .from("characters")
-      .update({ is_shared })
-      .eq("id", charId);
-    if (error) toast({ title: "Erro", variant: "destructive" });
-    else {
-      toast({ title: "Visibilidade da Ficha atualizada!" });
-      setCharacters((prev) =>
-        prev.map((c) => (c.id === charId ? { ...c, is_shared } : c)),
-      );
-    }
-  };
+
+  // --- REMOVIDO 'handleShare...' ---
+
   const handleDeleteNpc = async () => {
     if (!npcToDelete) return;
-    
+
     await supabase.from("journal_entries").update({ npc_id: null }).eq("npc_id", npcToDelete.id);
 
     const { error } = await supabase
@@ -289,9 +258,9 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
 
   const handleDuplicateNpc = async (npcToDuplicate: Npc) => {
     setDuplicating(true);
-    
+
     const newName = `Cópia de ${npcToDuplicate.name}`;
-    
+
     const newData = JSON.parse(JSON.stringify(npcToDuplicate.data || {}));
     newData.name = newName;
 
@@ -314,9 +283,9 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
 
   const handleDuplicateCharacter = async (charToDuplicate: Character) => {
     setDuplicating(true);
-    
+
     const newName = `Cópia de ${charToDuplicate.name}`;
-    
+
     const newData = JSON.parse(JSON.stringify(charToDuplicate.data || {}));
     newData.name = newName;
 
@@ -337,22 +306,28 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     }
     setDuplicating(false);
   };
-  
+
   const handleUpdateSharing = async (
     itemId: string,
     itemType: 'characters' | 'npcs' | 'journal_entries',
     newPlayerIds: string[]
   ) => {
+    const allPlayerIds = members.filter(m => !m.isMaster).map(p => p.id);
+    const isSharedWithEveryone = allPlayerIds.length > 0 && newPlayerIds.length === allPlayerIds.length;
+
     const { error } = await supabase
       .from(itemType)
-      .update({ shared_with_players: newPlayerIds })
+      .update({
+        shared_with_players: newPlayerIds,
+        is_shared: isSharedWithEveryone,
+      })
       .eq("id", itemId);
 
     if (error) {
       toast({ title: "Erro ao compartilhar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Compartilhamento atualizado!" });
-      loadData(); 
+      loadData();
     }
   };
 
@@ -383,7 +358,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             <CreateCharacterDialog
               tableId={tableId}
               masterId={masterId}
-              members={members} 
+              members={members}
               onCharacterCreated={loadData}
             >
               <Button size="sm">
@@ -415,53 +390,45 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="flex-1">
+                          {/* --- INÍCIO DA CORREÇÃO (DESCRIÇÃO) --- */}
                           <p className="text-sm text-muted-foreground">
                             {char.is_shared
-                              ? "Compartilhado com jogadores"
+                              ? "Compartilhado com TODOS"
+                              : (char.shared_with_players || []).length > 0
+                              ? `Compartilhado com ${(char.shared_with_players || []).length} jogador(es)`
                               : "Visível apenas para o dono e mestre"}
                           </p>
+                          {/* --- FIM DA CORREÇÃO --- */}
                         </CardContent>
-                        
+
                         <CardFooter className="flex justify-between items-center">
                           <div
-                            className="flex items-center gap-4"
+                            className="flex items-center"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <div className="flex items-center gap-2">
-                              <Switch
-                                id={`share-char-${char.id}`}
-                                checked={char.is_shared ?? false}
-                                onCheckedChange={(checked) =>
-                                  handleShareCharacter(char.id, checked)
-                                }
-                                disabled={duplicating}
-                              />
-                              <Label htmlFor={`share-char-${char.id}`}>
-                                Todos
-                              </Label>
-                            </div>
-
                             <ShareDialog
                               itemTitle={char.name}
+                              // --- INÍCIO DA CORREÇÃO (PROP) ---
                               currentSharedWith={char.shared_with_players || []}
+                              // --- FIM DA CORREÇÃO ---
                               disabled={duplicating}
-                              onSave={(newPlayerIds) => 
+                              onSave={(newPlayerIds) =>
                                 handleUpdateSharing(char.id, 'characters', newPlayerIds)
                               }
                             >
                               <Button variant="outline" size="sm">
-                                <Share2 className="w-4 h-4 mr-0 md:mr-2" />
-                                <span className="hidden md:inline">Específico</span>
+                                <Share2 className="w-4 h-4 mr-2" />
+                                Compartilhar
                               </Button>
                             </ShareDialog>
                           </div>
 
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={(e) => e.stopPropagation()} 
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={(e) => e.stopPropagation()}
                                 disabled={duplicating}
                               >
                                 <MoreVertical className="w-4 h-4" />
@@ -473,8 +440,8 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                                 Duplicar
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                className="text-destructive focus:text-destructive" 
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
                                 onClick={() => setCharacterToDelete(char)}
                               >
                                 <Trash2 className="w-4 h-4 mr-2" />
@@ -482,7 +449,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                          
+
                         </CardFooter>
                       </Card>
                     </CharacterSheetSheet>
@@ -516,57 +483,49 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                     <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col">
                       <CardHeader>
                         <CardTitle>{npc.name}</CardTitle>
+                        {/* --- INÍCIO DA CORREÇÃO (DESCRIÇÃO) --- */}
                         <CardDescription>
                           {npc.is_shared
-                            ? "Compartilhado com jogadores"
+                            ? "Compartilhado com TODOS"
+                            : (npc.shared_with_players || []).length > 0
+                            ? `Compartilhado com ${(npc.shared_with_players || []).length} jogador(es)`
                             : "Apenas mestre"}
                         </CardDescription>
+                        {/* --- FIM DA CORREÇÃO --- */}
                       </CardHeader>
                       <CardContent className="flex-1">
                         <p className="text-sm text-muted-foreground">
                           Clique para editar
                         </p>
                       </CardContent>
-                      
+
                       <CardFooter className="flex justify-between items-center">
                         <div
-                          className="flex items-center gap-4"
+                          className="flex items-center"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              id={`share-npc-${npc.id}`}
-                              checked={npc.is_shared ?? false}
-                              onCheckedChange={(checked) =>
-                                handleShareNpc(npc.id, checked)
-                              }
-                              disabled={duplicating}
-                            />
-                            <Label htmlFor={`share-npc-${npc.id}`}>
-                              Todos
-                            </Label>
-                          </div>
-                          
                           <ShareDialog
                             itemTitle={npc.name}
+                            // --- INÍCIO DA CORREÇÃO (PROP) ---
                             currentSharedWith={npc.shared_with_players || []}
+                            // --- FIM DA CORREÇÃO ---
                             disabled={duplicating}
-                            onSave={(newPlayerIds) => 
+                            onSave={(newPlayerIds) =>
                               handleUpdateSharing(npc.id, 'npcs', newPlayerIds)
                             }
                           >
                             <Button variant="outline" size="sm">
-                              <Share2 className="w-4 h-4 mr-0 md:mr-2" />
-                              <span className="hidden md:inline">Específico</span>
+                              <Share2 className="w-4 h-4 mr-2" />
+                              Compartilhar
                             </Button>
                           </ShareDialog>
                         </div>
-                        
+
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={(e) => e.stopPropagation()}
                               disabled={duplicating}
                             >
@@ -579,8 +538,8 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                               Duplicar
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem 
-                              className="text-destructive focus:text-destructive" 
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
                               onClick={() => setNpcToDelete(npc)}
                             >
                               <Trash2 className="w-4 h-4 mr-2" />
@@ -588,7 +547,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                        
+
                       </CardFooter>
                     </Card>
                   </NpcSheetSheet>
@@ -597,7 +556,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             )}
           </div>
         </TabsContent>
-        
+
         <TabsContent value="players" className="space-y-4">
           <h3 className="text-xl font-semibold mb-4">Jogadores na Mesa</h3>
           {members.filter(m => !m.isMaster).length === 0 ? (
@@ -646,7 +605,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               </JournalEntryDialog>
             </Suspense>
           </div>
-          
+
           <div className="grid gap-4 md:grid-cols-2">
             {journalEntries.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
@@ -666,9 +625,14 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                 } else if (entry.npc) {
                   description = `Anotação sobre: ${entry.npc.name}`;
                   canShare = false;
+                
+                // --- INÍCIO DA CORREÇÃO (DESCRIÇÃO) ---
                 } else if (entry.is_shared) {
-                  description = "Público (Jogadores podem ver)";
+                  description = "Público (Compartilhado com TODOS)";
+                } else if ((entry.shared_with_players || []).length > 0) {
+                  description = `Compartilhado com ${(entry.shared_with_players || []).length} jogador(es)`;
                 }
+                // --- FIM DA CORREÇÃO ---
 
                 return (
                   <Card key={entry.id} className="border-border/50 flex flex-col">
@@ -683,41 +647,29 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                     </CardContent>
                     <CardFooter className="flex justify-between items-center">
                         <div
-                          className="flex items-center gap-4"
+                          className="flex items-center"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {canShare ? (
-                            <>
-                              <div className="flex items-center gap-2">
-                                <Switch
-                                  id={`share-journal-${entry.id}`}
-                                  checked={entry.is_shared ?? false}
-                                  onCheckedChange={(checked) =>
-                                    handleShareJournal(entry.id, checked)
-                                  }
-                                />
-                                <Label htmlFor={`share-journal-${entry.id}`}>
-                                  Todos
-                                </Label>
-                              </div>
-                              <ShareDialog
-                                itemTitle={entry.title}
-                                currentSharedWith={entry.shared_with_players || []}
-                                onSave={(newPlayerIds) => 
-                                  handleUpdateSharing(entry.id, 'journal_entries', newPlayerIds)
-                                }
-                              >
-                                <Button variant="outline" size="sm">
-                                  <Share2 className="w-4 h-4 mr-0 md:mr-2" />
-                                  <span className="hidden md:inline">Específico</span>
-                                </Button>
-                              </ShareDialog>
-                            </>
+                            <ShareDialog
+                              itemTitle={entry.title}
+                              // --- INÍCIO DA CORREÇÃO (PROP) ---
+                              currentSharedWith={entry.shared_with_players || []}
+                              // --- FIM DA CORREÇÃO ---
+                              onSave={(newPlayerIds) =>
+                                handleUpdateSharing(entry.id, 'journal_entries', newPlayerIds)
+                              }
+                            >
+                              <Button variant="outline" size="sm">
+                                <Share2 className="w-4 h-4 mr-2" />
+                                Compartilhar
+                              </Button>
+                            </ShareDialog>
                           ) : (
-                            <div /> 
+                            <div />
                           )}
                         </div>
-                        
+
                         <div className="flex gap-2">
                           <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
                             <JournalEntryDialog
@@ -750,6 +702,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         </TabsContent>
       </Tabs>
 
+      {/* (Todos os AlertDialogs... sem alterações) */}
       <AlertDialog
         open={!!playerToRemove}
         onOpenChange={(open) => !open && setPlayerToRemove(null)}
