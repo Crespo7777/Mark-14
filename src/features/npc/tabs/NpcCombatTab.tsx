@@ -1,7 +1,8 @@
 // src/features/npc/tabs/NpcCombatTab.tsx
 
-import { useState } from "react";
-import { useNpcSheet } from "../NpcSheetContext"; // ATUALIZADO
+// --- 1. IMPORTAR 'useEffect' ---
+import { useState, useEffect } from "react";
+import { useNpcSheet } from "../NpcSheetContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,10 +14,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-// --- 1. 'Dices' e 'DefenseRollDialog' REMOVIDOS ---
-import { Heart, Shield, ShieldAlert } from "lucide-react"; 
-import { useToast } from "@/hooks/use-toast"; 
-// --- FIM DA REMOÇÃO ---
+import { Heart, Shield, ShieldAlert } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 /**
  * Componente de UI reutilizável para aplicar dano/cura
@@ -53,18 +52,34 @@ const DamageHealControl = ({
 };
 
 export const NpcCombatTab = () => {
-  const { form, npc } = useNpcSheet(); // ATUALIZADO: Pegar o 'npc'
-  
-  // --- 2. 'isDefenseRollOpen' REMOVIDO ---
-  // const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
-  // --- FIM DA REMOÇÃO ---
+  const { form, npc } = useNpcSheet();
+  const { toast } = useToast();
 
-  const { toast } = useToast(); 
-
-  // Observa os valores do formulário para os cálculos
   const currentToughness = form.watch("combat.toughness_current");
   const maxToughness = form.watch("combat.toughness_max");
-  // const defenseValue = form.watch("combat.defense"); // Já não precisamos de o observar
+
+  // --- 2. ESTADO LOCAL PARA O DISPLAY DO INPUT DE DEFESA ---
+  // Inicializa o estado local com o valor do formulário
+  const [displayDefense, setDisplayDefense] = useState<string>(() => {
+    const val = form.getValues("combat.defense");
+    return val === 0 || isNaN(val) ? "" : String(val);
+  });
+
+  // --- 3. SINCRONIZAR O ESTADO LOCAL ---
+  // Observa o valor real do formulário
+  const watchedDefense = form.watch("combat.defense");
+
+  useEffect(() => {
+    // Sincroniza o display se o valor do formulário mudar
+    // (ex: ao carregar dados, resetar, etc.)
+    const numVal = isNaN(watchedDefense) ? 0 : watchedDefense;
+    const displayNum = parseInt(displayDefense, 10) || 0;
+
+    if (numVal !== displayNum) {
+      setDisplayDefense(numVal === 0 ? "" : String(numVal));
+    }
+  }, [watchedDefense]); // Depende apenas do valor do formulário
+  // --- FIM DAS ADIÇÕES ---
 
   const handleDamage = (rawDamage: number) => {
     const armorRD = form.getValues("combat.armor_rd") || 0;
@@ -84,7 +99,7 @@ export const NpcCombatTab = () => {
       toast({
         title: "Limiar de Dor Ultrapassado!",
         description: `${npc.name} sofreu ${netDamage} de dano (Limiar: ${painThreshold}) e pode precisar fazer um teste!`,
-        variant: "destructive", 
+        variant: "destructive",
         action: (
           <div className="flex items-center gap-2 text-destructive-foreground/80">
             <ShieldAlert className="w-4 h-4" /> Aviso
@@ -110,7 +125,7 @@ export const NpcCombatTab = () => {
   return (
     <>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* CARD DE VITALIDADE + ARMADURA */}
+        {/* CARD DE VITALIDADE + ARMADURA (sem alterações) */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -223,7 +238,7 @@ export const NpcCombatTab = () => {
           </CardContent>
         </Card>
 
-        {/* --- 3. CARD DE DEFESA MODIFICADO --- */}
+        {/* --- CARD DE DEFESA (COM AS CORREÇÕES) --- */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -234,18 +249,37 @@ export const NpcCombatTab = () => {
             <FormField
               control={form.control}
               name="combat.defense"
-              render={({ field }) => (
+              render={({ field }) => ( // Usamos o 'field' original
                 <FormItem className="space-y-2">
                   <FormLabel>Modificador de Defesa (Fixo)</FormLabel>
                   <FormControl>
                     <Input
-                      type="number"
+                      type="text" // 4. Manter como "text"
                       className="text-2xl font-bold h-12"
                       placeholder="0"
-                      {...field}
-                      onChange={(e) =>
-                        field.onChange(parseInt(e.target.value, 10) || 0)
-                      }
+                      
+                      // 5. Usar o estado local 'displayDefense' para exibir
+                      value={displayDefense}
+                      
+                      // 6. onChange manual
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        
+                        // Regex: permite "", "-", ou "-números" ou "números"
+                        if (val === "" || val === "-") {
+                          setDisplayDefense(val); // Permite exibir "-"
+                          field.onChange(0); // Guarda 0 no RHF (seguro p/ Zod)
+                        } else if (/^-?\d*$/.test(val)) {
+                          // Se for um número válido (ex: "-3" ou "5")
+                          setDisplayDefense(val); // Atualiza display
+                          const num = parseInt(val, 10);
+                          field.onChange(isNaN(num) ? 0 : num); // Guarda o número
+                        }
+                        // Ignora entradas inválidas como "abc" ou "--3"
+                      }}
+                      
+                      // 7. Usar o onBlur original para validação
+                      onBlur={field.onBlur}
                     />
                   </FormControl>
                   <FormMessage />
@@ -253,24 +287,12 @@ export const NpcCombatTab = () => {
               )}
             />
             <p className="text-xs text-muted-foreground">
-              Este é um modificador fixo (ex: -3 ou +2) que se aplica à rolagem de ataque do Oponente. Não é uma rolagem.
+              Este é um modificador fixo (ex: -3 ou +2) que se aplica à rolagem
+              de ataque do Oponente. Não é uma rolagem.
             </p>
-            {/* O BOTÃO DE ROLAGEM FOI REMOVIDO DAQUI */}
           </CardContent>
         </Card>
-        {/* --- FIM DA MODIFICAÇÃO --- */}
-
       </div>
-
-      {/* --- 4. DIÁLOGO DE ROLAGEM REMOVIDO --- */}
-      {/* <DefenseRollDialog
-        open={isDefenseRollOpen}
-        onOpenChange={setIsDefenseRollOpen}
-        defenseValue={defenseValue}
-        characterName={npc.name}
-        tableId={npc.table_id}
-      /> 
-      */}
     </>
   );
 };
