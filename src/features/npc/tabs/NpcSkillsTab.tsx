@@ -33,6 +33,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
+import { useToast } from "@/hooks/use-toast";
 
 type AbilityRollData = {
   abilityName: string;
@@ -41,12 +42,12 @@ type AbilityRollData = {
 };
 
 export const NpcSkillsTab = () => {
-  const { form, npc } = useNpcSheet();
+  const { form, npc, isReadOnly } = useNpcSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] =
     useState<AbilityRollData | null>(null);
   
-  // <-- MUDANÇA: Controlar o estado do acordeão
   const [openItems, setOpenItems] = useState<string[]>([]);
+  const { toast } = useToast();
 
   const {
     fields: abilityFields,
@@ -69,6 +70,15 @@ export const NpcSkillsTab = () => {
       ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
       : 0;
 
+    if (attributeValue === 0 || !selectedAttr) {
+      toast({
+        title: "Atributo não definido",
+        description: "Selecione um Atributo Associado para esta habilidade.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSelectedAbilityRoll({
       abilityName: ability.name || "Habilidade",
       attributeName: selectedAttr?.label || "Nenhum",
@@ -87,6 +97,7 @@ export const NpcSkillsTab = () => {
             type="button"
             size="sm"
             onClick={() => appendAbility(getDefaultAbility())}
+            disabled={isReadOnly}
           >
             <Plus className="w-4 h-4 mr-2" /> Adicionar
           </Button>
@@ -98,7 +109,6 @@ export const NpcSkillsTab = () => {
             </p>
           )}
 
-          {/* <-- MUDANÇA: Acordeão controlado --> */}
           <Accordion
             type="multiple"
             className="space-y-4"
@@ -111,7 +121,6 @@ export const NpcSkillsTab = () => {
                 value={field.id}
                 className="p-3 rounded-md border bg-muted/20"
               >
-                {/* --- INÍCIO DA CORREÇÃO HTML --- */}
                 <div className="flex justify-between items-center w-full p-0">
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
@@ -144,11 +153,6 @@ export const NpcSkillsTab = () => {
                       type="button"
                       size="sm"
                       onClick={() => handleRollClick(index)}
-                      disabled={
-                        form.watch(
-                          `abilities.${index}.associatedAttribute`,
-                        ) === "Nenhum"
-                      }
                     >
                       <Dices className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Rolar</span>
@@ -159,12 +163,12 @@ export const NpcSkillsTab = () => {
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
                       onClick={() => removeAbility(index)}
+                      disabled={isReadOnly}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>
-                {/* --- FIM DA CORREÇÃO --- */}
 
                 <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                   <div className="space-y-4">
@@ -179,6 +183,7 @@ export const NpcSkillsTab = () => {
                               <Input
                                 placeholder="Nome da Habilidade / Poder"
                                 {...field}
+                                readOnly={isReadOnly}
                               />
                             </FormControl>
                           </FormItem>
@@ -193,6 +198,7 @@ export const NpcSkillsTab = () => {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
+                              disabled={isReadOnly}
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -217,6 +223,7 @@ export const NpcSkillsTab = () => {
                             <Select
                               onValueChange={field.onChange}
                               value={field.value}
+                              disabled={isReadOnly}
                             >
                               <FormControl>
                                 <SelectTrigger>
@@ -246,6 +253,7 @@ export const NpcSkillsTab = () => {
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
+                            disabled={isReadOnly}
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -276,6 +284,7 @@ export const NpcSkillsTab = () => {
                               placeholder="Descreva a habilidade, seus efeitos, etc..."
                               {...field}
                               className="min-h-[80px] text-sm"
+                              readOnly={isReadOnly}
                             />
                           </FormControl>
                         </FormItem>
@@ -289,6 +298,7 @@ export const NpcSkillsTab = () => {
         </CardContent>
       </Card>
 
+      {/* --- INÍCIO DA CORREÇÃO --- */}
       {selectedAbilityRoll && (
         <NpcAbilityRollDialog
           open={!!selectedAbilityRoll}
@@ -296,8 +306,10 @@ export const NpcSkillsTab = () => {
             if (!open) setSelectedAbilityRoll(null);
           }}
           {...selectedAbilityRoll}
+          buttonText="Usar Habilidade" // <-- 1. PASSAR O TEXTO CORRETO
         />
       )}
+      {/* --- FIM DA CORREÇÃO --- */}
     </>
   );
 };
