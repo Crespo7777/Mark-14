@@ -21,7 +21,8 @@ type SelectedAttribute = {
 };
 
 export const NpcAttributesTab = () => {
-  const { form, npc } = useNpcSheet();
+  // --- 1. OBTER 'isReadOnly' ---
+  const { form, npc, isReadOnly } = useNpcSheet();
   const [selectedAttr, setSelectedAttr] = useState<SelectedAttribute | null>(
     null,
   );
@@ -40,19 +41,12 @@ export const NpcAttributesTab = () => {
           <CardTitle>Atributos</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* --- INÍCIO DA MODIFICAÇÃO --- */}
           {attributesList.map((attr) => {
-            // 1. Definimos o nome do campo de atributo (ex: "attributes.cunning.value")
             const attributeName = `attributes.${
               attr.key as keyof typeof form.getValues.attributes
             }.value`;
-
-            // 2. Usamos 'form.watch' para observar o valor atual desse atributo
             const currentValue = form.watch(attributeName);
-
-            // 3. Calculamos o modificador com base na sua regra
             const modifier = (currentValue || 0) - 10;
-            // Formatamos para exibir "+1", "-2", "0", etc.
             const modString = modifier > 0 ? `+${modifier}` : `${modifier}`;
 
             return (
@@ -60,16 +54,16 @@ export const NpcAttributesTab = () => {
                 key={attr.key}
                 className={cn(
                   "space-y-1 rounded-lg p-2 transition-colors",
+                  // --- 2. MANTER O 'onClick' PARA JOGADORES PODEREM ROLAR ---
                   "cursor-pointer hover:bg-muted/50",
                 )}
                 onClick={() =>
                   handleAttributeClick(
                     attr.label,
-                    form.getValues(attributeName), // Pega o valor atual ao clicar
+                    form.getValues(attributeName),
                   )
                 }
               >
-                {/* Campo Principal (Valor) - Permanece igual */}
                 <FormField
                   control={form.control}
                   name={attributeName}
@@ -87,6 +81,7 @@ export const NpcAttributesTab = () => {
                             field.onChange(parseInt(e.target.value, 10) || 0)
                           }
                           onClick={(e) => e.stopPropagation()}
+                          readOnly={isReadOnly} // <-- 3. ADICIONADO
                         />
                       </FormControl>
                       <FormMessage />
@@ -94,37 +89,30 @@ export const NpcAttributesTab = () => {
                   )}
                 />
 
-                {/* --- 4. CAMPO DE MODIFICADOR AUTOMÁTICO --- */}
-                {/* Removemos o <FormField> que usava "attributes.note".
-                  Substituímos por um <Input readOnly /> que exibe o 'modString' calculado.
-                */}
                 <div>
                   <FormControl>
                     <Input
                       type="text"
                       className={cn(
                         "h-8 text-center text-sm font-bold border-none bg-transparent read-only:cursor-default focus-visible:ring-0 focus-visible:ring-offset-0",
-                        // Classes de cor dinâmicas
                         modifier > 0 && "text-primary",
                         modifier < 0 && "text-destructive",
                         modifier === 0 && "text-muted-foreground",
                       )}
                       value={modString}
                       readOnly
-                      tabIndex={-1} // Remove do foco (não é interativo)
+                      tabIndex={-1} 
                       onClick={(e) => e.stopPropagation()}
                     />
                   </FormControl>
                 </div>
-                {/* --- FIM DA MODIFICAÇÃO --- */}
               </div>
             );
           })}
-          {/* --- FIM DO MAP --- */}
         </CardContent>
       </Card>
 
-      {/* O diálogo de rolagem permanece o mesmo */}
+      {/* O Diálogo de Rolagem funciona para todos (Mestre e Jogador) */}
       <AttributeRollDialog
         open={!!selectedAttr}
         onOpenChange={(open) => {
