@@ -1,6 +1,6 @@
 // src/features/npc/tabs/NpcDetailsTab.tsx
 
-import { useNpcSheet } from "../NpcSheetContext"; // 1. MUDANÇA: Usa o hook do NPC
+import { useNpcSheet } from "../NpcSheetContext";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,24 +10,19 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-// --- 1. IMPORTAR O TEXTAREA ---
 import { Textarea } from "@/components/ui/textarea";
-// --- FIM DA IMPORTAÇÃO ---
 
-
-// 2. MUDANÇA: Nome do componente
-export const NpcDetailsTab = () => { 
-  const { form } = useNpcSheet(); // 3. MUDANÇA: Usa o hook do NPC
+export const NpcDetailsTab = () => {
+  const { form } = useNpcSheet();
 
   return (
-    // --- 2. ENVOLVER TUDO EM UM 'space-y-6' PARA SEPARAR OS CARDS ---
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          {/* 4. MUDANÇA: Título */}
           <CardTitle>Detalhes do NPC</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Campo Nome (sem alterações) */}
           <FormField
             control={form.control}
             name="name"
@@ -45,8 +40,8 @@ export const NpcDetailsTab = () => {
             )}
           />
 
-          {/* --- 3. GRID ATUALIZADO PARA 2x2 --- */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Campo Raça (sem alterações) */}
             <FormField
               control={form.control}
               name="race"
@@ -60,15 +55,19 @@ export const NpcDetailsTab = () => {
                 </FormItem>
               )}
             />
+            
+            {/* --- INÍCIO DA MUDANÇA 1 --- */}
             <FormField
               control={form.control}
-              name="occupation"
+              name="occupation" // O 'name' (ID interno) permanece o mesmo
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Ocupação</FormLabel>
+                  {/* O Label foi alterado */}
+                  <FormLabel>Resistência</FormLabel> 
                   <FormControl>
                     <Input
-                      placeholder="Monstro"
+                      // O Placeholder foi alterado
+                      placeholder="Ex: Normal, Forte, Fraco" 
                       {...field}
                     />
                   </FormControl>
@@ -76,17 +75,20 @@ export const NpcDetailsTab = () => {
                 </FormItem>
               )}
             />
+            {/* --- FIM DA MUDANÇA 1 --- */}
 
-            {/* --- CAMPOS NOVOS ADICIONADOS AO GRID --- */}
+            {/* --- INÍCIO DA MUDANÇA 2 --- */}
             <FormField
               control={form.control}
               name="shadow"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Sombra (Cor)</FormLabel>
+                  <FormLabel>Sombra (Aparência)</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Ex: Negro-carvão"
+                    {/* Alterado de <Input> para <Textarea> */}
+                    <Textarea
+                      placeholder="Ex: Negro-carvão, com bordas puídas e um brilho avermelhado..."
+                      className="min-h-[80px]" // Define uma altura mínima
                       {...field}
                     />
                   </FormControl>
@@ -94,6 +96,9 @@ export const NpcDetailsTab = () => {
                 </FormItem>
               )}
             />
+            {/* --- FIM DA MUDANÇA 2 --- */}
+
+            {/* --- INÍCIO DA MUDANÇA 3 --- */}
             <FormField
               control={form.control}
               name="personalGoal"
@@ -101,8 +106,10 @@ export const NpcDetailsTab = () => {
                 <FormItem>
                   <FormLabel>Objetivo Pessoal / Motivação</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Ex: Proteger o ninho..."
+                    {/* Alterado de <Input> para <Textarea> */}
+                    <Textarea
+                      placeholder="Ex: Proteger o ninho a todo custo, acumular ouro para seu mestre, encontrar a cura para sua aflição..."
+                      className="min-h-[80px]" // Define uma altura mínima
                       {...field}
                     />
                   </FormControl>
@@ -110,13 +117,13 @@ export const NpcDetailsTab = () => {
                 </FormItem>
               )}
             />
-            {/* --- FIM DA ADIÇÃO DO GRID --- */}
-
+            {/* --- FIM DA MUDANÇA 3 --- */}
+            
           </div>
         </CardContent>
       </Card>
 
-      {/* --- 4. NOVO CARD PARA 'PESSOAS E ALIADOS' --- */}
+      {/* Card "Pessoas e Aliados" (sem alterações) */}
       <Card>
         <CardHeader>
           <CardTitle>Pessoas e Aliados Importantes</CardTitle>
@@ -131,7 +138,7 @@ export const NpcDetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Ex: O líder da tribo, a bruxa que o controla..."
-                    className="min-h-[150px]" // altura ligeiramente reduzida
+                    className="min-h-[150px]"
                     {...field}
                   />
                 </FormControl>
@@ -141,9 +148,8 @@ export const NpcDetailsTab = () => {
           />
         </CardContent>
       </Card>
-      {/* --- FIM DO NOVO CARD --- */}
       
-      {/* --- 5. NOVO CARD PARA 'ANOTAÇÕES GERAIS' --- */}
+      {/* Card "Anotações Gerais" (sem alterações) */}
       <Card>
         <CardHeader>
           <CardTitle>Anotações Gerais (Mestre)</CardTitle>
@@ -160,7 +166,7 @@ export const NpcDetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Lembretes, táticas, etc..."
-                    className="min-h-[150px]" // altura ligeiramente reduzida
+                    className="min-h-[150px]"
                     {...field}
                   />
                 </FormControl>
@@ -170,8 +176,6 @@ export const NpcDetailsTab = () => {
           />
         </CardContent>
       </Card>
-      {/* --- FIM DO NOVO CARD --- */}
-
-    </div> // --- FIM do 'space-y-6' ---
+    </div>
   );
 };
