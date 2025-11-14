@@ -1,7 +1,7 @@
 // src/features/npc/tabs/NpcAttributesTab.tsx
 
 import { useState } from "react";
-import { useNpcSheet } from "../NpcSheetContext"; // 1. Usa o hook do NPC
+import { useNpcSheet } from "../NpcSheetContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
 import { AttributeRollDialog } from "@/components/AttributeRollDialog";
-// 2. Importa a lista de atributos do arquivo de constantes
 import { attributesList } from "@/features/character/character.constants";
 
 type SelectedAttribute = {
@@ -21,9 +20,8 @@ type SelectedAttribute = {
   value: number;
 };
 
-// 3. Nome do componente
 export const NpcAttributesTab = () => {
-  const { form, npc } = useNpcSheet(); // 4. Usa o hook do NPC e pega o 'npc'
+  const { form, npc } = useNpcSheet();
   const [selectedAttr, setSelectedAttr] = useState<SelectedAttribute | null>(
     null,
   );
@@ -42,82 +40,91 @@ export const NpcAttributesTab = () => {
           <CardTitle>Atributos</CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {attributesList.map((attr) => (
-            <div
-              key={attr.key}
-              className={cn(
-                "space-y-1 rounded-lg p-2 transition-colors",
-                "cursor-pointer hover:bg-muted/50",
-              )}
-              onClick={() =>
-                handleAttributeClick(
-                  attr.label,
-                  form.getValues(
-                    `attributes.${
-                      attr.key as keyof typeof form.getValues.attributes
-                    }.value`,
-                  ),
-                )
-              }
-            >
-              {/* Campo Principal (Valor) */}
-              <FormField
-                control={form.control}
-                name={
-                  `attributes.${
-                    attr.key as keyof typeof form.getValues.attributes
-                  }.value` // ATUALIZADO: .value
-                }
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className={cn("text-lg", "cursor-pointer")}>
-                      {attr.label}
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        className="text-2xl font-bold h-12 text-center"
-                        {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value, 10) || 0)
-                        }
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          {/* --- INÍCIO DA MODIFICAÇÃO --- */}
+          {attributesList.map((attr) => {
+            // 1. Definimos o nome do campo de atributo (ex: "attributes.cunning.value")
+            const attributeName = `attributes.${
+              attr.key as keyof typeof form.getValues.attributes
+            }.value`;
 
-              {/* NOVO CAMPO (Anotação/Modificador) */}
-              <FormField
-                control={form.control}
-                name={
-                  `attributes.${
-                    attr.key as keyof typeof form.getValues.attributes
-                  }.note` // ATUALIZADO: .note
-                }
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <Input
-                        type="text"
-                        className="h-8 text-center text-sm text-muted-foreground"
-                        placeholder="Mod."
-                        {...field}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+            // 2. Usamos 'form.watch' para observar o valor atual desse atributo
+            const currentValue = form.watch(attributeName);
+
+            // 3. Calculamos o modificador com base na sua regra
+            const modifier = (currentValue || 0) - 10;
+            // Formatamos para exibir "+1", "-2", "0", etc.
+            const modString = modifier > 0 ? `+${modifier}` : `${modifier}`;
+
+            return (
+              <div
+                key={attr.key}
+                className={cn(
+                  "space-y-1 rounded-lg p-2 transition-colors",
+                  "cursor-pointer hover:bg-muted/50",
                 )}
-              />
-            </div>
-          ))}
+                onClick={() =>
+                  handleAttributeClick(
+                    attr.label,
+                    form.getValues(attributeName), // Pega o valor atual ao clicar
+                  )
+                }
+              >
+                {/* Campo Principal (Valor) - Permanece igual */}
+                <FormField
+                  control={form.control}
+                  name={attributeName}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className={cn("text-lg", "cursor-pointer")}>
+                        {attr.label}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          className="text-2xl font-bold h-12 text-center"
+                          {...field}
+                          onChange={(e) =>
+                            field.onChange(parseInt(e.target.value, 10) || 0)
+                          }
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* --- 4. CAMPO DE MODIFICADOR AUTOMÁTICO --- */}
+                {/* Removemos o <FormField> que usava "attributes.note".
+                  Substituímos por um <Input readOnly /> que exibe o 'modString' calculado.
+                */}
+                <div>
+                  <FormControl>
+                    <Input
+                      type="text"
+                      className={cn(
+                        "h-8 text-center text-sm font-bold border-none bg-transparent read-only:cursor-default focus-visible:ring-0 focus-visible:ring-offset-0",
+                        // Classes de cor dinâmicas
+                        modifier > 0 && "text-primary",
+                        modifier < 0 && "text-destructive",
+                        modifier === 0 && "text-muted-foreground",
+                      )}
+                      value={modString}
+                      readOnly
+                      tabIndex={-1} // Remove do foco (não é interativo)
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </FormControl>
+                </div>
+                {/* --- FIM DA MODIFICAÇÃO --- */}
+              </div>
+            );
+          })}
+          {/* --- FIM DO MAP --- */}
         </CardContent>
       </Card>
 
-      {/* 5. Passa os dados do NPC para o diálogo de rolagem */}
+      {/* O diálogo de rolagem permanece o mesmo */}
       <AttributeRollDialog
         open={!!selectedAttr}
         onOpenChange={(open) => {
