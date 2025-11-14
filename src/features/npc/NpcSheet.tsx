@@ -28,10 +28,7 @@ import {
 } from "./npc.schema";
 import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
 
-// useTableContext não é mais necessário aqui em NpcSheet, 
-// pois NpcSheetProvider agora cuida disso.
-// import { useTableContext } from "@/features/table/TableContext";
-
+// Abas do NPC
 import { NpcCombatTab } from "./tabs/NpcCombatTab";
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
@@ -51,25 +48,22 @@ interface NpcSheetProps {
 // Componente "Interno"
 const NpcSheetInner = ({
   onClose,
-  onSave,
   initialData,
 }: {
   onClose: () => void;
-  onSave: (data: NpcSheetData) => Promise<void>;
+  onSave: (data: NpcSheetData) => Promise<void>; // 'onSave' é passado para o Provider
   initialData: NpcSheetData;
 }) => {
-  // --- 1. OBTER 'isReadOnly' DO NOVO CONTEXTO ---
-  const { form, isReadOnly } = useNpcSheet();
+  // 1. Obter tudo do novo contexto
+  const { form, isReadOnly, isDirty, isSaving, saveSheet } = useNpcSheet();
   const { toast } = useToast();
 
-  const { isDirty, isSubmitting } = form.formState;
+  // 2. Remover todos os states e refs de salvamento
+  // const { isDirty, isSubmitting } = form.formState; // REMOVIDO
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
-  
-  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
-  const watchedValues = form.watch(); 
-  
-  const [onSaveSuccessCallback, setOnSaveSuccessCallback] =
-    useState<(() => void) | null>(null);
+  // const debounceTimer = useRef<NodeJS.Timeout | null>(null); // REMOVIDO
+  // const watchedValues = form.watch(); // REMOVIDO
+  // const [onSaveSuccessCallback, setOnSaveSuccessCallback] = useState... // REMOVIDO
     
   const [name, race, occupation] = form.watch([
     "name",
@@ -77,62 +71,13 @@ const NpcSheetInner = ({
     "occupation",
   ]);
 
-  // 'isMaster' agora é 'isReadOnly'
-  // const { isMaster } = useTableContext(); 
+  // 3. Remover 'onSubmit' e 'onInvalid' locais
+  // REMOVIDOS
 
-  const onSubmit = async (data: NpcSheetData) => {
-    // Só salva se não for ReadOnly
-    if (isReadOnly) return;
-    try {
-      await onSave(data);
-      form.reset(data); 
-      toast({ title: "Ficha de NPC Salva!" });
+  // 4. Remover 'useEffect[watchedValues]' (O auto-save)
+  // REMOVIDO
 
-      if (onSaveSuccessCallback) {
-        onSaveSuccessCallback();
-        setOnSaveSuccessCallback(null);
-      }
-    } catch (error) {
-      console.error("Falha no submit do NPC:", error);
-      if (onSaveSuccessCallback) {
-        setOnSaveSuccessCallback(null);
-      }
-    }
-  };
-
-  const onInvalid = (errors: any) => {
-    console.error("Erros de validação do NPC:", errors);
-    toast({
-      title: "Erro de Validação",
-      description: "Verifique os campos em vermelho.",
-      variant: "destructive",
-    });
-    if (onSaveSuccessCallback) {
-      setOnSaveSuccessCallback(null);
-    }
-  };
-
-  // Auto-save
-  useEffect(() => {
-    // --- 2. USAR '!isReadOnly' EM VEZ DE 'isMaster' ---
-    if (isDirty && !isSubmitting && !isReadOnly) { 
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-      debounceTimer.current = setTimeout(() => {
-        console.log("Auto-save (NPC): Disparando o salvamento...");
-        form.handleSubmit(onSubmit, onInvalid)();
-      }, 2500);
-    }
-    return () => {
-      if (debounceTimer.current) {
-        clearTimeout(debounceTimer.current);
-      }
-    };
-  }, [watchedValues, isDirty, isSubmitting, isReadOnly, form.handleSubmit, onSubmit, onInvalid]);
-
-
-  // Aviso de Fecho de Aba
+  // 5. Manter 'useEffect[isDirty]' (Aviso de fechar a aba)
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -140,7 +85,7 @@ const NpcSheetInner = ({
       return "";
     };
 
-    // --- 3. USAR '!isReadOnly' EM VEZ DE 'isMaster' ---
+    // Só avisa se a ficha NÃO for 'somente leitura'
     if (isDirty && !isReadOnly) {
       window.addEventListener("beforeunload", handleBeforeUnload);
     } else {
@@ -151,28 +96,23 @@ const NpcSheetInner = ({
     };
   }, [isDirty, isReadOnly]); 
 
-  // --- Lógica para o botão "Fechar" (Popup) ---
+  // 6. Simplificar lógicas de fechar
   const handleCloseClick = () => {
-    // --- 4. USAR '!isReadOnly' EM VEZ DE 'isMaster' ---
-    if (isDirty && !isReadOnly) { 
+    if (isDirty && !isReadOnly) { // Só perguntar se for o Mestre
       setIsCloseAlertOpen(true);
     } else {
       onClose();
     }
   };
 
-  // (handleSaveAndClose, handleCloseWithoutSaving... sem alterações)
-  const handleSaveAndClose = () => {
-    setOnSaveSuccessCallback(() => {
-      return () => {
-        setIsCloseAlertOpen(false);
-        onClose();
-      };
-    });
-    form.handleSubmit(onSubmit, onInvalid)();
+  const handleSaveAndClose = async () => {
+    await saveSheet();
+    setIsCloseAlertOpen(false);
+    onClose();
   };
+
   const handleCloseWithoutSaving = () => {
-    form.reset(initialData);
+    form.reset(initialData); 
     setIsCloseAlertOpen(false);
     onClose();
   };
@@ -189,7 +129,7 @@ const NpcSheetInner = ({
           </div>
 
           <div className="flex gap-2 items-center">
-            {/* --- 5. USAR '!isReadOnly' --- */}
+            {/* 7. Ligar indicador ao contexto (e esconder se for read-only) */}
             {!isReadOnly && (
               <div
                 className={cn(
@@ -197,7 +137,7 @@ const NpcSheetInner = ({
                   isDirty ? "text-amber-500" : "text-muted-foreground/70",
                 )}
               >
-                {isSubmitting
+                {isSaving
                   ? "Salvando..."
                   : isDirty
                   ? "Alterações não salvas"
@@ -205,12 +145,13 @@ const NpcSheetInner = ({
               </div>
             )}
 
+            {/* 8. Ligar botões ao contexto (e esconder se for read-only) */}
             {!isReadOnly && (
               <Button
                 size="sm"
                 variant="default"
-                onClick={form.handleSubmit(onSubmit, onInvalid)}
-                disabled={!isDirty || isSubmitting}
+                onClick={saveSheet}
+                disabled={!isDirty || isSaving}
               >
                 <Save className="w-4 h-4 mr-2" />
                 Salvar
@@ -221,7 +162,7 @@ const NpcSheetInner = ({
               size="sm"
               variant="outline"
               onClick={handleCloseClick}
-              disabled={isSubmitting}
+              disabled={isSaving}
             >
               <X className="w-4 h-4 mr-2" />
               Fechar
@@ -231,7 +172,7 @@ const NpcSheetInner = ({
 
         <Form {...form}>
           <form
-            onSubmit={form.handleSubmit(onSubmit, onInvalid)}
+            onSubmit={(e) => e.preventDefault()}
             className="flex-1 overflow-y-auto"
           >
             <Tabs defaultValue="details" className="w-full">
@@ -246,12 +187,10 @@ const NpcSheetInner = ({
                 <TabsTrigger value="journal">Diário</TabsTrigger>
               </TabsList>
 
-              {/* --- 6. ATUALIZAR FIELDSET ---
-                O fieldset agora só desativa durante o 'submitting'.
-                A lógica 'isReadOnly' será passada para cada aba.
-              --- */}
+              {/* O 'isReadOnly' agora é passado para cada aba individualmente
+                  e o 'fieldset' só desabilita durante o 'isSaving'. */}
               <fieldset
-                disabled={isSubmitting}
+                disabled={isSaving}
                 className="p-4 pt-0 space-y-4"
               >
                 <TabsContent value="details">
@@ -284,7 +223,7 @@ const NpcSheetInner = ({
         </Form>
       </div>
 
-      {/* (AlertDialog... sem alterações) */}
+      {/* 9. Ligar AlertDialog ao 'isSaving' */}
       <AlertDialog
         open={isCloseAlertOpen}
         onOpenChange={setIsCloseAlertOpen}
@@ -297,22 +236,22 @@ const NpcSheetInner = ({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>
+            <AlertDialogCancel disabled={isSaving}>
               Cancelar
             </AlertDialogCancel>
             <Button
               variant="outline"
               onClick={handleCloseWithoutSaving}
-              disabled={isSubmitting}
+              disabled={isSaving}
             >
               Sair Sem Salvar
             </Button>
             <AlertDialogAction
               className={cn(buttonVariants({ variant: "default" }))}
               onClick={handleSaveAndClose}
-              disabled={isSubmitting}
+              disabled={isSaving}
             >
-              {isSubmitting ? "Salvando..." : "Salvar e Sair"}
+              {isSaving ? "Salvando..." : "Salvar e Sair"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -325,9 +264,8 @@ const NpcSheetInner = ({
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const { toast } = useToast();
 
+  // (Lógica de merge de dados... permanece idêntica)
   const defaults = getDefaultNpcSheetData(initialNpc.name);
-
-  // (Lógica de merge de dados... sem alterações)
   const mergedData = {
     ...defaults,
     ...(initialNpc.data as any),
@@ -364,6 +302,7 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const validatedData = parsedData.success ? parsedData.data : mergedData;
   initialNpc.data = validatedData;
   
+  // 10. A função que o Contexto usará para salvar
   const handleSave = async (data: NpcSheetData) => {
     const { error } = await supabase
       .from("npcs")
@@ -371,18 +310,12 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
       .eq("id", initialNpc.id);
 
     if (error) {
-      toast({
-        title: "Erro ao salvar NPC",
-        description: error.message,
-        variant: "destructive",
-      });
       throw new Error(error.message);
     }
   };
 
   return (
-    // NpcSheetProvider agora está ciente se é ReadOnly ou não
-    <NpcSheetProvider npc={initialNpc}>
+    <NpcSheetProvider npc={initialNpc} onSave={handleSave}>
       <NpcSheetInner
         onClose={onClose}
         onSave={handleSave}
