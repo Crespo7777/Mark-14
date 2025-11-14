@@ -12,7 +12,7 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+// import { Textarea } from "@/components/ui/textarea"; // Não usado
 import {
   Select,
   SelectContent,
@@ -33,8 +33,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils"; // <-- 1. IMPORTAR O 'cn'
+// import { Separator } from "@/components/ui/separator"; // Não usado
+import { cn } from "@/lib/utils";
 
 type AttackRollData = {
   abilityName: string;
@@ -43,13 +43,13 @@ type AttackRollData = {
 };
 
 export const NpcEquipmentTab = () => {
-  const { form, npc } = useNpcSheet();
+  const { form, npc, isReadOnly } = useNpcSheet();
   const { toast } = useToast();
 
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(
     null,
   );
-
+  
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
 
@@ -71,7 +71,6 @@ export const NpcEquipmentTab = () => {
     name: "armors",
   });
 
-  // Função 'handleAttackClick' (sem alterações)
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -103,7 +102,7 @@ export const NpcEquipmentTab = () => {
   return (
     <>
       <div className="space-y-6">
-        {/* Card de Armas (sem alterações no Header) */}
+        {/* (Card de Armas e todo o resto... sem alterações) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -113,6 +112,7 @@ export const NpcEquipmentTab = () => {
               type="button"
               size="sm"
               onClick={() => appendWeapon(getDefaultNpcWeapon())}
+              disabled={isReadOnly}
             >
               <Plus className="w-4 h-4 mr-2" /> Adicionar Arma
             </Button>
@@ -130,35 +130,24 @@ export const NpcEquipmentTab = () => {
               onValueChange={setOpenWeapons}
             >
               {weaponFields.map((field, index) => {
-                // --- INÍCIO DA MUDANÇA (LÓGICA DO MODIFICADOR) ---
-
-                // 2. Observa o atributo de ataque selecionado para ESTA arma
                 const selectedAttrKey = form.watch(
                   `weapons.${index}.attackAttribute`,
                 );
-                // 3. Observa TODOS os atributos da ficha do NPC
                 const allAttributes = form.watch("attributes");
-
-                // 4. Calcula o modificador
                 let mod = 0;
                 let modString = "";
-                
-                // Verificamos se uma chave válida foi selecionada
                 if (selectedAttrKey && allAttributes[selectedAttrKey]) {
                   const value = allAttributes[selectedAttrKey].value || 0;
                   mod = value - 10;
                   modString = mod > 0 ? `(+${mod})` : `(${mod})`;
                 }
                 
-                // --- FIM DA MUDANÇA (LÓGICA DO MODIFICADOR) ---
-
                 return (
                   <AccordionItem
                     key={field.id}
                     value={field.id}
                     className="p-3 rounded-md border bg-muted/20"
                   >
-                    {/* O Trigger do Acordeão (sem alterações) */}
                     <div className="flex justify-between items-center w-full p-0">
                       <AccordionTrigger className="p-0 hover:no-underline flex-1">
                         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
@@ -186,6 +175,7 @@ export const NpcEquipmentTab = () => {
                           </div>
                         </div>
                       </AccordionTrigger>
+
                       <div
                         className="flex gap-1 pl-2 flex-shrink-0"
                         onClick={(e) => e.stopPropagation()}
@@ -205,6 +195,7 @@ export const NpcEquipmentTab = () => {
                           variant="ghost"
                           className="text-destructive hover:text-destructive"
                           onClick={() => removeWeapon(index)}
+                          disabled={isReadOnly}
                         >
                           <Trash2 className="w-4 h-4" />
                         </Button>
@@ -220,22 +211,23 @@ export const NpcEquipmentTab = () => {
                             <FormItem>
                               <FormLabel>Nome</FormLabel>
                               <FormControl>
-                                <Input placeholder="Espada Longa" {...field} />
+                                <Input 
+                                  placeholder="Espada Longa" 
+                                  {...field} 
+                                  readOnly={isReadOnly}
+                                />
                               </FormControl>
                             </FormItem>
                           )}
                         />
                         <div className="grid grid-cols-3 gap-4">
-                          {/* --- INÍCIO DA MUDANÇA (LABEL DO ATRIBUTO) --- */}
                           <FormField
                             control={form.control}
                             name={`weapons.${index}.attackAttribute`}
                             render={({ field }) => (
                               <FormItem>
-                                {/* 5. Adiciona um contêiner flex para o Label e o Modificador */}
                                 <div className="flex justify-between items-baseline">
                                   <FormLabel>Atributo de Ataque</FormLabel>
-                                  {/* 6. Renderiza o modificador calculado */}
                                   {modString && (
                                     <span
                                       className={cn(
@@ -252,6 +244,7 @@ export const NpcEquipmentTab = () => {
                                 <Select
                                   onValueChange={field.onChange}
                                   value={field.value}
+                                  disabled={isReadOnly}
                                 >
                                   <FormControl>
                                     <SelectTrigger>
@@ -272,8 +265,6 @@ export const NpcEquipmentTab = () => {
                               </FormItem>
                             )}
                           />
-                          {/* --- FIM DA MUDANÇA (LABEL DO ATRIBUTO) --- */}
-
                           <FormField
                             control={form.control}
                             name={`weapons.${index}.damage`}
@@ -281,7 +272,11 @@ export const NpcEquipmentTab = () => {
                               <FormItem>
                                 <FormLabel>Dano (Fixo)</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="5" {...field} />
+                                  <Input 
+                                    placeholder="5" 
+                                    {...field} 
+                                    readOnly={isReadOnly}
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -293,7 +288,11 @@ export const NpcEquipmentTab = () => {
                               <FormItem>
                                 <FormLabel>Qualidades</FormLabel>
                                 <FormControl>
-                                  <Input placeholder="Precisa" {...field} />
+                                  <Input 
+                                    placeholder="Precisa" 
+                                    {...field} 
+                                    readOnly={isReadOnly}
+                                  />
                                 </FormControl>
                               </FormItem>
                             )}
@@ -308,7 +307,7 @@ export const NpcEquipmentTab = () => {
           </CardContent>
         </Card>
 
-        {/* Card de Armaduras (sem alterações) */}
+        {/* (Card de Armaduras... sem alterações) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -318,6 +317,7 @@ export const NpcEquipmentTab = () => {
               type="button"
               size="sm"
               onClick={() => appendArmor(getDefaultNpcArmor())}
+              disabled={isReadOnly}
             >
               <Plus className="w-4 h-4 mr-2" /> Adicionar Armadura
             </Button>
@@ -367,6 +367,7 @@ export const NpcEquipmentTab = () => {
                         variant="ghost"
                         className="text-destructive hover:text-destructive"
                         onClick={() => removeArmor(index)}
+                        disabled={isReadOnly}
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -383,7 +384,11 @@ export const NpcEquipmentTab = () => {
                             <FormItem className="md:col-span-1">
                               <FormLabel>Nome</FormLabel>
                               <FormControl>
-                                <Input placeholder="Cota de Malha" {...field} />
+                                <Input 
+                                  placeholder="Cota de Malha" 
+                                  {...field} 
+                                  readOnly={isReadOnly}
+                                />
                               </FormControl>
                             </FormItem>
                           )}
@@ -395,7 +400,11 @@ export const NpcEquipmentTab = () => {
                             <FormItem className="md:col-span-1">
                               <FormLabel>Proteção (Fixa)</FormLabel>
                               <FormControl>
-                                <Input placeholder="3" {...field} />
+                                <Input 
+                                  placeholder="3" 
+                                  {...field} 
+                                  readOnly={isReadOnly}
+                                />
                               </FormControl>
                             </FormItem>
                           )}
@@ -407,7 +416,11 @@ export const NpcEquipmentTab = () => {
                             <FormItem className="md:col-span-1">
                               <FormLabel>Qualidades</FormLabel>
                               <FormControl>
-                                <Input placeholder="Reforçada" {...field} />
+                                <Input 
+                                  placeholder="Reforçada" 
+                                  {...field} 
+                                  readOnly={isReadOnly}
+                                />
                               </FormControl>
                             </FormItem>
                           )}
@@ -422,14 +435,16 @@ export const NpcEquipmentTab = () => {
         </Card>
       </div>
 
-      {/* Diálogo de Rolagem (sem alterações) */}
+      {/* --- INÍCIO DA CORREÇÃO --- */}
       {attackRollData && (
         <NpcAbilityRollDialog
           open={!!attackRollData}
           onOpenChange={(open) => !open && setAttackRollData(null)}
           {...attackRollData}
+          buttonText="Rolar Ataque" // <-- 1. PASSAR O TEXTO CORRETO
         />
       )}
+      {/* --- FIM DA CORREÇÃO --- */}
     </>
   );
 };
