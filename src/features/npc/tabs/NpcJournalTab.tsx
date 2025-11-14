@@ -8,15 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-
-// ######################################################
-// ### CORREÇÃO AQUI ###
-// ######################################################
-import { Plus, Trash2, Edit, BookOpen } from "lucide-react"; // Adicionado 'BookOpen'
-// ######################################################
-// ### FIM DA CORREÇÃO ###
-// ######################################################
-
+import { Plus, Trash2, Edit, BookOpen } from "lucide-react"; 
 import { Skeleton } from "@/components/ui/skeleton";
 import { JournalRenderer } from "@/components/JournalRenderer";
 import {
@@ -31,14 +23,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 
-// Lazy load o diálogo de entrada
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
 );
 
 type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"];
 
-// Função para buscar entradas do diário
 const fetchJournalEntries = async (npcId: string) => {
   const { data, error } = await supabase
     .from("journal_entries")
@@ -51,21 +41,20 @@ const fetchJournalEntries = async (npcId: string) => {
 };
 
 export const NpcJournalTab = () => { 
-  const { npc } = useNpcSheet();
+  // --- 1. OBTER 'isReadOnly' ---
+  const { npc, isReadOnly } = useNpcSheet();
   const { tableId } = useTableContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
 
-  // Buscar as entradas de diário ligadas a este NPC
   const { data: entries, isLoading } = useQuery({
     queryKey: ["journal_entries", "npc", npc.id],
     queryFn: () => fetchJournalEntries(npc.id),
   });
 
   const onEntrySaved = () => {
-    // Invalida a query para forçar o refetch
     queryClient.invalidateQueries({ queryKey: ["journal_entries", "npc", npc.id] });
   };
 
@@ -80,7 +69,7 @@ export const NpcJournalTab = () => {
       toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Anotação excluída" });
-      onEntrySaved(); // Re-busca os dados
+      onEntrySaved();
     }
     setEntryToDelete(null);
   };
@@ -113,27 +102,31 @@ export const NpcJournalTab = () => {
             <CardContent className="flex-1">
               <JournalRenderer content={entry.content} className="line-clamp-4" />
             </CardContent>
-            <CardFooter className="flex justify-end items-center gap-2">
-              <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
-                <JournalEntryDialog
-                  tableId={tableId}
-                  onEntrySaved={onEntrySaved}
-                  entry={entry}
-                  npcId={npc.id}
+            {/* --- 2. ADICIONAR '&& !isReadOnly' --- */}
+            {/* Só mostra botões de editar/excluir se for Mestre */}
+            {!isReadOnly && ( 
+              <CardFooter className="flex justify-end items-center gap-2">
+                <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
+                  <JournalEntryDialog
+                    tableId={tableId}
+                    onEntrySaved={onEntrySaved}
+                    entry={entry}
+                    npcId={npc.id}
+                  >
+                    <Button variant="outline" size="icon">
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                  </JournalEntryDialog>
+                </Suspense>
+                <Button
+                  variant="destructive"
+                  size="icon"
+                  onClick={() => setEntryToDelete(entry)}
                 >
-                  <Button variant="outline" size="icon">
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                </JournalEntryDialog>
-              </Suspense>
-              <Button
-                variant="destructive"
-                size="icon"
-                onClick={() => setEntryToDelete(entry)}
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </CardFooter>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </CardFooter>
+            )}
           </Card>
         ))}
       </div>
@@ -152,18 +145,21 @@ export const NpcJournalTab = () => {
               Anotações do Mestre, história e segredos sobre este NPC.
             </CardDescription>
           </div>
-          <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
-            <JournalEntryDialog
-              tableId={tableId}
-              onEntrySaved={onEntrySaved}
-              npcId={npc.id}
-            >
-              <Button size="sm">
-                <Plus className="w-4 h-4 mr-2" />
-                Nova Anotação
-              </Button>
-            </JournalEntryDialog>
-          </Suspense>
+          {/* --- 3. ADICIONAR '&& !isReadOnly' --- */}
+          {!isReadOnly && (
+            <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
+              <JournalEntryDialog
+                tableId={tableId}
+                onEntrySaved={onEntrySaved}
+                npcId={npc.id}
+              >
+                <Button size="sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nova Anotação
+                </Button>
+              </JournalEntryDialog>
+            </Suspense>
+          )}
         </CardHeader>
         <CardContent>
           {renderContent()}
