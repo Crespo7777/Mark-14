@@ -128,15 +128,17 @@ export const CreateNpcDialog = ({
                 onChange={(e) => setRace(e.target.value)}
               />
             </div>
+            {/* --- 3. LABEL CORRIGIDO --- */}
             <div className="space-y-2">
-              <Label htmlFor="npc-occupation">Ocupação</Label>
+              <Label htmlFor="npc-occupation">Resistência</Label>
               <Input
                 id="npc-occupation"
-                placeholder="Bandido"
+                placeholder="Ex: Normal, Fraco"
                 value={occupation}
                 onChange={(e) => setOccupation(e.target.value)}
               />
             </div>
+            {/* --- FIM DA CORREÇÃO --- */}
           </div>
 
           <Button onClick={handleCreate} disabled={loading} className="w-full">
