@@ -46,7 +46,16 @@ export const NpcAttributesTab = () => {
               attr.key as keyof typeof form.getValues.attributes
             }.value`;
             const currentValue = form.watch(attributeName);
-            const modifier = (currentValue || 0) - 10;
+            
+            // ######################################################
+            // ### INÍCIO DA CORREÇÃO ###
+            // ######################################################
+            // A lógica foi invertida conforme pedido: 10 - Valor
+            const modifier = 10 - (currentValue || 0);
+            // ######################################################
+            // ### FIM DA CORREÇÃO ###
+            // ######################################################
+            
             const modString = modifier > 0 ? `+${modifier}` : `${modifier}`;
 
             return (
