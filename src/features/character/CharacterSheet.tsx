@@ -59,7 +59,11 @@ const CharacterSheetInner = ({
   const { toast } = useToast(); // Apenas para o onInvalid (se precisasse)
 
   // 2. Remover todos os states e refs de salvamento
+  // const { isDirty, isSubmitting } = form.formState; // REMOVIDO
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
+  // const debounceTimer = useRef<NodeJS.Timeout | null>(null); // REMOVIDO
+  // const watchedValues = form.watch(); // REMOVIDO
+  // const [onSaveSuccessCallback, setOnSaveSuccessCallback] = useState... // REMOVIDO
 
   const [name, race, occupation] = form.watch([
     "name",
@@ -67,7 +71,13 @@ const CharacterSheetInner = ({
     "occupation",
   ]);
 
-  // 3. Manter 'useEffect[isDirty]' (Aviso de fechar a aba)
+  // 3. Remover 'onSubmit' e 'onInvalid' locais
+  // REMOVIDOS
+
+  // 4. Remover 'useEffect[watchedValues]' (O auto-save)
+  // REMOVIDO
+
+  // 5. Manter 'useEffect[isDirty]' (Aviso de fechar a aba)
   // Este é o "airbag" de segurança.
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -87,7 +97,7 @@ const CharacterSheetInner = ({
   }, [isDirty]); // Agora só depende do 'isDirty'
 
 
-  // 4. Simplificar lógicas de fechar
+  // 6. Simplificar lógicas de fechar
   const handleCloseClick = () => {
     if (isDirty) {
       setIsCloseAlertOpen(true);
@@ -122,7 +132,7 @@ const CharacterSheetInner = ({
           </div>
 
           <div className="flex gap-2 items-center">
-            {/* 5. Ligar indicador ao contexto */}
+            {/* 7. Ligar indicador ao contexto */}
             <div
               className={cn(
                 "text-sm transition-opacity duration-300",
@@ -136,7 +146,7 @@ const CharacterSheetInner = ({
                 : "Salvo"}
             </div>
 
-            {/* 6. Ligar botões ao contexto */}
+            {/* 8. Ligar botões ao contexto */}
             <Button
               size="sm"
               variant="default"
@@ -214,7 +224,7 @@ const CharacterSheetInner = ({
         </Form>
       </div>
 
-      {/* 7. Ligar AlertDialog ao 'isSaving' */}
+      {/* 9. Ligar AlertDialog ao 'isSaving' */}
       <AlertDialog
         open={isCloseAlertOpen}
         onOpenChange={setIsCloseAlertOpen}
@@ -288,7 +298,7 @@ export const CharacterSheet = ({
   const validatedData = parsedData.success ? parsedData.data : mergedData;
   initialCharacter.data = validatedData;
   
-  // 8. Esta é a função que o Contexto usará para salvar
+  // 10. Esta é a função que o Contexto usará para salvar
   const handleSave = async (data: CharacterSheetData) => {
     const { error } = await supabase
       .from("characters")
