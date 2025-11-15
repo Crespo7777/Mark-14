@@ -543,6 +543,11 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
               journalEntries.map((entry) => {
                 let description = "Anotação Pública do Mestre";
                 let isMyEntry = false;
+                
+                // --- INÍCIO DA CORREÇÃO 1 ---
+                const isSharedWithMe = (entry.shared_with_players || []).includes(userId!);
+                const canEditEntry = isMyEntry || isSharedWithMe;
+                // --- FIM DA CORREÇÃO 1 ---
 
                 if (entry.player_id === userId) {
                   description = "Sua Anotação Pessoal";
@@ -556,8 +561,10 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                         // É diário de outro personagem, não mostrar
                         return null; 
                     }
-                } else if ((entry.shared_with_players || []).includes(userId!)) {
+                // --- INÍCIO DA CORREÇÃO 2 ---
+                } else if (isSharedWithMe) {
                   description = "Compartilhado com você pelo Mestre";
+                // --- FIM DA CORREÇÃO 2 ---
                 } else if (!entry.is_shared) {
                   // Se não for pública, nem minha, nem compartilhada comigo, não mostra.
                   return null; 
@@ -572,17 +579,23 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1">
-                      <JournalRenderer content={entry.content} className="line-clamp-4" />
+                      {/* --- INÍCIO DA CORREÇÃO 3: Remover line-clamp --- */}
+                      <JournalRenderer content={entry.content} />
+                      {/* --- FIM DA CORREÇÃO 3 --- */}
                     </CardContent>
-                    {isMyEntry && (
+                    
+                    {/* --- INÍCIO DA CORREÇÃO 4: Mostrar botão de editar --- */}
+                    {(isMyEntry || isSharedWithMe) && (
                       <CardFooter className="flex justify-end items-center gap-2">
                         <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
                           <JournalEntryDialog
                             tableId={tableId}
                             onEntrySaved={() => {}} // Realtime cuida
                             entry={entry}
+                            // Passa as props corretas para o diálogo
                             isPlayerNote={!!entry.player_id}
                             characterId={entry.character_id || undefined}
+                            npcId={entry.npc_id || undefined}
                           >
                             <Button variant="outline" size="icon">
                               <Edit className="w-4 h-4" />
@@ -598,6 +611,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                         </Button>
                       </CardFooter>
                     )}
+                    {/* --- FIM DA CORREÇÃO 4 --- */}
                   </Card>
                 );
               })
