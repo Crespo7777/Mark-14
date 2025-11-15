@@ -806,7 +806,9 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1">
-                      <JournalRenderer content={entry.content} className="line-clamp-4" />
+                      {/* --- INÍCIO DA CORREÇÃO: Remover line-clamp --- */}
+                      <JournalRenderer content={entry.content} />
+                      {/* --- FIM DA CORREÇÃO --- */}
                     </CardContent>
                     <CardFooter className="flex justify-between items-center">
                         <div
