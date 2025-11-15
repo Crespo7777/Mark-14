@@ -99,6 +99,27 @@ All colors MUST be HSL.
     @apply bg-accent/30 text-accent-foreground font-semibold px-1 py-0.5 rounded-sm;
   }
   /* --- FIM DA ADIÇÃO --- */
+
+
+  /* ###################################################### */
+  /* ### INÍCIO DA CORREÇÃO: Remover setas do input[type=number] ### */
+  /* ###################################################### */
+  
+  /* Oculta as setas no Chrome, Safari, Edge e Opera */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Oculta as setas no Firefox */
+  input[type=number] {
+    -moz-appearance: textfield;
+  }
+  
+  /* ###################################################### */
+  /* ### FIM DA CORREÇÃO ### */
+  /* ###################################################### */
 }
 
 @layer utilities {
