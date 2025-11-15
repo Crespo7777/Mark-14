@@ -39,6 +39,10 @@ const npcCombatSchema = z.object({
   defense: z.number().default(0), 
   armor_rd: z.number().default(0),
   pain_threshold: z.number().default(0), // <-- MUDADO (de 5 para 0)
+  
+  // --- INÍCIO DA CORREÇÃO ---
+  pain_threshold_bonus: z.number().default(0), // <-- ADICIONADO
+  // --- FIM DA CORREÇÃO ---
 });
 
 // ---
