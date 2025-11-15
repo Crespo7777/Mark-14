@@ -48,7 +48,7 @@ export const NpcBackpackTab = () => {
           type="button"
           size="sm"
           onClick={() => appendItem(getDefaultInventoryItem())}
-          disabled={isReadOnly} // <-- 2. ADICIONADO
+          disabled={isReadOnly} // <-- 2. ADICIONADO (Já estava no teu ficheiro original)
         >
           <Plus className="w-4 h-4 mr-2" /> Adicionar Item
         </Button>
@@ -75,6 +75,19 @@ export const NpcBackpackTab = () => {
               <div className="flex justify-between items-center w-full p-0">
                 <AccordionTrigger className="p-0 hover:no-underline flex-1">
                   {/* ... (conteúdo do trigger sem alteração) ... */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
+                    <h4 className="font-semibold text-base text-primary-foreground truncate">
+                      {form.watch(`inventory.${index}.name`) || "Novo Item"}
+                    </h4>
+                    <div className="flex gap-1.5 flex-wrap">
+                      <Badge variant="secondary" className="px-1.5 py-0.5">
+                        Qtd: {form.watch(`inventory.${index}.quantity`) || 0}
+                      </Badge>
+                      <Badge variant="outline" className="px-1.5 py-0.5">
+                        Peso: {form.watch(`inventory.${index}.weight`) || 0}
+                      </Badge>
+                    </div>
+                  </div>
                 </AccordionTrigger>
 
                 <div
