@@ -79,10 +79,23 @@ export const NpcTraitsTab = () => {
               value={field.id}
               className="p-3 rounded-md border bg-muted/20"
             >
+              {/* ###################################################### */}
+              {/* ### INÍCIO DA CORREÇÃO DE LAYOUT ### */}
+              {/* ###################################################### */}
               <div className="flex justify-between items-center w-full p-0">
                 <AccordionTrigger className="p-0 hover:no-underline flex-1">
-                  {/* ... (conteúdo do trigger sem alteração) ... */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
+                    <h4 className="font-semibold text-base text-primary-foreground truncate">
+                      {form.watch(`traits.${index}.name`) || "Novo Traço"}
+                    </h4>
+                    <Badge variant="secondary" className="px-1.5 py-0.5">
+                      {form.watch(`traits.${index}.type`)}
+                    </Badge>
+                  </div>
                 </AccordionTrigger>
+              {/* ###################################################### */}
+              {/* ### FIM DA CORREÇÃO DE LAYOUT ### */}
+              {/* ###################################################### */}
 
                 <div
                   className="flex pl-2 flex-shrink-0"
