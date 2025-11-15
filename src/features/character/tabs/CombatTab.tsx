@@ -15,6 +15,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Heart, Shield } from "lucide-react";
+// --- INÍCIO DA CORREÇÃO ---
+import { Separator } from "@/components/ui/separator";
+import { roundUpDiv } from "../character.schema";
+// --- FIM DA CORREÇÃO ---
+
 
 /**
  * Componente de UI reutilizável para aplicar dano/cura
@@ -58,7 +63,7 @@ const DamageHealControl = ({
 export const CombatTab = () => {
   // ATUALIZADO: isEditing removido
   const { form /*, isEditing*/ } = useCharacterSheet();
-  const { toughnessMax, painThreshold, corruptionThreshold } =
+  const { toughnessMax, painThreshold, corruptionThreshold, vigorous } = // <-- Adicionado vigorous
     useCharacterCalculations();
   const currentToughness = form.watch("toughness.current");
 
@@ -115,11 +120,6 @@ export const CombatTab = () => {
           />
 
           <div className="space-y-3 pt-2">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Limiar de Dor:</span>
-              <span className="font-medium">{painThreshold}</span>
-            </div>
-
             <FormField
               control={form.control}
               name="toughness.bonus"
@@ -142,6 +142,41 @@ export const CombatTab = () => {
                 </FormItem>
               )}
             />
+            
+            {/* --- INÍCIO DA CORREÇÃO: Bloco Limiar de Dor --- */}
+            <Separator />
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">Limiar de Dor (Base):</span>
+              <span className="font-medium">{roundUpDiv(vigorous || 0, 2)}</span>
+            </div>
+
+            <FormField
+              control={form.control}
+              name="painThresholdBonus"
+              render={({ field }) => (
+                <FormItem className="flex justify-between items-center space-y-0">
+                  <FormLabel className="text-muted-foreground text-sm">
+                    Bônus Limiar de Dor:
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      className="w-20 h-8 text-center"
+                      {...field}
+                      onChange={(e) =>
+                        field.onChange(parseInt(e.target.value, 10) || 0)
+                      }
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-between items-center text-base pt-1">
+              <span className="text-foreground font-semibold">Limiar de Dor Total:</span>
+              <span className="font-bold text-lg">{painThreshold}</span>
+            </div>
+            {/* --- FIM DA CORREÇÃO --- */}
+
           </div>
 
           {/* Controles de Dano/Cura movidos para dentro do CardContent */}
