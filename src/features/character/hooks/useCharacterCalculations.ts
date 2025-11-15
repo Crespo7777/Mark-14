@@ -26,6 +26,10 @@ export const useCharacterCalculations = () => {
   const inventory = form.watch("inventory");
   const experience = form.watch("experience");
   
+  // --- INÍCIO DA CORREÇÃO ---
+  const painThresholdBonus = form.watch("painThresholdBonus");
+  // --- FIM DA CORREÇÃO ---
+
   const totalAttributePointsSpent = useMemo(() => {
     return (
       (cunning || 0) +
@@ -52,11 +56,14 @@ export const useCharacterCalculations = () => {
   }, [vigorous, toughnessBonus]);
 
   /**
-   * REGRA: Limiar de Dor = Vigoroso / 2 (arredondado para cima)
+   * REGRA: Limiar de Dor = (Vigoroso / 2) + Bônus
    */
+  // --- INÍCIO DA CORREÇÃO ---
   const painThreshold = useMemo(() => {
-    return roundUpDiv(vigorous || 0, 2);
-  }, [vigorous]);
+    const base = roundUpDiv(vigorous || 0, 2);
+    return base + (painThresholdBonus || 0);
+  }, [vigorous, painThresholdBonus]);
+  // --- FIM DA CORREÇÃO ---
 
   /**
    * REGRA: Limiar de Corrupção = Resoluto / 2 (arredondado para cima)
