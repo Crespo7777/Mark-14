@@ -55,7 +55,7 @@ export const NpcTraitsTab = () => {
           type="button"
           size="sm"
           onClick={() => appendTrait(getDefaultTrait())}
-          disabled={isReadOnly} // <-- 2. ADICIONADO
+          disabled={isReadOnly} // <-- 2. ADICIONADO (Já estava no teu ficheiro original)
         >
           <Plus className="w-4 h-4 mr-2" /> Adicionar Traço
         </Button>
@@ -79,9 +79,6 @@ export const NpcTraitsTab = () => {
               value={field.id}
               className="p-3 rounded-md border bg-muted/20"
             >
-              {/* ###################################################### */}
-              {/* ### INÍCIO DA CORREÇÃO DE LAYOUT ### */}
-              {/* ###################################################### */}
               <div className="flex justify-between items-center w-full p-0">
                 <AccordionTrigger className="p-0 hover:no-underline flex-1">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
@@ -93,9 +90,6 @@ export const NpcTraitsTab = () => {
                     </Badge>
                   </div>
                 </AccordionTrigger>
-              {/* ###################################################### */}
-              {/* ### FIM DA CORREÇÃO DE LAYOUT ### */}
-              {/* ###################################################### */}
 
                 <div
                   className="flex pl-2 flex-shrink-0"
