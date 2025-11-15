@@ -44,8 +44,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { CreateCharacterDialog } from "./CreateCharacterDialog";
-// import { Switch } from "@/components/ui/switch"; // Removido
-// import { Label } from "@/components/ui/label"; // Removido
 
 import { Database } from "@/integrations/supabase/types";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -207,8 +205,6 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     window.location.reload();
     setPlayerToRemove(null);
   };
-
-  // --- REMOVIDO 'handleShare...' ---
 
   const handleDeleteNpc = async () => {
     if (!npcToDelete) return;
