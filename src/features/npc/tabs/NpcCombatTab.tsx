@@ -1,6 +1,6 @@
 // src/features/npc/tabs/NpcCombatTab.tsx
 
-import { useState, useEffect } from "react"; // Importar useEffect
+import { useState, useEffect } from "react"; 
 import { useNpcSheet } from "../NpcSheetContext"; 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/form";
 import { Heart, Shield, ShieldAlert } from "lucide-react"; 
 import { useToast } from "@/hooks/use-toast"; 
-import { roundUpDiv } from "@/features/character/character.schema"; // Importar função de cálculo
+import { roundUpDiv } from "@/features/character/character.schema";
+// import { cn } from "@/lib/utils"; // <-- Não é necessário
 
 /**
  * Componente de UI reutilizável para aplicar dano/cura
@@ -56,7 +57,7 @@ export const NpcCombatTab = () => {
   const { toast } = useToast(); 
 
   const currentToughness = form.watch("combat.toughness_current");
-  const maxToughness = form.watch("combat.toughness_max"); // Observa o valor correto
+  const maxToughness = form.watch("combat.toughness_max"); 
 
   const [displayDefense, setDisplayDefense] = useState<string>(() => {
     const val = form.getValues("combat.defense");
@@ -65,20 +66,20 @@ export const NpcCombatTab = () => {
   
   const watchedDefense = form.watch("combat.defense");
   const vigorous = form.watch("attributes.vigorous.value");
+  const painThresholdBonus = form.watch("combat.pain_threshold_bonus");
 
-  // Observa o Vigoroso e atualiza os campos de combate
+
+  // Observa o Vigoroso E O BÓNUS
   useEffect(() => {
-    // Apenas o Mestre deve recalcular os valores base
     if (!isReadOnly) { 
-      // Regra: Max(10, Vigoroso)
       const newMaxToughness = Math.max(10, vigorous || 0);
       form.setValue("combat.toughness_max", newMaxToughness);
 
-      // Regra: Vigoroso / 2 (arredondado para cima)
-      const newPainThreshold = roundUpDiv(vigorous || 0, 2);
-      form.setValue("combat.pain_threshold", newPainThreshold);
+      const basePainThreshold = roundUpDiv(vigorous || 0, 2);
+      const bonus = painThresholdBonus || 0;
+      form.setValue("combat.pain_threshold", basePainThreshold + bonus);
     }
-  }, [vigorous, form, isReadOnly]);
+  }, [vigorous, painThresholdBonus, form, isReadOnly]); 
 
 
   useEffect(() => {
@@ -90,12 +91,9 @@ export const NpcCombatTab = () => {
     }
   }, [watchedDefense]);
 
-  /**
-   * Aplica dano ao NPC, considerando a armadura e o limiar de dor.
-   */
   const handleDamage = (rawDamage: number) => {
     const armorRD = form.getValues("combat.armor_rd") || 0;
-    const painThreshold = form.getValues("combat.pain_threshold") || 0;
+    const painThreshold = form.getValues("combat.pain_threshold") || 0; 
     const currentToughness = form.getValues("combat.toughness_current") || 0;
 
     const actualDamage = Math.max(0, rawDamage - armorRD);
@@ -117,17 +115,8 @@ export const NpcCombatTab = () => {
     }
   };
 
-  /**
-   * Cura a vitalidade do NPC, limitado ao máximo.
-   */
   const handleHeal = (healAmount: number) => {
-    // ######################################################
-    // ### INÍCIO DA CORREÇÃO ###
-    // ######################################################
     const currentToughness = form.getValues("combat.toughness_current") || 0;
-    
-    // A variável 'maxToughness' já está a ser "observada" (watch) no topo do componente.
-    // Usamos o valor de 'maxToughness' que já temos.
     const max = isNaN(maxToughness) ? 10 : maxToughness;
     const newToughness = Math.min(max, currentToughness + healAmount);
     
@@ -137,9 +126,6 @@ export const NpcCombatTab = () => {
       title: "Cura Aplicada!",
       description: `+${healAmount} de Vitalidade recuperada.`,
     });
-    // ######################################################
-    // ### FIM DA CORREÇÃO ###
-    // ######################################################
   };
 
   return (
@@ -184,10 +170,7 @@ export const NpcCombatTab = () => {
                         type="number"
                         className="text-2xl font-bold h-12 bg-muted/50"
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value, 10) || 0)
-                        }
-                        readOnly // Campo agora é calculado
+                        readOnly // Vitalidade Máxima é automática
                       />
                     </FormControl>
                   </FormItem>
@@ -198,13 +181,40 @@ export const NpcCombatTab = () => {
               value={(currentToughness / (maxToughness || 10)) * 100}
               className="h-2"
             />
-            <div className="grid grid-cols-2 gap-4 pt-2">
+            
+            {/* --- INÍCIO DA CORREÇÃO DE LAYOUT --- */}
+            {/* Adicionado 'items-end' para alinhar os FormItems pela base */}
+            <div className="grid grid-cols-3 gap-4 pt-2 items-end">
+            {/* --- FIM DA CORREÇÃO DE LAYOUT --- */}
               <FormField
                 control={form.control}
                 name="combat.armor_rd"
                 render={({ field }) => (
                   <FormItem className="space-y-2">
+                    {/* Removido h-10 */}
                     <FormLabel>Armadura (Redução)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        className="text-lg h-10"
+                        {...field}
+                        onChange={(e) =>
+                          field.onChange(parseInt(e.target.value, 10) || 0)
+                        }
+                        readOnly={isReadOnly}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="combat.pain_threshold_bonus"
+                render={({ field }) => (
+                  <FormItem className="space-y-2">
+                    {/* Removido h-10 */}
+                    <FormLabel>Bônus (Limiar)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
@@ -225,16 +235,14 @@ export const NpcCombatTab = () => {
                 name="combat.pain_threshold"
                 render={({ field }) => (
                   <FormItem className="space-y-2">
-                    <FormLabel>Limiar de Dor</FormLabel>
+                    {/* Removido h-10 */}
+                    <FormLabel>Limiar de Dor (Total)</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         className="text-lg h-10 bg-muted/50"
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value, 10) || 0)
-                        }
-                        readOnly // Campo agora é calculado
+                        readOnly // O total é sempre read-only
                       />
                     </FormControl>
                     <FormMessage />
