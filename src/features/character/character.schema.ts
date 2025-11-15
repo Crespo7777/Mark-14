@@ -150,6 +150,11 @@ export const characterSheetSchema = z.object({
   attributes: attributesSchema.default({}),
   toughness: toughnessSchema.default({}),
   corruption: corruptionSchema.default({}),
+  
+  // --- INÍCIO DA CORREÇÃO ---
+  painThresholdBonus: z.number().default(0), // <-- ADICIONADO
+  // --- FIM DA CORREÇÃO ---
+
   money: moneySchema.default({}),
   experience: experienceSchema.default({}),
   weapons: z.array(weaponSchema).default([]),
