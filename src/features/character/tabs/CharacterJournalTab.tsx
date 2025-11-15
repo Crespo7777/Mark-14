@@ -111,7 +111,9 @@ export const CharacterJournalTab = () => {
               <CardTitle>{entry.title}</CardTitle>
             </CardHeader>
             <CardContent className="flex-1">
-              <JournalRenderer content={entry.content} className="line-clamp-4" />
+              {/* --- INÍCIO DA CORREÇÃO: Remover line-clamp --- */}
+              <JournalRenderer content={entry.content} />
+              {/* --- FIM DA CORREÇÃO --- */}
             </CardContent>
             <CardFooter className="flex justify-end items-center gap-2">
               <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
