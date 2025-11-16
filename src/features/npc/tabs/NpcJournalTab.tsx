@@ -55,7 +55,12 @@ export const NpcJournalTab = () => {
   });
 
   const onEntrySaved = () => {
+    // --- INÍCIO DA CORREÇÃO: Invalidar ambas as caches ---
+    // 1. Invalida a cache desta aba (para atualizar a lista aqui)
     queryClient.invalidateQueries({ queryKey: ["journal_entries", "npc", npc.id] });
+    // 2. Invalida a cache principal do diário (para atualizar o MasterView)
+    queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
+    // --- FIM DA CORREÇÃO ---
   };
 
   const handleDelete = async () => {
