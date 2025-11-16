@@ -24,14 +24,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
 
-// --- 1. ADICIONAR NOVA PROP 'buttonText' ---
 interface NpcAbilityRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   abilityName: string;
   attributeName: string;
   attributeValue: number;
-  buttonText?: string; // <-- ADICIONADO
+  buttonText?: string; 
 }
 
 export const NpcAbilityRollDialog = ({
@@ -40,7 +39,7 @@ export const NpcAbilityRollDialog = ({
   abilityName,
   attributeName,
   attributeValue,
-  buttonText = "Usar Habilidade", // <-- 2. VALOR PADRÃO ADICIONADO
+  buttonText = "Usar Habilidade", 
 }: NpcAbilityRollDialogProps) => {
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -75,15 +74,26 @@ export const NpcAbilityRollDialog = ({
       });
     }
 
+    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatAbilityTest(
       npc.name,
       abilityName,
       attributeName,
       result,
-      0, 
+      0, // NPCs não têm custo de corrupção
     );
+    
+    // Objeto de dados para o DISCORD
+    const discordRollData = {
+      rollType: "ability",
+      abilityName: abilityName,
+      attributeName: attributeName,
+      corruptionCost: 0,
+      result: result
+    };
 
     if (isHidden && isMaster) {
+      // (Mensagens para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: npc.table_id,
         user_id: user.id,
@@ -99,6 +109,7 @@ export const NpcAbilityRollDialog = ({
         recipient_id: masterId,
       });
     } else {
+      // (Mensagem pública para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: npc.table_id,
         user_id: user.id,
@@ -111,8 +122,8 @@ export const NpcAbilityRollDialog = ({
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: npc.table_id,
-          chatMessage: chatMessage,
-          userName: npc.name, // <-- Enviar o nome do NPC
+          rollData: discordRollData, // Envia o JSON
+          userName: npc.name, // Envia o nome do NPC
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
@@ -169,7 +180,6 @@ export const NpcAbilityRollDialog = ({
             disabled={loading}
           >
             {loading ? "Rolando..." : <Dices className="w-4 h-4 mr-2" />}
-            {/* --- 3. USAR A PROP 'buttonText' --- */}
             {buttonText}
           </Button>
         </DialogFooter>
