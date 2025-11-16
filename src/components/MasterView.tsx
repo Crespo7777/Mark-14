@@ -95,7 +95,7 @@ type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"] & {
   npc: { name: string } | null;
 };
 
-// --- 2. FUNÇÕES DE FETCH (para o useQuery) ---
+// --- FUNÇÕES DE FETCH (para o useQuery) ---
 const fetchCharacters = async (tableId: string) => {
   const { data, error } = await supabase
     .from("characters")
@@ -138,12 +138,13 @@ interface MasterViewProps {
 }
 
 export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
-  // --- 3. REMOVER useState, USAR useQuery e useQueryClient ---
   const { members, setMembers } = useTableContext();
   const { toast } = useToast();
   const queryClient = useQueryClient(); // O invalidador de cache
 
+  // <-- OTIMIZAÇÃO 1: Este estado agora controla o 'enabled' dos queries
   const [activeTab, setActiveTab] = useState("characters");
+  
   const [playerFilter, setPlayerFilter] = useState<string | null>(null);
   const [playerToRemove, setPlayerToRemove] = useState<any | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
@@ -153,24 +154,26 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   );
   const [duplicating, setDuplicating] = useState(false);
 
-  // --- 4. SUBSTITUIR loadData() e useState POR useQuery ---
+  // <-- OTIMIZAÇÃO 1: Adicionado 'enabled' a todos os useQuery ---
   const { data: characters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId],
     queryFn: () => fetchCharacters(tableId),
+    enabled: activeTab === 'characters', // <-- SÓ BUSCA SE A ABA ESTIVER ATIVA
   });
 
   const { data: npcs = [], isLoading: isLoadingNpcs } = useQuery({
     queryKey: ['npcs', tableId],
     queryFn: () => fetchNpcs(tableId),
+    enabled: activeTab === 'npcs', // <-- SÓ BUSCA SE A ABA ESTIVER ATIVA
   });
 
   const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
     queryKey: ['journal', tableId], // Chave principal para o diário da mesa
     queryFn: () => fetchJournalEntries(tableId),
+    enabled: activeTab === 'journal', // <-- SÓ BUSCA SE A ABA ESTIVER ATIVA
   });
   
-  // --- 5. ATUALIZAR O useEffect DO REALTIME ---
-  // Em vez de 'set...', vamos 'invalidar' o cache do React Query.
+  // --- ATUALIZAÇÃO DO REALTIME COM OTIMIZAÇÃO 2 ---
   useEffect(() => {
     // Função para recarregar membros (mantida)
     const loadMembers = async () => {
@@ -202,6 +205,55 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             setMembers(memberList);
         }
     };
+    
+    // <-- INÍCIO DA OTIMIZAÇÃO 2: Função auxiliar de Realtime ---
+    /**
+     * Atualiza o cache do React Query manualmente com base no payload do Supabase.
+     * Isso evita um refetch completo (invalidate) e torna a UI instantânea.
+     */
+    const handleRealtimeUpdate = (payload: any, queryKey: string) => {
+      // Tipagem 'genérica' para os itens (Character, Npc, JournalEntry)
+      type CacheItem = { id: string, [key: string]: any };
+
+      queryClient.setQueryData([queryKey, tableId], (oldData: CacheItem[] | undefined) => {
+        // Se o cache estiver vazio (ex: aba ainda não foi aberta), não fazemos nada.
+        // O 'enabled' (Otimização 1) fará a busca quando a aba for ativada.
+        if (!oldData) {
+          return oldData; 
+        }
+
+        // Evento de INSERÇÃO
+        if (payload.eventType === 'INSERT') {
+          console.log(`Realtime (Otimizado): Inserindo ${queryKey}`);
+          // Adiciona o novo item
+          // Precisamos buscar os dados completos da Relação (ex: player.display_name)
+          // A invalidação aqui é mais segura do que tentar construir o objeto complexo.
+          queryClient.invalidateQueries({ queryKey: [queryKey, tableId] });
+          return oldData; // Retorna os dados antigos por enquanto
+        }
+
+        // Evento de ATUALIZAÇÃO
+        if (payload.eventType === 'UPDATE') {
+          console.log(`Realtime (Otimizado): Atualizando ${queryKey}`);
+          // Mapeia os dados antigos e substitui apenas o item que mudou
+          return oldData.map((item: CacheItem) =>
+            item.id === payload.new.id ? { ...item, ...payload.new } : item
+            // Usamos "...item" para manter dados relacionais (como player.display_name)
+            // que não vêm no payload.new puro.
+          );
+        }
+
+        // Evento de EXCLUSÃO
+        if (payload.eventType === 'DELETE') {
+          console.log(`Realtime (Otimizado): Deletando ${queryKey}`);
+          // Filtra a lista, removendo o item que foi deletado
+          return oldData.filter((item: CacheItem) => item.id !== payload.old.id);
+        }
+
+        return oldData;
+      });
+    };
+    // <-- FIM DA OTIMIZAÇÃO 2 ---
   
     const channel = supabase
       .channel(`master-view:${tableId}`)
@@ -209,8 +261,9 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         "postgres_changes",
         { event: "*", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
         (payload) => {
-          console.log("Realtime: invalidando 'characters'");
-          queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
+          // <-- OTIMIZAÇÃO 2: Usar a nova função ---
+          handleRealtimeUpdate(payload, 'characters');
+          
           // Invalida a cache da ficha individual (se estiver aberta)
           if (payload.eventType !== 'INSERT' && payload.old?.id) {
             queryClient.invalidateQueries({ queryKey: ['character', payload.old.id] });
@@ -221,8 +274,9 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         "postgres_changes",
         { event: "*", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
         (payload) => {
-          console.log("Realtime: invalidando 'npcs'");
-          queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
+          // <-- OTIMIZAÇÃO 2: Usar a nova função ---
+          handleRealtimeUpdate(payload, 'npcs');
+
           if (payload.eventType !== 'INSERT' && payload.old?.id) {
             queryClient.invalidateQueries({ queryKey: ['npc', payload.old.id] });
           }
@@ -232,8 +286,10 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         "postgres_changes",
         { event: "*", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
         (payload) => {
-          console.log("Realtime: invalidando 'journal'");
+          // <-- OTIMIZAÇÃO 2: Usar a nova função ---
+          // Para o diário, a invalidação é mais segura por causa das relações
           queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
+          
           // Invalida caches específicos de diários de entidade (se estiverem abertos)
           if (payload.old?.character_id) {
             queryClient.invalidateQueries({ queryKey: ['journal_entries', 'character', payload.old.character_id] });
@@ -248,7 +304,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         { event: "*", schema: "public", table: "table_members", filter: `table_id=eq.${tableId}` },
         () => {
             console.log("Realtime: atualizando membros");
-            loadMembers(); // O 'setMembers' vem do TableContext, está correto
+            loadMembers();
         }
       )
       .subscribe();
@@ -256,13 +312,13 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tableId, queryClient, setMembers]); // Dependências corretas
+  }, [tableId, queryClient, setMembers]);
   // --- FIM DA ATUALIZAÇÃO DO REALTIME ---
 
 
-  // --- 6. ATUALIZAR FUNÇÕES DE AÇÃO (Create, Delete, Update) ---
+  // --- FUNÇÕES DE AÇÃO (Create, Delete, Update) ---
   
-  // Funções de invalidação
+  // Funções de invalidação (agora são usadas apenas após AÇÕES do usuário, não no realtime)
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
   const invalidateNpcs = () => queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
@@ -403,7 +459,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       toast({ title: "Erro ao compartilhar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Compartilhamento atualizado!" });
-      // O Realtime já vai tratar de invalidar, mas podemos forçar:
+      // Invalida o cache localmente para refletir a mudança
       if (itemType === 'characters') invalidateCharacters();
       if (itemType === 'npcs') invalidateNpcs();
       if (itemType === 'journal_entries') invalidateJournal();
@@ -426,7 +482,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       <Tabs
         defaultValue="characters"
         value={activeTab}
-        onValueChange={setActiveTab}
+        onValueChange={setActiveTab} // <-- OTIMIZAÇÃO 1: Controla o estado da aba
         className="w-full"
       >
         <TabsList className="grid w-full grid-cols-4">
@@ -443,7 +499,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               tableId={tableId}
               masterId={masterId}
               members={members}
-              onCharacterCreated={invalidateCharacters} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
+              onCharacterCreated={invalidateCharacters} 
             >
               <Button size="sm">
                 <Plus className="w-4 h-4 mr-2" />
@@ -461,6 +517,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               (char) => !playerFilter || char.player_id === playerFilter,
             ).length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
+                {/* <-- OTIMIZAÇÃO 1: Mensagem de aba vazia */}
                 Nenhum personagem criado ainda.
               </p>
             ) : (
@@ -550,7 +607,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
               <CreateNpcDialog 
                 tableId={tableId} 
-                onNpcCreated={invalidateNpcs} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
+                onNpcCreated={invalidateNpcs} 
               >
                 <Button size="sm">
                   <Plus className="w-4 h-4 mr-2" />
@@ -567,7 +624,8 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               </>
             ) : npcs.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
-                Nenhum NPC criado ainda
+                {/* <-- OTIMIZAÇÃO 1: Mensagem de aba vazia */}
+                Nenhum NPC criado ainda.
               </p>
             ) : (
               npcs.map((npc) => (
@@ -688,7 +746,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
               <JournalEntryDialog 
                 tableId={tableId} 
-                onEntrySaved={invalidateJournal} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
+                onEntrySaved={invalidateJournal} 
               >
                 <Button size="sm">
                   <Plus className="w-4 h-4 mr-2" />
@@ -706,6 +764,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               </>
             ) : journalEntries.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
+                {/* <-- OTIMIZAÇÃO 1: Mensagem de aba vazia */}
                 Nenhuma entrada no diário.
               </p>
             ) : (
@@ -767,7 +826,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                           <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
                             <JournalEntryDialog
                               tableId={tableId}
-                              onEntrySaved={invalidateJournal} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
+                              onEntrySaved={invalidateJournal} 
                               entry={entry}
                               isPlayerNote={!!entry.player_id}
                               characterId={entry.character_id || undefined}
