@@ -1,11 +1,13 @@
 // src/features/npc/NpcSheet.tsx
 
-import { useEffect, useRef, useState, useCallback } from "react"; // <-- Adiciona useCallback
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Database } from "@/integrations/supabase/types";
 // ######################################################
 // ### A CORREÇÃO ESTÁ AQUI ###
 // ######################################################
 import { useToast } from "@/hooks/use-toast";
+// --- 1. IMPORTAR O useQueryClient ---
+import { useQueryClient } from "@tanstack/react-query";
 // ######################################################
 // ### FIM DA CORREÇÃO ###
 // ######################################################
@@ -264,6 +266,8 @@ const NpcSheetInner = ({
 // Componente "Pai"
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const { toast } = useToast(); // Esta linha agora funciona
+  // --- 2. INICIAR O queryClient ---
+  const queryClient = useQueryClient();
 
   // (Lógica de merge de dados... permanece idêntica)
   const defaults = getDefaultNpcSheetData(initialNpc.name);
@@ -313,6 +317,16 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
     if (error) {
       throw new Error(error.message);
     }
+
+    // --- 3. INVALIDAR OS CACHES APÓS SALVAR ---
+    // Invalida a lista principal de NPCs
+    await queryClient.invalidateQueries({
+      queryKey: ['npcs', initialNpc.table_id]
+    });
+    // Invalida a cache desta ficha específica (se houver)
+    await queryClient.invalidateQueries({
+      queryKey: ['npc', initialNpc.id]
+    });
   };
 
   return (
