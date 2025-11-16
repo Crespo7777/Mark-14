@@ -126,28 +126,36 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const { toast } = useToast();
   const queryClient = useQueryClient(); // O invalidador de cache
   
+  // <-- INÍCIO DA OTIMIZAÇÃO 1 ---
+  const [activeTab, setActiveTab] = useState("characters"); // <-- ESTE ESTADO AGORA CONTROLA OS QUERIES
+  // <-- FIM DA OTIMIZAÇÃO 1 ---
+  
   const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(null);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [duplicating, setDuplicating] = useState(false);
 
   // --- 4. SUBSTITUIR loadData() e useState POR useQuery ---
+  
+  // <-- INÍCIO DA OTIMIZAÇÃO 1 ---
+  // Adicionamos a flag 'enabled' em todos os useQuery
   const { data: allCharacters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId], // Chave partilhada com o MasterView
     queryFn: () => fetchPlayerCharacters(tableId),
-    enabled: !!userId, // Só corre se o userId estiver carregado
+    enabled: !!userId && activeTab === 'characters', // <-- SÓ BUSCA SE A ABA ESTIVER ATIVA
   });
 
   const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
     queryKey: ['journal', tableId], // Chave partilhada com o MasterView
     queryFn: () => fetchPlayerJournal(tableId),
-    enabled: !!userId,
+    enabled: !!userId && activeTab === 'journal', // <-- SÓ BUSCA SE A ABA ESTIVER ATIVA
   });
 
   const { data: sharedNpcs = [], isLoading: isLoadingNpcs } = useQuery({
     queryKey: ['npcs', tableId], // Chave partilhada com o MasterView
     queryFn: () => fetchSharedNpcs(tableId),
-    enabled: !!userId,
+    enabled: !!userId && activeTab === 'npcs', // <-- SÓ BUSCA SE A ABA ESTIVER ATIVA
   });
+  // <-- FIM DA OTIMIZAÇÃO 1 ---
 
   // Filtra localmente as fichas que pertencem a este jogador
   const myCharacters = allCharacters.filter(c => c.player_id === userId);
@@ -283,7 +291,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         </p>
       </div>
 
-      <Tabs defaultValue="characters" className="w-full">
+      <Tabs 
+        defaultValue="characters" 
+        className="w-full"
+        value={activeTab}
+        onValueChange={setActiveTab} // <-- INÍCIO DA OTIMIZAÇÃO 1: Controla o estado da aba
+      >
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="characters">
             <UserSquare className="w-4 h-4 mr-2" />
@@ -320,8 +333,10 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
               </>
             ) : myCharacters.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
+                {/* <-- INÍCIO DA OTIMIZAÇÃO 1: Mensagem de aba vazia */}
                 Você ainda não criou nenhum personagem. Clique em "Nova Ficha"
                 para começar.
+                {/* <-- FIM DA OTIMIZAÇÃO 1 */}
               </p>
             ) : (
               myCharacters.map((char) => (
@@ -387,7 +402,9 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
               </>
             ) : sharedNpcs.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
+                {/* <-- INÍCIO DA OTIMIZAÇÃO 1: Mensagem de aba vazia */}
                 O Mestre ainda não compartilhou nenhum NPC.
+                {/* <-- FIM DA OTIMIZAÇÃO 1 */}
               </p>
             ) : (
               sharedNpcs.map((npc) => (
@@ -439,7 +456,9 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
               </>
             ) : journalEntries.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
+                {/* <-- INÍCIO DA OTIMIZAÇÃO 1: Mensagem de aba vazia */}
                 Nenhuma anotação pública ou privada.
+                {/* <-- FIM DA OTIMIZAÇÃO 1 */}
               </p>
             ) : (
               journalEntries.map((entry) => {
