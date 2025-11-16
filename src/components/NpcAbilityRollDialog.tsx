@@ -106,6 +106,15 @@ export const NpcAbilityRollDialog = ({
         message_type: "roll",
         recipient_id: null,
       });
+
+      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
+      supabase.functions.invoke('discord-roll-handler', {
+        body: {
+          tableId: npc.table_id,
+          chatMessage: chatMessage,
+        }
+      }).catch(console.error);
+      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
 
     setLoading(false);
