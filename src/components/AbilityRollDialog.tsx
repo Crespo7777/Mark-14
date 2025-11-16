@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dices, ShieldAlert } from "lucide-react";
-// --- 1. IMPORTAR O HOOK DA FICHA ---
 import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -49,7 +48,6 @@ export const AbilityRollDialog = ({
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  // --- 2. OBTER O 'form' E O 'programmaticSave' ---
   const { form, programmaticSave, isSaving } = useCharacterSheet();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
@@ -63,21 +61,15 @@ export const AbilityRollDialog = ({
       return;
     }
 
-    // --- 3. LÓGICA DE SALVAMENTO IMEDIATO ---
     if (corruptionCost > 0) {
       const currentCorruption = form.getValues("corruption.temporary");
       form.setValue(
         "corruption.temporary",
         currentCorruption + corruptionCost,
-        { shouldDirty: true }, // Marca como "sujo"
+        { shouldDirty: true },
       );
-      
-      // Salva programaticamente
-      // Não precisamos de 'await' se não quisermos bloquear a UI
-      // Mas vamos adicionar para garantir que salvou antes de rolar
       await programmaticSave(); 
     }
-    // --- FIM DA LÓGICA DE SALVAMENTO ---
 
     const result = rollAttributeTest({
       attributeValue,
@@ -101,6 +93,7 @@ export const AbilityRollDialog = ({
       });
     }
 
+    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatAbilityTest(
       characterName,
       abilityName,
@@ -109,7 +102,17 @@ export const AbilityRollDialog = ({
       corruptionCost,
     );
 
+    // Objeto de dados para o DISCORD
+    const discordRollData = {
+      rollType: "ability",
+      abilityName: abilityName,
+      attributeName: attributeName,
+      corruptionCost: corruptionCost,
+      result: result
+    };
+
     if (isHidden && isMaster) {
+      // (Mensagens para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -125,6 +128,7 @@ export const AbilityRollDialog = ({
         recipient_id: masterId,
       });
     } else {
+      // (Mensagem pública para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -137,8 +141,8 @@ export const AbilityRollDialog = ({
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          chatMessage: chatMessage,
-          userName: characterName, // <-- Enviar o nome
+          rollData: discordRollData, // Envia o JSON
+          userName: characterName, 
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
@@ -197,7 +201,6 @@ export const AbilityRollDialog = ({
             type="button"
             className="w-full"
             onClick={handleRoll}
-            // 4. Desabilitar se a rolagem local ESTIVER acontecendo OU a ficha ESTIVER salvando
             disabled={loading || isSaving}
           >
             {loading ? "Rolando..." : (isSaving ? "Salvando..." : <><Dices className="w-4 h-4 mr-2" /> Usar Habilidade</>)}
