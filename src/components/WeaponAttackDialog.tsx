@@ -19,7 +19,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dices, Crosshair } from "lucide-react"; 
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
-// --- 1. IMPORTAR O HOOK DA FICHA ---
 import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
 
 interface WeaponAttackDialogProps {
@@ -53,12 +52,10 @@ export const WeaponAttackDialog = ({
     tableId: contextTableId,
   } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
-
-  // --- 2. OBTER O 'form' E O 'programmaticSave' ---
   const { form, programmaticSave, isSaving } = useCharacterSheet();
 
   const handleRoll = async () => {
-    // --- 3. LÓGICA DE MUNIÇÃO (INÍCIO) ---
+    // (Lógica de gastar munição... permanece igual)
     if (projectileId && form) {
       const projectiles = form.getValues("projectiles");
       const projectileIndex = projectiles.findIndex(
@@ -98,12 +95,9 @@ export const WeaponAttackDialog = ({
           </div>
         ),
       });
-
-      // 4. SALVAR A MUDANÇA DE MUNIÇÃO
       await programmaticSave();
-
     }
-    // --- LÓGICA DE MUNIÇÃO (FIM) ---
+    // --- Fim da lógica de munição ---
 
     setLoading(true);
 
@@ -140,6 +134,7 @@ export const WeaponAttackDialog = ({
       });
     }
 
+    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatAttackRoll(
       characterName,
       weaponName,
@@ -147,8 +142,16 @@ export const WeaponAttackDialog = ({
       result,
     );
 
-    // ... (lógica de envio de chat) ...
+    // Objeto de dados para o DISCORD
+    const discordRollData = {
+      rollType: "attack",
+      weaponName: weaponName,
+      attributeName: attributeName,
+      result: result
+    };
+
     if (isHidden && isMaster) {
+      // (Mensagens para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -164,6 +167,7 @@ export const WeaponAttackDialog = ({
         recipient_id: masterId,
       });
     } else {
+      // (Mensagem pública para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -176,8 +180,8 @@ export const WeaponAttackDialog = ({
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          chatMessage: chatMessage,
-          userName: characterName, // <-- Enviar o nome
+          rollData: discordRollData, // Envia o JSON
+          userName: characterName, 
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
@@ -238,7 +242,6 @@ export const WeaponAttackDialog = ({
             type="button"
             className="w-full"
             onClick={handleRoll}
-            // 5. Desabilitar se a rolagem local ESTIVER acontecendo OU a ficha ESTIVER salvando
             disabled={loading || isSaving}
           >
             {loading ? "Rolando..." : (isSaving ? "Salvando..." : <><Dices className="w-4 h-4 mr-2" /> Rolar Ataque</>)}
