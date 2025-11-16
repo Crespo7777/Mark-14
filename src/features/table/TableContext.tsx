@@ -1,6 +1,6 @@
 // src/features/table/TableContext.tsx
 
-import { createContext, useContext, ReactNode } from "react";
+import { createContext, useContext, ReactNode, SetStateAction, Dispatch } from "react";
 
 // --- 1. NOVO TIPO: Membro da Mesa ---
 // Uma interface simplificada para nossos propósitos
@@ -16,9 +16,12 @@ interface TableContextType {
   masterId: string;
   userId: string;
   isMaster: boolean;
-  // --- 2. ADICIONAR MEMBROS AO CONTEXTO ---
   members: TableMember[]; 
-  // --- FIM DA ADIÇÃO ---
+  
+  // --- INÍCIO DA CORREÇÃO ---
+  // Adicionamos a função de 'set' ao tipo do contexto
+  setMembers: Dispatch<SetStateAction<TableMember[]>>;
+  // --- FIM DA CORREÇÃO ---
 }
 
 const TableContext = createContext<TableContextType | null>(null);
