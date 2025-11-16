@@ -1,6 +1,14 @@
 // src/features/character/CharacterSheetContext.tsx
 
-import { createContext, useContext, ReactNode, useState } from "react";
+import {
+  createContext,
+  useContext,
+  ReactNode,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+} from "react";
 import { useForm, UseFormReturn } from "react-hook-form";
 import { CharacterSheetData, characterSheetSchema } from "./character.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,14 +17,13 @@ import { useToast } from "@/hooks/use-toast";
 
 type Character = Database["public"]["Tables"]["characters"]["Row"];
 
-// 1. ATUALIZAMOS A INTERFACE DO CONTEXTO
 export interface CharacterSheetContextType {
   character: Character;
   form: UseFormReturn<CharacterSheetData>;
-  isDirty: boolean; // <-- Gerenciado pelo react-hook-form
-  isSaving: boolean; // <-- Nosso estado de "salvando..."
-  saveSheet: () => Promise<void>; // <-- Para o botão "Salvar" (valida o form)
-  programmaticSave: () => Promise<void>; // <-- Para salvar em diálogos (não valida)
+  isDirty: boolean; 
+  isSaving: boolean; 
+  saveSheet: () => Promise<void>; 
+  programmaticSave: () => Promise<void>; 
 }
 
 export const CharacterSheetContext =
@@ -31,38 +38,44 @@ interface CharacterSheetProviderProps {
 export const CharacterSheetProvider = ({
   children,
   character,
-  onSave, // Recebemos a função que realmente fala com o Supabase
+  onSave,
 }: CharacterSheetProviderProps) => {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // --- 1. Refs para evitar 'stale state' no callback do watch ---
+  // O Ref guarda o valor ATUAL do 'isSaving'
+  const isSavingRef = useRef(isSaving);
+  useEffect(() => {
+    isSavingRef.current = isSaving;
+  }, [isSaving]);
 
   const form = useForm<CharacterSheetData>({
     resolver: zodResolver(characterSheetSchema),
     defaultValues: character.data as CharacterSheetData,
   });
 
-  // 2. Extrair o 'isDirty' (sabe se há mudanças)
   const { isDirty } = form.formState;
 
-  // 3. Callback de sucesso (usado por ambas as funções de salvar)
-  const handleSaveSuccess = (data: CharacterSheetData) => {
+  // --- 2. Callbacks de salvamento (sem dependência de 'isSaving') ---
+  const handleSaveSuccess = useCallback((data: CharacterSheetData) => {
     form.reset(data); // "Limpa" o formulário (isDirty = false)
     toast({ title: "Ficha Salva!" });
     setIsSaving(false);
-  };
+  }, [form, toast]);
 
-  // 4. Callback de erro de validação (usado apenas pelo saveSheet)
-  const handleSaveInvalid = (errors: any) => {
+  const handleSaveInvalid = useCallback((errors: any) => {
     console.error("Erros de validação:", errors);
     toast({
       title: "Erro de Validação",
       description: "Verifique os campos em vermelho.",
       variant: "destructive",
     });
-  };
+    setIsSaving(false); 
+  }, [toast]);
 
-  // 5. Callback de erro de submit
-  const handleSaveError = (error: any) => {
+  const handleSaveError = useCallback((error: any) => {
     console.error("Falha no submit:", error);
     toast({
       title: "Erro ao Salvar",
@@ -70,23 +83,11 @@ export const CharacterSheetProvider = ({
       variant: "destructive",
     });
     setIsSaving(false);
-  };
+  }, [toast]);
 
-  // 6. FUNÇÃO 1: Salvar com Validação (para botões "Salvar")
-  // Esta função usa o handleSubmit do react-hook-form
-  const saveSheet = form.handleSubmit(async (data) => {
-    setIsSaving(true);
-    try {
-      await onSave(data);
-      handleSaveSuccess(data);
-    } catch (error) {
-      handleSaveError(error);
-    }
-  }, handleSaveInvalid);
-
-  // 7. FUNÇÃO 2: Salvar Programaticamente (para diálogos)
-  // Esta função pega os dados atuais (sem validar) e salva.
-  const programmaticSave = async () => {
+  // Save Programático (Auto-save ou diálogos)
+  const programmaticSave = useCallback(async () => {
+    // Não verifica 'isSaving' aqui, o 'caller' (timer) é que verifica
     setIsSaving(true);
     try {
       const currentData = form.getValues();
@@ -95,7 +96,58 @@ export const CharacterSheetProvider = ({
     } catch (error) {
       handleSaveError(error);
     }
-  };
+  }, [form, onSave, handleSaveSuccess, handleSaveError]);
+  
+  // Ref para a função (para o timer ter sempre a função mais recente)
+  const programmaticSaveRef = useRef(programmaticSave);
+  useEffect(() => {
+    programmaticSaveRef.current = programmaticSave;
+  }, [programmaticSave]);
+
+  // Save Manual (Botão "Salvar")
+  const saveSheet = useCallback(
+    () => form.handleSubmit(async (data) => {
+      // Usa o Ref para a verificação
+      if (isSavingRef.current) return; 
+      setIsSaving(true);
+      try {
+        await onSave(data);
+        handleSaveSuccess(data);
+      } catch (error) {
+        handleSaveError(error);
+      }
+    }, handleSaveInvalid)(),
+    [form, onSave, handleSaveSuccess, handleSaveError, handleSaveInvalid]
+  );
+  
+  // --- 3. Efeito de Auto-Save (Corrigido) ---
+  useEffect(() => {
+    const subscription = form.watch((value, { name, type }) => {
+      // Apenas acionar se for uma mudança de utilizador (ex: 'onChange')
+      if (!type) return;
+
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+
+      debounceTimer.current = setTimeout(() => {
+        // Usa os Refs para aceder aos valores ATUAIS
+        if (form.formState.isDirty && !isSavingRef.current) {
+          console.log("Auto-saving character sheet...");
+          programmaticSaveRef.current(); // Chama a função pelo ref
+        }
+      }, 2000); // 2 segundos
+    });
+
+    return () => {
+      subscription.unsubscribe();
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  // --- 4. Dependência estável (só corre 1 vez) ---
+  }, [form]); 
+
 
   return (
     <CharacterSheetContext.Provider
@@ -104,8 +156,8 @@ export const CharacterSheetProvider = ({
         form,
         isDirty,
         isSaving,
-        saveSheet, // Exporta o salvamento com validação
-        programmaticSave, // Exporta o salvamento rápido
+        saveSheet,
+        programmaticSave, // Mantemos este aqui para o 'WeaponAttackDialog', etc.
       }}
     >
       {children}
