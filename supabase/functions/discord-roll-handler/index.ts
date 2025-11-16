@@ -1,25 +1,38 @@
 // supabase/functions/discord-roll-handler/index.ts
-// (Versão "unificada" para o editor online do Supabase - v2)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.44.4";
 
-// 1. O código de _shared/cors.ts foi colado aqui
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 /**
- * Função para limpar o HTML da mensagem de chat e convertê-lo em Markdown
- * básico para o Discord.
+ * Interface para os dados estruturados da rolagem /r
  */
-function formatHtmlToDiscord(html: string): string {
+interface ManualRollData {
+  command: string; // Ex: "1d20+5"
+  result: {
+    rolls: number[]; // Ex: [15]
+    modifier: number; // Ex: 5
+    total: number; // Ex: 20
+  };
+  userName: string; // Ex: "Kaed"
+  rollType: "manual";
+}
+
+/**
+ * Função de fallback para limpar o HTML das rolagens antigas (Testes de Atributo, etc.)
+ * Esta é a tua função original, mas com a RegEx de limpeza corrigida.
+ */
+function formatHtmlFallback(html: string): string {
   let text = html;
 
   // Quebras de linha
+  text = text.replace(/<br\s*\/?>/gi, '\n');
   text = text.replace(/\n/g, '\n');
 
-  // Nomes e Títulos (Ex: "Gandalf ataca com...")
+  // Nomes e Títulos
   text = text.replace(
     /^(.*?) (fez um teste de|ataca com|rola o dano de|rola|usou) <span.*?>(.*?)<\/span>/m,
     "**$1** $2 **$3**"
@@ -44,11 +57,10 @@ function formatHtmlToDiscord(html: string): string {
   text = text.replace(/<span class="text-purple-400">\((.*?)\)<\/span>/g, "*($1)*");
 
   // Alvo (Ex: "(Alvo: 10 [12-2])")
-  // Simplifica, removendo o cálculo interno
   text = text.replace(/\(Alvo: (\d+).*?\)/g, "(Alvo: $1)");
 
-  // Limpar quaisquer tags HTML restantes
-  text = text.replace(/<[^>]*>/g, '');
+  // CORREÇÃO: Limpar tags HTML restantes de forma NÃO-GULOSA (adiciona o '?')
+  text = text.replace(/<[^>]*?>/g, '');
 
   return text.trim();
 }
@@ -62,23 +74,23 @@ Deno.serve(async (req: Request) => {
 
   try {
     // 1. Validar a requisição
-    const { tableId, chatMessage } = await req.json();
-    if (!tableId || !chatMessage) {
-      throw new Error("Faltando tableId ou chatMessage");
+    // O body pode ter 'rollData' (novo) ou 'chatMessage' (antigo)
+    const body = await req.json();
+    const { tableId, rollData, chatMessage, userName } = body;
+
+    if (!tableId) {
+      throw new Error("Faltando tableId");
+    }
+    
+    if (!rollData && !chatMessage) {
+      throw new Error("Faltando rollData ou chatMessage");
     }
 
     // 2. Criar um cliente Supabase com privilégios de SERVIÇO (ignora RLS)
-    // ###################################
-    // ### INÍCIO DA CORREÇÃO ###
-    // ###################################
-    // Usar os novos nomes de secrets
     const supabaseAdmin = createClient(
       Deno.env.get("PROJECT_URL")!,
       Deno.env.get("PROJECT_SERVICE_ROLE_KEY")!,
     );
-    // ###################################
-    // ### FIM DA CORREÇÃO ###
-    // ###################################
 
     // 3. Buscar o Webhook URL da tabela
     const { data: tableData, error: tableError } = await supabaseAdmin
@@ -99,15 +111,52 @@ Deno.serve(async (req: Request) => {
       });
     }
     
-    // 5. Formatar a mensagem HTML para Markdown
-    const discordContent = formatHtmlToDiscord(chatMessage);
+    // --- 5. LÓGICA DE CRIAÇÃO DO PAYLOAD ---
     
-    // 6. Preparar o payload para o Discord
-    const payload = {
-      // 'username': "Symbaroum VTT", // Opcional: define o nome do "bot"
-      // 'avatar_url': "https://.../meu-icone.png", // Opcional
-      content: discordContent,
-    };
+    let payload = {};
+
+    // CASO A: Temos dados estruturados (do /r no ChatPanel)
+    if (rollData && rollData.rollType === "manual") {
+      const data = rollData as ManualRollData;
+      const { command, result, userName: rollUserName } = data;
+      
+      // Formata a descrição da rolagem
+      const rollsStr = `[${result.rolls.join(", ")}]`;
+      const modStr = result.modifier > 0 ? ` + ${result.modifier}` : (result.modifier < 0 ? ` - ${Math.abs(result.modifier)}` : "");
+      const description = `${rollsStr}${modStr} = **${result.total}**`;
+      
+      payload = {
+        username: rollUserName || "Symbaroum VTT",
+        // avatar_url: "URL_DO_ICONE_AQUI",
+        embeds: [{
+          author: {
+            name: rollUserName || "Rolagem"
+          },
+          title: `Rolou ${command}`,
+          description: description,
+          color: 14981709, // Um tom de "accent" (âmbar)
+          footer: {
+            text: "Symbaroum VTT"
+          }
+        }]
+      };
+      
+    } 
+    // CASO B: Recebemos HTML (das outras rolagens de diálogo)
+    else if (chatMessage) {
+      const formattedContent = formatHtmlFallback(chatMessage as string);
+      payload = {
+        username: userName || "Symbaroum VTT", // Usa o userName se foi passado
+        // avatar_url: "URL_DO_ICONE_AQUI",
+        content: formattedContent,
+      };
+    } 
+    // CASO C: Erro
+    else {
+      throw new Error("Payload inválido");
+    }
+    
+    // --- FIM DA LÓGICA DO PAYLOAD ---
     
     // 7. Enviar para o Discord
     const discordResponse = await fetch(webhookUrl, {
@@ -117,11 +166,10 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!discordResponse.ok) {
-      // Se o Discord falhar (ex: URL inválido), loga o erro mas não falha para o usuário
       console.error("Erro ao enviar para o Discord:", await discordResponse.text());
       return new Response(JSON.stringify({ error: "Falha ao enviar para o Discord." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500, // Indica um erro no servidor
+        status: 500,
       });
     }
 
