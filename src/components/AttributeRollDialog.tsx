@@ -110,6 +110,7 @@ export const AttributeRollDialog = ({
         body: {
           tableId: contextTableId,
           chatMessage: chatMessage,
+          userName: characterName, // <-- Enviar o nome
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
