@@ -2,6 +2,8 @@
 
 import { useEffect, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
+// --- 1. IMPORTAR useQuery E useQueryClient ---
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -78,227 +80,116 @@ type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"] & {
   npc: { name: string } | null;
 };
 
+// --- 2. FUNÇÕES DE FETCH (para o useQuery) ---
+// RLS garante que o jogador só veja o que pode
+const fetchPlayerCharacters = async (tableId: string) => {
+  const { data, error } = await supabase
+    .from("characters")
+    .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
+    .eq("table_id", tableId);
+  if (error) throw error;
+  return data as MyCharacter[];
+};
+
+const fetchPlayerJournal = async (tableId: string) => {
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select(
+      `
+      *,
+      shared_with_players,
+      player:profiles!journal_entries_player_id_fkey(display_name),
+      character:characters!journal_entries_character_id_fkey(name),
+      npc:npcs!journal_entries_npc_id_fkey(name)
+    `,
+    )
+    .eq("table_id", tableId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as JournalEntry[];
+};
+
+const fetchSharedNpcs = async (tableId: string) => {
+  const { data, error } = await supabase
+    .from("npcs")
+    .select("*, shared_with_players")
+    .eq("table_id", tableId)
+    .order("name", { ascending: true });
+  if (error) throw error;
+  return data as Npc[];
+};
+
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
-  const [myCharacters, setMyCharacters] = useState<MyCharacter[]>([]);
+  // --- 3. REMOVER useState, USAR useQuery e useQueryClient ---
   const { userId } = useTableContext();
   const { toast } = useToast();
+  const queryClient = useQueryClient(); // O invalidador de cache
+  
   const [characterToDelete, setCharacterToDelete] = useState<MyCharacter | null>(null);
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
-  const [sharedNpcs, setSharedNpcs] = useState<Npc[]>([]);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
   const [duplicating, setDuplicating] = useState(false);
 
-  // ######################################################
-  // ### INÍCIO DA OTIMIZAÇÃO DE REALTIME ###
-  // ######################################################
+  // --- 4. SUBSTITUIR loadData() e useState POR useQuery ---
+  const { data: allCharacters = [], isLoading: isLoadingChars } = useQuery({
+    queryKey: ['characters', tableId], // Chave partilhada com o MasterView
+    queryFn: () => fetchPlayerCharacters(tableId),
+    enabled: !!userId, // Só corre se o userId estiver carregado
+  });
 
-  // A função loadData() permanece a mesma, para a carga inicial
-  const loadData = async () => {
-    if (!userId) return;
+  const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
+    queryKey: ['journal', tableId], // Chave partilhada com o MasterView
+    queryFn: () => fetchPlayerJournal(tableId),
+    enabled: !!userId,
+  });
 
-    try {
-      // (As RLS do Supabase já filtram automaticamente o que o jogador pode ver)
-      const [charsRes, journalRes, npcsRes] = await Promise.all([
-        supabase
-          .from("characters")
-          .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-          .eq("table_id", tableId),
+  const { data: sharedNpcs = [], isLoading: isLoadingNpcs } = useQuery({
+    queryKey: ['npcs', tableId], // Chave partilhada com o MasterView
+    queryFn: () => fetchSharedNpcs(tableId),
+    enabled: !!userId,
+  });
 
-        supabase
-          .from("journal_entries")
-          .select(
-            `
-            *,
-            shared_with_players,
-            player:profiles!journal_entries_player_id_fkey(display_name),
-            character:characters!journal_entries_character_id_fkey(name),
-            npc:npcs!journal_entries_npc_id_fkey(name)
-          `,
-          )
-          .eq("table_id", tableId)
-          .order("created_at", { ascending: false }),
+  // Filtra localmente as fichas que pertencem a este jogador
+  const myCharacters = allCharacters.filter(c => c.player_id === userId);
 
-        supabase
-          .from("npcs")
-          .select("*, shared_with_players")
-          .eq("table_id", tableId)
-          .order("name", { ascending: true }),
-      ]);
-
-      if (charsRes.error) throw charsRes.error;
-      const allChars = (charsRes.data as any) || [];
-      // Filtramos localmente apenas as fichas que pertencem a este jogador
-      setMyCharacters(allChars.filter((c: MyCharacter) => c.player_id === userId));
-
-      if (journalRes.error) throw journalRes.error;
-      setJournalEntries((journalRes.data as any) || []);
-
-      if (npcsRes.error) throw npcsRes.error;
-      setSharedNpcs(npcsRes.data || []);
-
-    } catch (error: any) {
-      console.error("Erro ao carregar dados do jogador:", error.message);
-      toast({
-        title: "Erro ao carregar dados",
-        description: "Houve um problema ao buscar seus dados.",
-        variant: "destructive",
-      });
-      setMyCharacters([]);
-      setJournalEntries([]);
-      setSharedNpcs([]);
-    }
-  };
-
-
+  // --- 5. ATUALIZAR O useEffect DO REALTIME ---
   useEffect(() => {
-    if (userId) {
-      // 1. Carga inicial dos dados
-      loadData();
-    }
+    if (!userId) return; // Não subscrever sem userId
 
-    // 2. Inscrição no canal de Realtime
     const channel = supabase
-      .channel(`player-view:${tableId}:${userId}`) // Canal específico do jogador
-
-      // --- CHARACTERS ---
-      // (Aqui a lógica é um pouco diferente, pois só nos importamos com NOSSAS fichas)
+      .channel(`player-view:${tableId}:${userId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-          // Verifica se a nova ficha é minha
-          if (payload.new.player_id === userId) {
-            console.log("Realtime: Minha nova ficha inserida");
-            // Buscamos a ficha para pegar o join de 'display_name'
-            const { data: newChar } = await supabase
-              .from("characters")
-              .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-              .eq("id", payload.new.id)
-              .single();
-            if (newChar) {
-              setMyCharacters((prev) => [...prev, newChar as any]);
-            }
+        { event: "*", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
+        (payload) => {
+          console.log("Realtime (Player): invalidando 'characters'");
+          queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
+          if (payload.eventType !== 'INSERT' && payload.old?.id) {
+            queryClient.invalidateQueries({ queryKey: ['character', payload.old.id] });
           }
         }
       )
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-          // Verifica se a ficha atualizada é minha
-          if (payload.new.player_id === userId) {
-            console.log("Realtime: Minha ficha atualizada");
-            const { data: updatedChar } = await supabase
-              .from("characters")
-              .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-              .eq("id", payload.new.id)
-              .single();
-            if (updatedChar) {
-              setMyCharacters((prev) =>
-                prev.map((c) => (c.id === updatedChar.id ? (updatedChar as any) : c))
-              );
-            }
-          } else {
-             // A ficha pode ter sido minha e foi atribuída a outro.
-             setMyCharacters((prev) => prev.filter((c) => c.id !== payload.new.id));
+        { event: "*", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
+        (payload) => {
+          console.log("Realtime (Player): invalidando 'npcs'");
+          queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
+          if (payload.eventType !== 'INSERT' && payload.old?.id) {
+            queryClient.invalidateQueries({ queryKey: ['npc', payload.old.id] });
           }
         }
       )
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
+        { event: "*", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
         (payload) => {
-          console.log("Realtime: Ficha deletada");
-          // Remove da lista se for minha
-          setMyCharacters((prev) => prev.filter((c) => c.id !== payload.old.id));
-        }
-      )
-
-      // --- NPCS ---
-      // (A RLS do Supabase já filtra. Só receberemos eventos de NPCs compartilhados)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: Novo NPC compartilhado");
-          setSharedNpcs((prev) => [...prev, payload.new as Npc]);
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          // Se o NPC foi atualizado para não ser mais compartilhado, a RLS pode não enviar o evento.
-          // Mas se ele for atualizado E continuar compartilhado, atualizamos.
-          // Se ele deixar de ser compartilhado, a RLS *pode* enviar um 'DELETE' lógico (ou nada).
-          // A maneira mais segura é verificar se ele ainda é visível.
-          if (payload.new.is_shared || (payload.new.shared_with_players || []).includes(userId!)) {
-            console.log("Realtime: NPC compartilhado atualizado");
-            setSharedNpcs((prev) =>
-              prev.map((n) => (n.id === payload.new.id ? (payload.new as Npc) : n))
-            );
-          } else {
-            // Deixou de ser compartilhado, removemos da lista
-            console.log("Realtime: NPC deixou de ser compartilhado");
-            setSharedNpcs((prev) => prev.filter((n) => n.id !== payload.new.id));
+          console.log("Realtime (Player): invalidando 'journal'");
+          queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
+          // Invalida caches específicos
+          if (payload.old?.character_id) {
+            queryClient.invalidateQueries({ queryKey: ['journal_entries', 'character', payload.old.character_id] });
           }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: NPC deletado");
-          setSharedNpcs((prev) => prev.filter((n) => n.id !== payload.old.id));
-        }
-      )
-
-      // --- JOURNAL ENTRIES ---
-      // (A RLS também filtra aqui)
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-          console.log("Realtime: Nova entrada no diário (visível para mim)");
-          // Buscamos a entrada para pegar os joins
-          const { data: newEntry } = await supabase
-            .from("journal_entries")
-            .select("*, shared_with_players, player:profiles!journal_entries_player_id_fkey(display_name), character:characters!journal_entries_character_id_fkey(name), npc:npcs!journal_entries_npc_id_fkey(name)")
-            .eq("id", payload.new.id)
-            .single();
-          if (newEntry) {
-            setJournalEntries((prev) => [newEntry as any, ...prev]);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-            console.log("Realtime: Entrada de diário atualizada (visível para mim)");
-            const { data: updatedEntry } = await supabase
-            .from("journal_entries")
-            .select("*, shared_with_players, player:profiles!journal_entries_player_id_fkey(display_name), character:characters!journal_entries_character_id_fkey(name), npc:npcs!journal_entries_npc_id_fkey(name)")
-            .eq("id", payload.new.id)
-            .single();
-          
-          if (updatedEntry) {
-            setJournalEntries((prev) =>
-              prev.map((j) => (j.id === updatedEntry.id ? (updatedEntry as any) : j))
-            );
-          } else {
-            // A entrada pode ter deixado de ser visível (ex: mestre removeu o share)
-            setJournalEntries((prev) => prev.filter((j) => j.id !== payload.new.id));
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: Entrada de diário deletada");
-          setJournalEntries((prev) => prev.filter((j) => j.id !== payload.old.id));
         }
       )
       .subscribe();
@@ -306,52 +197,48 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tableId, userId]); // Depende do userId para os filtros
+  }, [tableId, userId, queryClient]); // Dependências corretas
+  // --- FIM DA ATUALIZAÇÃO DO REALTIME ---
 
-  // ######################################################
-  // ### FIM DA OTIMIZAÇÃO DE REALTIME ###
-  // ######################################################
-
+  // --- 6. ATUALIZAR FUNÇÕES DE AÇÃO (Create, Delete, Update) ---
+  
+  // Funções de invalidação
+  const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
+  const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
-
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
-
-    const { error } = await supabase
-      .from("characters")
-      .delete()
-      .eq("id", characterToDelete.id);
+    const { error } = await supabase.from("characters").delete().eq("id", characterToDelete.id);
     if (error) {
       toast({ title: "Erro ao excluir ficha", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Ficha excluída!", description: `A ficha ${characterToDelete.name} foi removida.` });
-      // loadData(); // Não é mais necessário
+      invalidateCharacters(); // <-- Invalidar cache
+      invalidateJournal(); // Entradas de diário podem ter sido afetadas
     }
     setCharacterToDelete(null);
   };
 
   const handleDeleteJournalEntry = async () => {
     if (!entryToDelete) return;
-
-    const { error } = await supabase
-      .from("journal_entries")
-      .delete()
-      .eq("id", entryToDelete.id);
-
+    const { error } = await supabase.from("journal_entries").delete().eq("id", entryToDelete.id);
     if (error) {
       toast({ title: "Erro ao excluir anotação", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Anotação excluída" });
-      setEntryToDelete(null);
-      // loadData(); // Não é mais necessário
+      invalidateJournal(); // <-- Invalidar cache
     }
+    setEntryToDelete(null);
   };
 
   const handleDuplicateCharacter = async (charToDuplicate: MyCharacter) => {
-    if (!userId) return;
     setDuplicating(true);
-
+    if (!userId) {
+      setDuplicating(false);
+      return;
+    };
+    
     const newName = `Cópia de ${charToDuplicate.name}`;
 
     const { data: fullCharData, error: fetchError } = await supabase
@@ -382,7 +269,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
       toast({ title: "Erro ao duplicar Ficha", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Ficha Duplicada!", description: `${newName} foi criada.` });
-      // loadData(); // Não é mais necessário
+      invalidateCharacters(); // <-- Invalidar cache
     }
     setDuplicating(false);
   };
@@ -417,7 +304,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
             <h3 className="text-xl font-semibold">Minhas Fichas</h3>
             <CreatePlayerCharacterDialog
               tableId={tableId}
-              onCharacterCreated={() => {}} // Realtime cuida
+              onCharacterCreated={invalidateCharacters} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
             >
               <Button size="sm">
                 <Plus className="w-4 h-4 mr-2" />
@@ -426,7 +313,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
             </CreatePlayerCharacterDialog>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {myCharacters.length === 0 ? (
+            {isLoadingChars ? (
+              <>
+                <SheetLoadingFallback />
+                <SheetLoadingFallback />
+              </>
+            ) : myCharacters.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
                 Você ainda não criou nenhum personagem. Clique em "Nova Ficha"
                 para começar.
@@ -488,7 +380,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
             <h3 className="text-xl font-semibold">NPCs Compartilhados</h3>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {sharedNpcs.length === 0 ? (
+            {isLoadingNpcs ? (
+              <>
+                <NpcLoadingFallback />
+                <NpcLoadingFallback />
+              </>
+            ) : sharedNpcs.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
                 O Mestre ainda não compartilhou nenhum NPC.
               </p>
@@ -524,7 +421,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
             <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
               <JournalEntryDialog
                 tableId={tableId}
-                onEntrySaved={() => {}} // Realtime cuida
+                onEntrySaved={invalidateJournal} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
                 isPlayerNote={true}
               >
                 <Button size="sm">
@@ -535,7 +432,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
             </Suspense>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {journalEntries.length === 0 ? (
+            {isLoadingJournal ? (
+              <>
+                <SheetLoadingFallback />
+                <SheetLoadingFallback />
+              </>
+            ) : journalEntries.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
                 Nenhuma anotação pública ou privada.
               </p>
@@ -544,31 +446,27 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                 let description = "Anotação Pública do Mestre";
                 let isMyEntry = false;
                 
-                // --- INÍCIO DA CORREÇÃO 1 ---
-                const isSharedWithMe = (entry.shared_with_players || []).includes(userId!);
-                const canEditEntry = isMyEntry || isSharedWithMe;
-                // --- FIM DA CORREÇÃO 1 ---
-
+                if (!userId) return null; // Guarda de segurança
+                
+                const isSharedWithMe = (entry.shared_with_players || []).includes(userId);
+                
                 if (entry.player_id === userId) {
                   description = "Sua Anotação Pessoal";
                   isMyEntry = true;
                 } else if (entry.character) {
-                    // Verifica se o personagem da nota é um dos meus
                     if(myCharacters.some(c => c.id === entry.character_id)) {
                         description = `Diário de: ${entry.character.name}`;
                         isMyEntry = true;
                     } else {
-                        // É diário de outro personagem, não mostrar
                         return null; 
                     }
-                // --- INÍCIO DA CORREÇÃO 2 ---
                 } else if (isSharedWithMe) {
                   description = "Compartilhado com você pelo Mestre";
-                // --- FIM DA CORREÇÃO 2 ---
                 } else if (!entry.is_shared) {
-                  // Se não for pública, nem minha, nem compartilhada comigo, não mostra.
                   return null; 
                 }
+
+                const canEditEntry = isMyEntry || isSharedWithMe;
 
                 return (
                   <Card key={entry.id} className="border-border/50 flex flex-col">
@@ -579,20 +477,16 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1">
-                      {/* --- INÍCIO DA CORREÇÃO 3: Remover line-clamp --- */}
                       <JournalRenderer content={entry.content} />
-                      {/* --- FIM DA CORREÇÃO 3 --- */}
                     </CardContent>
                     
-                    {/* --- INÍCIO DA CORREÇÃO 4: Mostrar botão de editar --- */}
-                    {(isMyEntry || isSharedWithMe) && (
+                    {canEditEntry && (
                       <CardFooter className="flex justify-end items-center gap-2">
                         <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
                           <JournalEntryDialog
                             tableId={tableId}
-                            onEntrySaved={() => {}} // Realtime cuida
+                            onEntrySaved={invalidateJournal} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
                             entry={entry}
-                            // Passa as props corretas para o diálogo
                             isPlayerNote={!!entry.player_id}
                             characterId={entry.character_id || undefined}
                             npcId={entry.npc_id || undefined}
@@ -611,7 +505,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                         </Button>
                       </CardFooter>
                     )}
-                    {/* --- FIM DA CORREÇÃO 4 --- */}
                   </Card>
                 );
               })
@@ -620,6 +513,7 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         </TabsContent>
       </Tabs>
 
+      {/* (Todos os AlertDialogs... permanecem iguais) */}
       <AlertDialog
         open={!!characterToDelete}
         onOpenChange={(open) => !open && setCharacterToDelete(null)}
