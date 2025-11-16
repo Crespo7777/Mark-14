@@ -108,6 +108,9 @@ const TableView = () => {
     userId: userId,
     isMaster: isMaster,
     members: members,
+    // --- INÍCIO DA CORREÇÃO ---
+    setMembers: setMembers, // Passando a função para o contexto
+    // --- FIM DA CORREÇÃO ---
   };
 
   // --- INÍCIO DA CORREÇÃO DE LAYOUT ---
