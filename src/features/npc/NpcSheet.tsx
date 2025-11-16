@@ -1,8 +1,14 @@
 // src/features/npc/NpcSheet.tsx
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react"; // <-- Adiciona useCallback
 import { Database } from "@/integrations/supabase/types";
+// ######################################################
+// ### A CORREÇÃO ESTÁ AQUI ###
+// ######################################################
 import { useToast } from "@/hooks/use-toast";
+// ######################################################
+// ### FIM DA CORREÇÃO ###
+// ######################################################
 import { supabase } from "@/integrations/supabase/client";
 import { X, Save } from "lucide-react";
 import { Form } from "@/components/ui/form";
@@ -55,27 +61,17 @@ const NpcSheetInner = ({
   initialData: NpcSheetData;
 }) => {
   // 1. Obter tudo do novo contexto
-  const { form, isReadOnly, isDirty, isSaving, saveSheet } = useNpcSheet();
-  const { toast } = useToast();
+  const { form, isReadOnly, isDirty, isSaving, saveSheet, programmaticSave } = useNpcSheet();
+  const { toast } = useToast(); // Esta linha agora funciona
 
   // 2. Remover todos os states e refs de salvamento
-  // const { isDirty, isSubmitting } = form.formState; // REMOVIDO
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
-  // const debounceTimer = useRef<NodeJS.Timeout | null>(null); // REMOVIDO
-  // const watchedValues = form.watch(); // REMOVIDO
-  // const [onSaveSuccessCallback, setOnSaveSuccessCallback] = useState... // REMOVIDO
     
   const [name, race, occupation] = form.watch([
     "name",
     "race",
     "occupation",
   ]);
-
-  // 3. Remover 'onSubmit' e 'onInvalid' locais
-  // REMOVIDOS
-
-  // 4. Remover 'useEffect[watchedValues]' (O auto-save)
-  // REMOVIDO
 
   // 5. Manter 'useEffect[isDirty]' (Aviso de fechar a aba)
   useEffect(() => {
@@ -98,6 +94,10 @@ const NpcSheetInner = ({
 
   // 6. Simplificar lógicas de fechar
   const handleCloseClick = () => {
+    if (isSaving) {
+      toast({ title: "Aguarde", description: "Salvamento automático em progresso..." });
+      return;
+    }
     if (isDirty && !isReadOnly) { // Só perguntar se for o Mestre
       setIsCloseAlertOpen(true);
     } else {
@@ -106,7 +106,8 @@ const NpcSheetInner = ({
   };
 
   const handleSaveAndClose = async () => {
-    await saveSheet();
+    if (isSaving) return;
+    await programmaticSave();
     setIsCloseAlertOpen(false);
     onClose();
   };
@@ -262,7 +263,7 @@ const NpcSheetInner = ({
 
 // Componente "Pai"
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
-  const { toast } = useToast();
+  const { toast } = useToast(); // Esta linha agora funciona
 
   // (Lógica de merge de dados... permanece idêntica)
   const defaults = getDefaultNpcSheetData(initialNpc.name);
