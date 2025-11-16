@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Dices, Trash2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-// --- IMPORTAR O TIPO 'DiceRoll' ---
-import { parseDiceRoll, formatRollResult, type DiceRoll } from "@/lib/dice-parser";
+import { parseDiceRoll, formatRollResult, type DiceRoll } from "@/lib/dice-parser"; // Importa o tipo
 import { cn } from "@/lib/utils";
 import { useTableContext, TableMember } from "@/features/table/TableContext";
 import {
@@ -30,6 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// (Interface Message, ChatPanelProps... permanecem iguais)
 interface Message {
   id: string;
   message: string;
@@ -43,6 +43,7 @@ interface ChatPanelProps {
   tableId: string;
 }
 
+// (Funções parseMentions... permanecem iguais)
 const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
@@ -59,6 +60,7 @@ const parseMentions = (text: string, members: TableMember[]): string => {
 
 
 export const ChatPanel = ({ tableId }: ChatPanelProps) => {
+  // (Todos os hooks e states... permanecem iguais)
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -67,6 +69,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const { isMaster, tableId: contextTableId, members } = useTableContext();
   const [isClearAlertOpen, setIsClearAlertOpen] = useState(false);
 
+  // (useEffect, loadMessages, subscribeToMessages... permanecem iguais)
   useEffect(() => {
     loadMessages();
     const channel = subscribeToMessages();
@@ -189,10 +192,9 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         
         // --- Preenche os dados estruturados para o Discord ---
         discordRollData = {
+          rollType: "manual", // O TIPO DA ROLAGEM
           command: command,
           result: result, // O objeto { rolls, modifier, total }
-          userName: userName,
-          rollType: "manual" // Para o backend saber que é um /r
         };
         
       } else {
@@ -226,26 +228,22 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         supabase.functions.invoke('discord-roll-handler', {
           body: {
             tableId: contextTableId,
-            rollData: discordRollData // Enviamos o objeto 'rollData'
+            rollData: discordRollData,
+            userName: userName, // Envia o nome de utilizador
           }
         }).catch(console.error);
       }
-      
-      // As tuas rolagens de Ataque/Atributo NÃO vão entrar neste 'if' 
-      // e vão continuar a ser enviadas como 'chatMessage'
-      // (como definido em WeaponAttackDialog.tsx, etc.),
-      // o que está CORRETO.
     }
     setLoading(false);
   };
 
+  // (handleKeyPress, handleClearChat... permanecem iguais)
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
-  
   const handleClearChat = async () => {
     setLoading(true);
     const { error } = await supabase
@@ -286,6 +284,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     }
   };
 
+  // (O JSX do return... permanece igual)
   return (
     <div className="flex flex-col h-full bg-card">
       
