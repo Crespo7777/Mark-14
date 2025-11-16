@@ -23,17 +23,14 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { getDefaultCharacterSheetData } from "@/features/character/character.schema";
-
-// --- 1. IMPORTAR O TIPO 'TableMember' ---
 import { TableMember } from "@/features/table/TableContext";
 
 interface CreateCharacterDialogProps {
   children: React.ReactNode;
   onCharacterCreated: () => void;
   tableId: string;
-  masterId: string;
-  // --- 2. ATUALIZAR O TIPO DA PROP 'members' ---
-  members: TableMember[];
+  masterId: string; // <-- Precisa disto
+  members: TableMember[]; // <-- Precisa disto
 }
 
 export const CreateCharacterDialog = ({
@@ -83,7 +80,7 @@ export const CreateCharacterDialog = ({
       setOccupation("");
       setAssignedPlayerId(masterId);
       setOpen(false);
-      onCharacterCreated();
+      onCharacterCreated(); // <-- CHAMA O INVALIDADOR DO PAI
     }
 
     setLoading(false);
@@ -142,19 +139,11 @@ export const CreateCharacterDialog = ({
                 <SelectItem value={masterId}>Mestre (Você)</SelectItem>
                 <SelectSeparator />
                 
-                {/* --- 3. CORRIGIR O MAPA AQUI --- */}
-                {/* Filtramos o mestre (m.isMaster) porque ele já foi 
-                  adicionado manualmente acima.
-                  Mudamos 'member.user_id' para 'member.id'.
-                  Mudamos 'member.user.display_name' para 'member.display_name'.
-                */}
                 {members.filter(m => !m.isMaster).map((member) => (
                   <SelectItem key={member.id} value={member.id}>
                     {member.display_name}
                   </SelectItem>
                 ))}
-                {/* --- FIM DA CORREÇÃO --- */}
-
               </SelectContent>
             </Select>
           </div>
