@@ -2,6 +2,8 @@
 
 import { useEffect, useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
+// --- 1. IMPORTAR useQuery E useQueryClient ---
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -23,7 +25,7 @@ import {
   Copy,
   MoreVertical,
   Share2,
-  Bot, // <-- 1. IMPORTAR ÍCONE
+  Bot,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -51,8 +53,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { JournalRenderer } from "./JournalRenderer";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { useTableContext, TableMember } from "@/features/table/TableContext"; // Importa TableMember
-import { DiscordSettingsDialog } from "./DiscordSettingsDialog"; // <-- 2. IMPORTAR NOVO DIÁLOGO
+import { useTableContext, TableMember } from "@/features/table/TableContext"; 
+import { DiscordSettingsDialog } from "./DiscordSettingsDialog"; 
 
 const JournalEntryDialog = lazy(() =>
   import("./JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -93,20 +95,53 @@ type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"] & {
   npc: { name: string } | null;
 };
 
+// --- 2. FUNÇÕES DE FETCH (para o useQuery) ---
+const fetchCharacters = async (tableId: string) => {
+  const { data, error } = await supabase
+    .from("characters")
+    .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
+    .eq("table_id", tableId);
+  if (error) throw error;
+  return data as Character[];
+};
+
+const fetchNpcs = async (tableId: string) => {
+  const { data, error } = await supabase
+    .from("npcs")
+    .select("*, shared_with_players")
+    .eq("table_id", tableId);
+  if (error) throw error;
+  return data as Npc[];
+};
+
+const fetchJournalEntries = async (tableId: string) => {
+  const { data, error } = await supabase
+    .from("journal_entries")
+    .select(
+      `
+      *,
+      shared_with_players,
+      player:profiles!journal_entries_player_id_fkey(display_name),
+      character:characters!journal_entries_character_id_fkey(name),
+      npc:npcs!journal_entries_npc_id_fkey(name)
+    `,
+    )
+    .eq("table_id", tableId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as JournalEntry[];
+};
+
 interface MasterViewProps {
   tableId: string;
   masterId: string;
 }
 
 export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [npcs, setNpcs] = useState<Npc[]>([]);
-
-  // Mantém os membros do contexto (já atualizados pelo TableView)
+  // --- 3. REMOVER useState, USAR useQuery e useQueryClient ---
   const { members, setMembers } = useTableContext();
-
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
   const { toast } = useToast();
+  const queryClient = useQueryClient(); // O invalidador de cache
 
   const [activeTab, setActiveTab] = useState("characters");
   const [playerFilter, setPlayerFilter] = useState<string | null>(null);
@@ -118,204 +153,26 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   );
   const [duplicating, setDuplicating] = useState(false);
 
-  // ######################################################
-  // ### INÍCIO DA OTIMIZAÇÃO DE REALTIME ###
-  // ######################################################
+  // --- 4. SUBSTITUIR loadData() e useState POR useQuery ---
+  const { data: characters = [], isLoading: isLoadingChars } = useQuery({
+    queryKey: ['characters', tableId],
+    queryFn: () => fetchCharacters(tableId),
+  });
 
-  // A função loadData() permanece a mesma, para a carga inicial
-  const loadData = async () => {
-    const [charsRes, npcsRes, journalRes, membersRes, tableRes] = await Promise.all([
-      supabase
-        .from("characters")
-        .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-        .eq("table_id", tableId),
-      supabase.from("npcs").select("*, shared_with_players").eq("table_id", tableId),
-      supabase
-        .from("journal_entries")
-        .select(
-          `
-          *,
-          shared_with_players,
-          player:profiles!journal_entries_player_id_fkey(display_name),
-          character:characters!journal_entries_character_id_fkey(name),
-          npc:npcs!journal_entries_npc_id_fkey(name)
-        `,
-        )
-        .eq("table_id", tableId)
-        .order("created_at", { ascending: false }),
-      // Também recarregamos os membros aqui, caso o contexto ainda não tenha
-      supabase
-        .from("table_members")
-        .select("user:profiles!table_members_user_id_fkey(id, display_name)")
-        .eq("table_id", tableId),
-      supabase
-        .from("tables")
-        .select("master:profiles!tables_master_id_fkey(id, display_name)")
-        .eq("id", tableId)
-        .single(),
-    ]);
+  const { data: npcs = [], isLoading: isLoadingNpcs } = useQuery({
+    queryKey: ['npcs', tableId],
+    queryFn: () => fetchNpcs(tableId),
+  });
 
-    if (charsRes.data) setCharacters(charsRes.data as any);
-    if (npcsRes.data) setNpcs(npcsRes.data);
-    if (journalRes.data) setJournalEntries(journalRes.data as any);
-    
-    // Atualiza a lista de membros no contexto (caso venha do realtime)
-    if (membersRes.data && tableRes.data) {
-        const masterProfile = (tableRes.data as any).master;
-        const memberList: TableMember[] = [
-          { 
-            id: masterProfile.id, 
-            display_name: masterProfile.display_name, 
-            isMaster: true 
-          },
-          ...membersRes.data.map((m: any) => ({
-            id: m.user.id,
-            display_name: m.user.display_name,
-            isMaster: false,
-          }))
-        ];
-        setMembers(memberList);
-    }
-  };
-
-
+  const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
+    queryKey: ['journal', tableId], // Chave principal para o diário da mesa
+    queryFn: () => fetchJournalEntries(tableId),
+  });
+  
+  // --- 5. ATUALIZAR O useEffect DO REALTIME ---
+  // Em vez de 'set...', vamos 'invalidar' o cache do React Query.
   useEffect(() => {
-    // 1. Carga inicial dos dados
-    loadData();
-
-    // 2. Inscrição no canal de Realtime
-    const channel = supabase
-      .channel(`master-view:${tableId}`)
-
-      // --- CHARACTERS ---
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-          console.log("Realtime: Novo personagem inserido");
-          // Buscamos o personagem individualmente para pegar o 'join' com 'profiles'
-          const { data: newChar } = await supabase
-            .from("characters")
-            .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-            .eq("id", payload.new.id)
-            .single();
-          if (newChar) {
-            setCharacters((prev) => [...prev, newChar as any]);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-          console.log("Realtime: Personagem atualizado");
-          // Buscamos o personagem individualmente para pegar o 'join' com 'profiles'
-          const { data: updatedChar } = await supabase
-            .from("characters")
-            .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-            .eq("id", payload.new.id)
-            .single();
-          if (updatedChar) {
-            setCharacters((prev) =>
-              prev.map((c) => (c.id === updatedChar.id ? (updatedChar as any) : c))
-            );
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: Personagem deletado");
-          setCharacters((prev) => prev.filter((c) => c.id !== payload.old.id));
-        }
-      )
-
-      // --- NPCS ---
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: Novo NPC");
-          setNpcs((prev) => [...prev, payload.new as Npc]);
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: NPC atualizado");
-          setNpcs((prev) =>
-            prev.map((n) => (n.id === payload.new.id ? (payload.new as Npc) : n))
-          );
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: NPC deletado");
-          setNpcs((prev) => prev.filter((n) => n.id !== payload.old.id));
-        }
-      )
-
-      // --- JOURNAL ENTRIES ---
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-          console.log("Realtime: Nova entrada no diário");
-          // Buscamos a entrada para pegar os joins
-          const { data: newEntry } = await supabase
-            .from("journal_entries")
-            .select("*, shared_with_players, player:profiles!journal_entries_player_id_fkey(display_name), character:characters!journal_entries_character_id_fkey(name), npc:npcs!journal_entries_npc_id_fkey(name)")
-            .eq("id", payload.new.id)
-            .single();
-          if (newEntry) {
-            setJournalEntries((prev) => [newEntry as any, ...prev]);
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
-        async (payload) => {
-          console.log("Realtime: Entrada de diário atualizada");
-          // Buscamos a entrada para pegar os joins
-          const { data: updatedEntry } = await supabase
-            .from("journal_entries")
-            .select("*, shared_with_players, player:profiles!journal_entries_player_id_fkey(display_name), character:characters!journal_entries_character_id_fkey(name), npc:npcs!journal_entries_npc_id_fkey(name)")
-            .eq("id", payload.new.id)
-            .single();
-          if (updatedEntry) {
-            setJournalEntries((prev) =>
-              prev.map((j) => (j.id === updatedEntry.id ? (updatedEntry as any) : j))
-            );
-          }
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "DELETE", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-          console.log("Realtime: Entrada de diário deletada");
-          setJournalEntries((prev) => prev.filter((j) => j.id !== payload.old.id));
-        }
-      )
-      
-      // --- TABLE MEMBERS (Recarrega a lista de membros) ---
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "table_members", filter: `table_id=eq.${tableId}` },
-        (payload) => {
-            console.log("Realtime: Membros da mesa atualizados");
-            // loadData() é muito pesado, vamos recarregar apenas os membros
-            loadMembers();
-        }
-      )
-      .subscribe();
-      
-    // Função auxiliar para recarregar apenas os membros
+    // Função para recarregar membros (mantida)
     const loadMembers = async () => {
         const { data: membersData } = await supabase
           .from("table_members")
@@ -345,19 +202,75 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             setMembers(memberList);
         }
     };
+  
+    const channel = supabase
+      .channel(`master-view:${tableId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "characters", filter: `table_id=eq.${tableId}` },
+        (payload) => {
+          console.log("Realtime: invalidando 'characters'");
+          queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
+          // Invalida a cache da ficha individual (se estiver aberta)
+          if (payload.eventType !== 'INSERT' && payload.old?.id) {
+            queryClient.invalidateQueries({ queryKey: ['character', payload.old.id] });
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "npcs", filter: `table_id=eq.${tableId}` },
+        (payload) => {
+          console.log("Realtime: invalidando 'npcs'");
+          queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
+          if (payload.eventType !== 'INSERT' && payload.old?.id) {
+            queryClient.invalidateQueries({ queryKey: ['npc', payload.old.id] });
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "journal_entries", filter: `table_id=eq.${tableId}` },
+        (payload) => {
+          console.log("Realtime: invalidando 'journal'");
+          queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
+          // Invalida caches específicos de diários de entidade (se estiverem abertos)
+          if (payload.old?.character_id) {
+            queryClient.invalidateQueries({ queryKey: ['journal_entries', 'character', payload.old.character_id] });
+          }
+          if (payload.old?.npc_id) {
+             queryClient.invalidateQueries({ queryKey: ['journal_entries', 'npc', payload.old.npc_id] });
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "table_members", filter: `table_id=eq.${tableId}` },
+        () => {
+            console.log("Realtime: atualizando membros");
+            loadMembers(); // O 'setMembers' vem do TableContext, está correto
+        }
+      )
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [tableId, setMembers]); // Adicionado setMembers à dependência
+  }, [tableId, queryClient, setMembers]); // Dependências corretas
+  // --- FIM DA ATUALIZAÇÃO DO REALTIME ---
 
-  // ######################################################
-  // ### FIM DA OTIMIZAÇÃO DE REALTIME ###
-  // ######################################################
 
+  // --- 6. ATUALIZAR FUNÇÕES DE AÇÃO (Create, Delete, Update) ---
+  
+  // Funções de invalidação
+  const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
+  const invalidateNpcs = () => queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
+  const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
   const handleRemovePlayer = async () => {
     if (!playerToRemove) return;
+    
+    // Lógica de remoção...
     const { error: memberError } = await supabase
       .from("table_members")
       .delete()
@@ -381,61 +294,51 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     } else {
       toast({ title: "Jogador removido", description: `${playerToRemove.display_name} foi removido da mesa e suas fichas foram limpas.` });
     }
-    // window.location.reload(); // Não precisamos mais disso, o realtime vai atualizar
+    
+    invalidateCharacters(); // Invalida as fichas após remover o jogador
     setPlayerToRemove(null);
   };
 
   const handleDeleteNpc = async () => {
     if (!npcToDelete) return;
-
     await supabase.from("journal_entries").update({ npc_id: null }).eq("npc_id", npcToDelete.id);
-
-    const { error } = await supabase
-      .from("npcs")
-      .delete()
-      .eq("id", npcToDelete.id);
+    const { error } = await supabase.from("npcs").delete().eq("id", npcToDelete.id);
     if (error) toast({ title: "Erro", variant: "destructive" });
     else {
       toast({ title: "NPC excluído" });
+      invalidateNpcs(); // <-- Invalidar cache
+      invalidateJournal(); // Entradas de diário podem ter sido afetadas
       setNpcToDelete(null);
-      // loadData(); // Não precisamos mais disso
     }
   };
+  
   const handleDeleteJournalEntry = async () => {
     if (!entryToDelete) return;
-    const { error } = await supabase
-      .from("journal_entries")
-      .delete()
-      .eq("id", entryToDelete.id);
+    const { error } = await supabase.from("journal_entries").delete().eq("id", entryToDelete.id);
     if (error) toast({ title: "Erro", variant: "destructive" });
     else {
       toast({ title: "Entrada excluída" });
+      invalidateJournal(); // <-- Invalidar cache
       setEntryToDelete(null);
-      // loadData(); // Não precisamos mais disso
     }
   };
+  
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
-
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
-
-    const { error } = await supabase
-      .from("characters")
-      .delete()
-      .eq("id", characterToDelete.id);
+    const { error } = await supabase.from("characters").delete().eq("id", characterToDelete.id);
     if (error) toast({ title: "Erro", variant: "destructive" });
     else {
       toast({ title: "Ficha excluída" });
+      invalidateCharacters(); // <-- Invalidar cache
+      invalidateJournal(); // Entradas de diário podem ter sido afetadas
       setCharacterToDelete(null);
-      // loadData(); // Não precisamos mais disso
     }
   };
 
   const handleDuplicateNpc = async (npcToDuplicate: Npc) => {
     setDuplicating(true);
-
     const newName = `Cópia de ${npcToDuplicate.name}`;
-
     const newData = JSON.parse(JSON.stringify(npcToDuplicate.data || {}));
     newData.name = newName;
 
@@ -451,16 +354,14 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       toast({ title: "Erro ao duplicar NPC", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "NPC Duplicado!", description: `${newName} foi criado.` });
-      // loadData(); // Não precisamos mais disso
+      invalidateNpcs(); // <-- Invalidar cache
     }
     setDuplicating(false);
   };
 
   const handleDuplicateCharacter = async (charToDuplicate: Character) => {
     setDuplicating(true);
-
     const newName = `Cópia de ${charToDuplicate.name}`;
-
     const newData = JSON.parse(JSON.stringify(charToDuplicate.data || {}));
     newData.name = newName;
 
@@ -477,7 +378,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       toast({ title: "Erro ao duplicar Ficha", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Ficha Duplicada!", description: `${newName} foi criada para ${charToDuplicate.player.display_name}.` });
-      // loadData(); // Não precisamos mais disso
+      invalidateCharacters(); // <-- Invalidar cache
     }
     setDuplicating(false);
   };
@@ -502,7 +403,10 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
       toast({ title: "Erro ao compartilhar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Compartilhamento atualizado!" });
-      // loadData(); // Não precisamos mais disso, o realtime de UPDATE vai pegar
+      // O Realtime já vai tratar de invalidar, mas podemos forçar:
+      if (itemType === 'characters') invalidateCharacters();
+      if (itemType === 'npcs') invalidateNpcs();
+      if (itemType === 'journal_entries') invalidateJournal();
     }
   };
 
@@ -510,14 +414,12 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   return (
     <div className="space-y-6">
       <div>
-        {/* --- 3. BOTÃO ADICIONADO AQUI --- */}
         <div className="flex flex-wrap justify-between items-center gap-2 mb-2"> 
           <h2 className="text-3xl font-bold">Painel do Mestre</h2>
           <Suspense fallback={<Button variant="outline" size="sm" disabled>Carregando...</Button>}>
             <DiscordSettingsDialog />
           </Suspense>
         </div>
-        {/* --- FIM DA ADIÇÃO --- */}
         <p className="text-muted-foreground">Controle total sobre a mesa</p>
       </div>
 
@@ -533,7 +435,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           <TabsTrigger value="players">Jogadores</TabsTrigger>
           <TabsTrigger value="journal">Diário</TabsTrigger>
         </TabsList>
-
+        
         <TabsContent value="characters" className="space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Fichas dos Jogadores</h3>
@@ -541,7 +443,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
               tableId={tableId}
               masterId={masterId}
               members={members}
-              onCharacterCreated={() => {}} // Não precisa mais do loadData, o realtime cuida
+              onCharacterCreated={invalidateCharacters} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
             >
               <Button size="sm">
                 <Plus className="w-4 h-4 mr-2" />
@@ -550,7 +452,12 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             </CreateCharacterDialog>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {characters.filter(
+            {isLoadingChars ? (
+              <>
+                <SheetLoadingFallback />
+                <SheetLoadingFallback />
+              </>
+            ) : characters.filter(
               (char) => !playerFilter || char.player_id === playerFilter,
             ).length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
@@ -641,7 +548,10 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">NPCs da Mesa</h3>
             <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
-              <CreateNpcDialog tableId={tableId} onNpcCreated={() => {}} /* Realtime cuida */ >
+              <CreateNpcDialog 
+                tableId={tableId} 
+                onNpcCreated={invalidateNpcs} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
+              >
                 <Button size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   Novo NPC
@@ -650,7 +560,12 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
             </Suspense>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
-            {npcs.length === 0 ? (
+            {isLoadingNpcs ? (
+              <>
+                <SheetLoadingFallback />
+                <SheetLoadingFallback />
+              </>
+            ) : npcs.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
                 Nenhum NPC criado ainda
               </p>
@@ -771,7 +686,10 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           <div className="flex justify-between items-center">
             <h3 className="text-xl font-semibold">Diário da Mesa</h3>
             <Suspense fallback={<Button size="sm" disabled><Plus className="w-4 h-4 mr-2" /> Carregando...</Button>}>
-              <JournalEntryDialog tableId={tableId} onEntrySaved={() => {}} /* Realtime cuida */ >
+              <JournalEntryDialog 
+                tableId={tableId} 
+                onEntrySaved={invalidateJournal} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
+              >
                 <Button size="sm">
                   <Plus className="w-4 h-4 mr-2" />
                   Nova Entrada (Mestre)
@@ -781,7 +699,12 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            {journalEntries.length === 0 ? (
+            {isLoadingJournal ? (
+              <>
+                <SheetLoadingFallback />
+                <SheetLoadingFallback />
+              </>
+            ) : journalEntries.length === 0 ? (
               <p className="text-muted-foreground col-span-full text-center py-8">
                 Nenhuma entrada no diário.
               </p>
@@ -815,9 +738,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="flex-1">
-                      {/* --- INÍCIO DA CORREÇÃO: Remover line-clamp --- */}
                       <JournalRenderer content={entry.content} />
-                      {/* --- FIM DA CORREÇÃO --- */}
                     </CardContent>
                     <CardFooter className="flex justify-between items-center">
                         <div
@@ -846,7 +767,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
                           <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
                             <JournalEntryDialog
                               tableId={tableId}
-                              onEntrySaved={() => {}} /* Realtime cuida */
+                              onEntrySaved={invalidateJournal} // <-- 7. PASSAR A FUNÇÃO DE INVALIDAR
                               entry={entry}
                               isPlayerNote={!!entry.player_id}
                               characterId={entry.character_id || undefined}
@@ -874,7 +795,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
         </TabsContent>
       </Tabs>
 
-      {/* (Todos os AlertDialogs... sem alterações) */}
+      {/* (Todos os AlertDialogs... permanecem iguais) */}
       <AlertDialog
         open={!!playerToRemove}
         onOpenChange={(open) => !open && setPlayerToRemove(null)}
