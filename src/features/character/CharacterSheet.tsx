@@ -1,6 +1,6 @@
 // src/features/character/CharacterSheet.tsx
 
-import { useState, useEffect } from "react"; // useRef foi removido
+import { useState, useEffect, useCallback } from "react"; // useRef foi removido
 import { Database } from "@/integrations/supabase/types";
 import {
   CharacterSheetProvider,
@@ -13,7 +13,13 @@ import {
 } from "./character.schema";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
+// ######################################################
+// ### A CORREÇÃO ESTÁ AQUI ###
+// ######################################################
 import { useToast } from "@/hooks/use-toast";
+// ######################################################
+// ### FIM DA CORREÇÃO ###
+// ######################################################
 import { supabase } from "@/integrations/supabase/client";
 import { X, Save } from "lucide-react";
 import { Form } from "@/components/ui/form";
@@ -55,27 +61,17 @@ const CharacterSheetInner = ({
   initialData: CharacterSheetData;
 }) => {
   // 1. Obter tudo do contexto
-  const { form, isDirty, isSaving, saveSheet } = useCharacterSheet();
-  const { toast } = useToast(); // Apenas para o onInvalid (se precisasse)
+  const { form, isDirty, isSaving, saveSheet, programmaticSave } = useCharacterSheet();
+  const { toast } = useToast(); // Esta linha agora funciona
 
   // 2. Remover todos os states e refs de salvamento
-  // const { isDirty, isSubmitting } = form.formState; // REMOVIDO
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
-  // const debounceTimer = useRef<NodeJS.Timeout | null>(null); // REMOVIDO
-  // const watchedValues = form.watch(); // REMOVIDO
-  // const [onSaveSuccessCallback, setOnSaveSuccessCallback] = useState... // REMOVIDO
 
   const [name, race, occupation] = form.watch([
     "name",
     "race",
     "occupation",
   ]);
-
-  // 3. Remover 'onSubmit' e 'onInvalid' locais
-  // REMOVIDOS
-
-  // 4. Remover 'useEffect[watchedValues]' (O auto-save)
-  // REMOVIDO
 
   // 5. Manter 'useEffect[isDirty]' (Aviso de fechar a aba)
   // Este é o "airbag" de segurança.
@@ -99,6 +95,10 @@ const CharacterSheetInner = ({
 
   // 6. Simplificar lógicas de fechar
   const handleCloseClick = () => {
+    if (isSaving) {
+      toast({ title: "Aguarde", description: "Salvamento automático em progresso..." });
+      return; 
+    }
     if (isDirty) {
       setIsCloseAlertOpen(true);
     } else {
@@ -107,9 +107,8 @@ const CharacterSheetInner = ({
   };
 
   const handleSaveAndClose = async () => {
-    await saveSheet(); // 1. Salva
-    // A função 'saveSheet' já faz o form.reset()
-    // Então o 'isDirty' ficará falso.
+    if (isSaving) return;
+    await programmaticSave(); // 1. Salva
     setIsCloseAlertOpen(false); // 2. Fecha o pop-up
     onClose(); // 3. Fecha o sheet
   };
@@ -266,7 +265,7 @@ export const CharacterSheet = ({
   initialCharacter,
   onClose,
 }: CharacterSheetProps) => {
-  const { toast } = useToast();
+  const { toast } = useToast(); // Esta linha (linha 231) agora funciona
 
   // (Lógica de merge de dados permanece idêntica)
   const defaults = getDefaultCharacterSheetData(initialCharacter.name);
