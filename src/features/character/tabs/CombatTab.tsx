@@ -34,7 +34,9 @@ const DamageHealControl = ({
   onApply: (amount: number) => void;
   disabled: boolean; // Mantido na props por segurança, mas não o usamos mais
 }) => {
-  const [amount, setAmount] = useState(1);
+  // --- INÍCIO DA MELHORIA ---
+  const [amount, setAmount] = useState(0);
+  // --- FIM DA MELHORIA ---
   return (
     <div className="flex items-center gap-2">
       <Input
@@ -44,15 +46,20 @@ const DamageHealControl = ({
         onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)}
         // disabled={disabled} // Removido
       />
+      {/* --- INÍCIO DA MELHORIA --- */}
       <Button
         type="button"
         size="sm"
         variant="outline"
-        onClick={() => onApply(amount)}
+        onClick={() => {
+          onApply(amount);
+          setAmount(0); // Reseta para 0
+        }}
         // disabled={disabled} // Removido
       >
         {label}
       </Button>
+      {/* --- FIM DA MELHORIA --- */}
     </div>
   );
 };
