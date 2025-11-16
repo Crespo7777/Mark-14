@@ -112,6 +112,7 @@ export const NpcAbilityRollDialog = ({
         body: {
           tableId: npc.table_id,
           chatMessage: chatMessage,
+          userName: npc.name, // <-- Enviar o nome do NPC
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
