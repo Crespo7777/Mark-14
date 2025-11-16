@@ -132,6 +132,15 @@ export const AbilityRollDialog = ({
         message_type: "roll",
         recipient_id: null,
       });
+
+      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
+      supabase.functions.invoke('discord-roll-handler', {
+        body: {
+          tableId: contextTableId,
+          chatMessage: chatMessage,
+        }
+      }).catch(console.error);
+      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
 
     setLoading(false);
