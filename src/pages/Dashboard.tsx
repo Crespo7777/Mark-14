@@ -83,10 +83,13 @@ const Dashboard = () => {
   };
 
   const loadTables = async (userId: string) => {
+    // --- INÍCIO DA CORREÇÃO ---
+    // Pedimos colunas explícitas em vez de "*"
     const { data: masterTables } = await supabase
       .from("tables")
-      .select("*")
+      .select("id, name, description, master_id, created_at") 
       .eq("master_id", userId);
+    // --- FIM DA CORREÇÃO ---
 
     const { data: memberData } = await supabase
       .from("table_members")
@@ -97,10 +100,13 @@ const Dashboard = () => {
     
     let memberTables: Table[] = [];
     if (memberTableIds.length > 0) {
+      // --- INÍCIO DA CORREÇÃO ---
+      // Pedimos colunas explícitas em vez de "*"
       const { data } = await supabase
         .from("tables")
-        .select("*")
+        .select("id, name, description, master_id, created_at")
         .in("id", memberTableIds);
+      // --- FIM DA CORREÇÃO ---
       memberTables = data || [];
     }
 

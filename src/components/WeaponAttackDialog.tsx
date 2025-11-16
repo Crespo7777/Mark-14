@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { rollAttributeTest, formatAttackRoll } from "@/lib/dice-parser";
+// --- INÍCIO DA CORREÇÃO ---
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ import { Dices, Crosshair } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
 import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
+// --- FIM DA CORREÇÃO ---
 
 interface WeaponAttackDialogProps {
   open: boolean;
@@ -134,7 +136,6 @@ export const WeaponAttackDialog = ({
       });
     }
 
-    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatAttackRoll(
       characterName,
       weaponName,
@@ -142,7 +143,6 @@ export const WeaponAttackDialog = ({
       result,
     );
 
-    // Objeto de dados para o DISCORD
     const discordRollData = {
       rollType: "attack",
       weaponName: weaponName,
@@ -176,15 +176,13 @@ export const WeaponAttackDialog = ({
         recipient_id: null,
       });
 
-      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          rollData: discordRollData, // Envia o JSON
+          rollData: discordRollData,
           userName: characterName, 
         }
       }).catch(console.error);
-      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
 
     setLoading(false);

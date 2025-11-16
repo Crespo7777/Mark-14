@@ -7,6 +7,7 @@ import {
   rollAttributeTest,
   formatAttributeTest,
 } from "@/lib/dice-parser";
+// --- INÍCIO DA CORREÇÃO ---
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dices } from "lucide-react";
 import { Separator } from "@/components/ui/separator"; 
 import { useTableContext } from "@/features/table/TableContext"; 
+// --- FIM DA CORREÇÃO ---
 
 interface AttributeRollDialogProps {
   open: boolean;
@@ -72,10 +74,8 @@ export const AttributeRollDialog = ({
       });
     }
 
-    // A mensagem para o chat da APLICAÇÃO continua a ser HTML
     const chatMessage = formatAttributeTest(characterName, attributeName, result);
     
-    // Objeto de dados para o DISCORD
     const discordRollData = {
       rollType: "attribute",
       attributeName: attributeName,
@@ -109,8 +109,6 @@ export const AttributeRollDialog = ({
         recipient_id: null,
       });
       
-      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
-      // Envia o objeto JSON 'rollData' em vez do 'chatMessage'
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
@@ -118,7 +116,6 @@ export const AttributeRollDialog = ({
           userName: characterName,
         }
       }).catch(console.error);
-      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
 
     setLoading(false);

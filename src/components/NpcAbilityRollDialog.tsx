@@ -7,6 +7,7 @@ import {
   rollAttributeTest,
   formatAbilityTest,
 } from "@/lib/dice-parser";
+// --- INÍCIO DA CORREÇÃO ---
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import { useNpcSheet } from "@/features/npc/NpcSheetContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
+// --- FIM DA CORREÇÃO ---
 
 interface NpcAbilityRollDialogProps {
   open: boolean;
@@ -74,7 +76,6 @@ export const NpcAbilityRollDialog = ({
       });
     }
 
-    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatAbilityTest(
       npc.name,
       abilityName,
@@ -83,7 +84,6 @@ export const NpcAbilityRollDialog = ({
       0, // NPCs não têm custo de corrupção
     );
     
-    // Objeto de dados para o DISCORD
     const discordRollData = {
       rollType: "ability",
       abilityName: abilityName,
@@ -118,15 +118,13 @@ export const NpcAbilityRollDialog = ({
         recipient_id: null,
       });
 
-      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: npc.table_id,
-          rollData: discordRollData, // Envia o JSON
-          userName: npc.name, // Envia o nome do NPC
+          rollData: discordRollData,
+          userName: npc.name,
         }
       }).catch(console.error);
-      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
 
     setLoading(false);

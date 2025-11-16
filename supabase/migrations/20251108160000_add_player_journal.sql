@@ -50,15 +50,30 @@ CREATE POLICY "Players can create their own entries"
     )
   );
 
+-- ####################
+-- ### INÍCIO DA CORREÇÃO ###
+-- ####################
 
--- 5. Criar a NOVA política de EDIÇÃO/DELEÇÃO (UPDATE/DELETE) para jogadores
--- Jogadores só podem editar ou deletar suas próprias anotações.
-CREATE POLICY "Players can manage their own entries"
-  ON public.journal_entries FOR UPDATE, DELETE
+-- 5a. Criar a NOVA política de EDIÇÃO (UPDATE)
+CREATE POLICY "Players can update their own entries"
+  ON public.journal_entries FOR UPDATE
   USING (
     -- O 'player_id' da entrada DEVE ser o ID do jogador logado
     player_id = auth.uid()
   );
+
+-- 5b. Criar a NOVA política de DELEÇÃO (DELETE)
+CREATE POLICY "Players can delete their own entries"
+  ON public.journal_entries FOR DELETE
+  USING (
+    -- O 'player_id' da entrada DEVE ser o ID do jogador logado
+    player_id = auth.uid()
+  );
+  
+-- ####################
+-- ### FIM DA CORREÇÃO ###
+-- ####################
+
 
 -- NOTA: A política "Masters can manage journal entries"
 -- permanece intacta. Os Mestres continuarão com acesso total (SELECT, INSERT, UPDATE, DELETE)

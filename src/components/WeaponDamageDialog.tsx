@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { parseDiceRoll, formatDamageRoll } from "@/lib/dice-parser";
+// --- INÍCIO DA CORREÇÃO ---
 import {
   Dialog,
   DialogContent,
@@ -19,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dices } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
+// --- FIM DA CORREÇÃO ---
 
 interface WeaponDamageDialogProps {
   open: boolean;
@@ -76,7 +78,6 @@ export const WeaponDamageDialog = ({
       });
     }
 
-    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatDamageRoll(
       characterName,
       weaponName,
@@ -86,7 +87,6 @@ export const WeaponDamageDialog = ({
       totalDamage,
     );
     
-    // Objeto de dados para o DISCORD
     const discordRollData = {
       rollType: "damage",
       weaponName: weaponName,
@@ -122,15 +122,13 @@ export const WeaponDamageDialog = ({
         recipient_id: null,
       });
 
-      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          rollData: discordRollData, // Envia o JSON
+          rollData: discordRollData,
           userName: characterName, 
         }
       }).catch(console.error);
-      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
 
     setLoading(false);

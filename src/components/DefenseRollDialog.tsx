@@ -7,6 +7,7 @@ import {
   rollAttributeTest,
   formatDefenseRoll,
 } from "@/lib/dice-parser";
+// --- INÍCIO DA CORREÇÃO ---
 import {
   Dialog,
   DialogContent,
@@ -22,6 +23,7 @@ import { Dices } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
+// --- FIM DA CORREÇÃO ---
 
 interface DefenseRollDialogProps {
   open: boolean;
@@ -72,13 +74,11 @@ export const DefenseRollDialog = ({
       });
     }
 
-    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatDefenseRoll(
       characterName,
       result,
     );
 
-    // Objeto de dados para o DISCORD
     const discordRollData = {
       rollType: "defense",
       result: result
@@ -110,15 +110,13 @@ export const DefenseRollDialog = ({
         recipient_id: null,
       });
 
-      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          rollData: discordRollData, // Envia o JSON
+          rollData: discordRollData,
           userName: characterName, 
         }
       }).catch(console.error);
-      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
 
     setLoading(false);
