@@ -79,7 +79,7 @@ export const CreatePlayerCharacterDialog = ({
       setRace("");
       setOccupation("");
       setOpen(false);
-      onCharacterCreated();
+      onCharacterCreated(); // <-- CHAMA O INVALIDADOR DO PAI
     }
 
     setLoading(false);
@@ -126,8 +126,6 @@ export const CreatePlayerCharacterDialog = ({
               />
             </div>
           </div>
-
-          {/* O dropdown "Atribuir a" foi removido */}
 
           <Button onClick={handleCreate} disabled={loading} className="w-full">
             {loading ? "Criando..." : "Criar Ficha"}
