@@ -23,7 +23,6 @@ import { Dices } from "lucide-react";
 import { Separator } from "@/components/ui/separator"; 
 import { useTableContext } from "@/features/table/TableContext"; 
 
-// --- 1. PROPS REVERTIDAS ---
 interface AttributeRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -31,9 +30,7 @@ interface AttributeRollDialogProps {
   attributeValue: number;
   characterName: string;
   tableId: string;
-  // 'obstructivePenalty' REMOVIDO
 }
-// --- FIM DA REVERSÃO ---
 
 export const AttributeRollDialog = ({
   open,
@@ -50,8 +47,6 @@ export const AttributeRollDialog = ({
   const { isMaster, masterId, userId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
   
-  // --- 2. 'applyObstructive' REMOVIDO ---
-
   const handleRoll = async () => {
     setLoading(true);
 
@@ -61,13 +56,11 @@ export const AttributeRollDialog = ({
       return;
     }
 
-    // --- 3. LÓGICA DE 'finalModifier' REMOVIDA ---
     const result = rollAttributeTest({
       attributeValue,
-      modifier: modifier, // Voltamos a usar o modificador simples
+      modifier: modifier,
       withAdvantage,
     });
-    // --- FIM DA REVERSÃO ---
 
     if (!isHidden || isMaster) {
       const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${result.target}) - ${
@@ -79,16 +72,18 @@ export const AttributeRollDialog = ({
       });
     }
 
+    // A mensagem para o chat da APLICAÇÃO continua a ser HTML
     const chatMessage = formatAttributeTest(characterName, attributeName, result);
     
+    // Objeto de dados para o DISCORD
+    const discordRollData = {
+      rollType: "attribute",
+      attributeName: attributeName,
+      result: result
+    };
+    
     if (isHidden && isMaster) {
-      await supabase.from("chat_messages").insert({
-        table_id: contextTableId,
-        user_id: user.id,
-        message: `${characterName} rolou ${attributeName} em segredo.`,
-        message_type: "info",
-        recipient_id: null,
-      });
+      // (Mensagem para o Mestre no chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -96,7 +91,16 @@ export const AttributeRollDialog = ({
         message_type: "roll",
         recipient_id: masterId,
       });
+      // (Mensagem genérica para todos no chat da app)
+      await supabase.from("chat_messages").insert({
+        table_id: contextTableId,
+        user_id: user.id,
+        message: `${characterName} rolou ${attributeName} em segredo.`,
+        message_type: "info",
+        recipient_id: null,
+      });
     } else {
+      // (Mensagem pública para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -106,11 +110,12 @@ export const AttributeRollDialog = ({
       });
       
       // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
+      // Envia o objeto JSON 'rollData' em vez do 'chatMessage'
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          chatMessage: chatMessage,
-          userName: characterName, // <-- Enviar o nome
+          rollData: discordRollData,
+          userName: characterName,
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
@@ -119,7 +124,6 @@ export const AttributeRollDialog = ({
     setLoading(false);
     onOpenChange(false);
     setIsHidden(false); 
-    // 'setApplyObstructive(false)' REMOVIDO
   };
 
   return (
@@ -140,8 +144,6 @@ export const AttributeRollDialog = ({
             />
             <Label htmlFor="advantage">Vantagem (+1d4 na rolagem)</Label>
           </div>
-
-          {/* --- 4. CHECKBOX DE DESVANTAGEM REMOVIDO --- */}
           
           <div className="space-y-2">
             <Label htmlFor="modifier">Modificador (no alvo)</Label>
