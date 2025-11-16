@@ -1,6 +1,6 @@
 // src/features/character/CharacterSheet.tsx
 
-import { useState, useEffect, useCallback } from "react"; // useRef foi removido
+import { useState, useEffect, useCallback } from "react";
 import { Database } from "@/integrations/supabase/types";
 import {
   CharacterSheetProvider,
@@ -14,9 +14,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 // ######################################################
-// ### A CORREÇÃO ESTÁ AQUI ###
+// ### CORREÇÃO AQUI ###
 // ######################################################
 import { useToast } from "@/hooks/use-toast";
+// --- 1. IMPORTAR O useQueryClient ---
+import { useQueryClient } from "@tanstack/react-query";
 // ######################################################
 // ### FIM DA CORREÇÃO ###
 // ######################################################
@@ -266,6 +268,8 @@ export const CharacterSheet = ({
   onClose,
 }: CharacterSheetProps) => {
   const { toast } = useToast(); // Esta linha (linha 231) agora funciona
+  // --- 2. INICIAR O queryClient ---
+  const queryClient = useQueryClient();
 
   // (Lógica de merge de dados permanece idêntica)
   const defaults = getDefaultCharacterSheetData(initialCharacter.name);
@@ -308,6 +312,16 @@ export const CharacterSheet = ({
       // O 'toast' de erro já é disparado pelo contexto
       throw new Error(error.message);
     }
+    
+    // --- 3. INVALIDAR OS CACHES APÓS SALVAR ---
+    // Invalida a lista principal de personagens
+    await queryClient.invalidateQueries({
+      queryKey: ['characters', initialCharacter.table_id]
+    });
+    // Invalida a cache desta ficha específica (se houver)
+    await queryClient.invalidateQueries({
+      queryKey: ['character', initialCharacter.id]
+    });
   };
 
   return (
