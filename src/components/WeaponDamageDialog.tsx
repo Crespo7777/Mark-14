@@ -76,6 +76,7 @@ export const WeaponDamageDialog = ({
       });
     }
 
+    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatDamageRoll(
       characterName,
       weaponName,
@@ -84,8 +85,19 @@ export const WeaponDamageDialog = ({
       modifier,
       totalDamage,
     );
+    
+    // Objeto de dados para o DISCORD
+    const discordRollData = {
+      rollType: "damage",
+      weaponName: weaponName,
+      baseRoll: baseRoll,
+      advantageRoll: advantageRoll,
+      modifier: modifier,
+      totalDamage: totalDamage
+    };
 
     if (isHidden && isMaster) {
+      // (Mensagens para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -101,6 +113,7 @@ export const WeaponDamageDialog = ({
         recipient_id: masterId,
       });
     } else {
+      // (Mensagem pública para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -113,8 +126,8 @@ export const WeaponDamageDialog = ({
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          chatMessage: chatMessage,
-          userName: characterName, // <-- Enviar o nome
+          rollData: discordRollData, // Envia o JSON
+          userName: characterName, 
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
