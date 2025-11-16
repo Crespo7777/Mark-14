@@ -161,7 +161,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     return channel;
   };
 
-  // (handleSend, handleKeyPress, handleClearChat... permanecem iguais)
+  // (handleKeyPress, handleClearChat... permanecem iguais)
   const handleSend = async () => {
     const messageContent = newMessage.trim();
     if (!messageContent) return;
@@ -204,6 +204,18 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       });
     } else {
       setNewMessage("");
+
+      // --- INÍCIO DA MODIFICAÇÃO ---
+      // Se for uma rolagem, envia para o Discord
+      if (messageType === "roll") {
+        supabase.functions.invoke('discord-roll-handler', {
+          body: {
+            tableId: contextTableId,
+            chatMessage: messageToSend,
+          }
+        }).catch(console.error); // Loga se der erro, mas não bloqueia
+      }
+      // --- FIM DA MODIFICAÇÃO ---
     }
     setLoading(false);
   };
