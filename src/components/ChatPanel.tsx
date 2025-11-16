@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Dices, Trash2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser";
+// --- IMPORTAR O TIPO 'DiceRoll' ---
+import { parseDiceRoll, formatRollResult, type DiceRoll } from "@/lib/dice-parser";
 import { cn } from "@/lib/utils";
 import { useTableContext, TableMember } from "@/features/table/TableContext";
 import {
@@ -29,7 +30,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// (Interface Message, ChatPanelProps... permanecem iguais)
 interface Message {
   id: string;
   message: string;
@@ -43,7 +43,6 @@ interface ChatPanelProps {
   tableId: string;
 }
 
-// (Funções parseMentions... permanecem iguais)
 const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
@@ -60,7 +59,6 @@ const parseMentions = (text: string, members: TableMember[]): string => {
 
 
 export const ChatPanel = ({ tableId }: ChatPanelProps) => {
-  // (Todos os hooks e states... permanecem iguais)
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -69,7 +67,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const { isMaster, tableId: contextTableId, members } = useTableContext();
   const [isClearAlertOpen, setIsClearAlertOpen] = useState(false);
 
-  // (useEffect, loadMessages, subscribeToMessages... permanecem iguais)
   useEffect(() => {
     loadMessages();
     const channel = subscribeToMessages();
@@ -161,7 +158,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     return channel;
   };
 
-  // (handleKeyPress, handleClearChat... permanecem iguais)
   const handleSend = async () => {
     const messageContent = newMessage.trim();
     if (!messageContent) return;
@@ -174,20 +170,31 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       return;
     }
 
-    // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
-    // Encontrar o display_name do usuário atual
     const currentUser = members.find(m => m.id === user.id);
     const userName = currentUser ? currentUser.display_name : "Usuário";
-    // --- FIM DA MODIFICAÇÃO (DISCORD) ---
 
     let messageToSend = messageContent;
     let messageType = "chat";
+    
+    // --- Esta variável guardará os dados para o Discord ---
+    let discordRollData: any = null; 
+
     if (messageContent.startsWith("/r ") || messageContent.startsWith("/roll ")) {
       const command = messageContent.replace(/(\/r|\/roll)\s+/, "");
       const result = parseDiceRoll(command);
+      
       if (result) {
         messageToSend = formatRollResult(command, result);
         messageType = "roll";
+        
+        // --- Preenche os dados estruturados para o Discord ---
+        discordRollData = {
+          command: command,
+          result: result, // O objeto { rolls, modifier, total }
+          userName: userName,
+          rollType: "manual" // Para o backend saber que é um /r
+        };
+        
       } else {
         messageToSend = `Comando de rolagem inválido: ${command}`;
         messageType = "error";
@@ -196,6 +203,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       messageToSend = parseMentions(messageContent, members);
       messageType = "chat";
     }
+    
     const { error } = await supabase.from("chat_messages").insert({
       table_id: tableId,
       user_id: user.id,
@@ -203,6 +211,7 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       message_type: messageType,
       recipient_id: null,
     });
+    
     if (error) {
       toast({
         title: "Erro",
@@ -212,27 +221,31 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     } else {
       setNewMessage("");
 
-      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
-      // Se for uma rolagem, envia para o Discord
-      if (messageType === "roll") {
+      // --- Envia os dados estruturados se for uma rolagem de /r ---
+      if (messageType === "roll" && discordRollData) {
         supabase.functions.invoke('discord-roll-handler', {
           body: {
             tableId: contextTableId,
-            chatMessage: messageToSend,
-            userName: userName, // <-- Enviar o nome
+            rollData: discordRollData // Enviamos o objeto 'rollData'
           }
-        }).catch(console.error); // Loga se der erro, mas não bloqueia
+        }).catch(console.error);
       }
-      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
+      
+      // As tuas rolagens de Ataque/Atributo NÃO vão entrar neste 'if' 
+      // e vão continuar a ser enviadas como 'chatMessage'
+      // (como definido em WeaponAttackDialog.tsx, etc.),
+      // o que está CORRETO.
     }
     setLoading(false);
   };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
+  
   const handleClearChat = async () => {
     setLoading(true);
     const { error } = await supabase
@@ -273,12 +286,9 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     }
   };
 
-  // --- INÍCIO DA CORREÇÃO DAS BORDAS ---
   return (
-    // 1. Adicionado 'bg-card' para garantir um fundo sólido
     <div className="flex flex-col h-full bg-card">
       
-      {/* 2. Alterado 'border-border/50' para 'border-border' (sólido) */}
       <div className="p-4 border-b border-border">
         <div className="flex justify-between items-center">
           <h2 className="font-semibold">Chat da Mesa</h2>
@@ -304,7 +314,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
               key={msg.id}
               className={cn(
                 "p-3 rounded-lg",
-                // 3. O fundo das mensagens pode continuar 'muted/50' (fica bom)
                 msg.message_type === "roll"
                   ? "bg-accent/20 border border-accent/30"
                   : "bg-muted/50",
@@ -350,7 +359,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         </div>
       </ScrollArea>
       
-      {/* 4. Alterado 'border-border/50' para 'border-border' (sólido) */}
       <div className="p-4 border-t border-border">
         <div className="flex gap-2">
           <Input
@@ -360,7 +368,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
             onKeyPress={handleKeyPress}
             disabled={loading}
           />
-          {/* (Botões de Ajuda e Enviar permanecem iguais) */}
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="icon">
@@ -399,7 +406,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         </div>
       </div>
 
-      {/* (AlertDialog permanece igual) */}
       <AlertDialog
         open={isClearAlertOpen}
         onOpenChange={setIsClearAlertOpen}
@@ -427,5 +433,4 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       </AlertDialog>
     </div>
   );
-  // --- FIM DA CORREÇÃO DAS BORDAS ---
 };
