@@ -173,6 +173,13 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       setLoading(false);
       return;
     }
+
+    // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
+    // Encontrar o display_name do usuário atual
+    const currentUser = members.find(m => m.id === user.id);
+    const userName = currentUser ? currentUser.display_name : "Usuário";
+    // --- FIM DA MODIFICAÇÃO (DISCORD) ---
+
     let messageToSend = messageContent;
     let messageType = "chat";
     if (messageContent.startsWith("/r ") || messageContent.startsWith("/roll ")) {
@@ -205,17 +212,18 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     } else {
       setNewMessage("");
 
-      // --- INÍCIO DA MODIFICAÇÃO ---
+      // --- INÍCIO DA MODIFICAÇÃO (DISCORD) ---
       // Se for uma rolagem, envia para o Discord
       if (messageType === "roll") {
         supabase.functions.invoke('discord-roll-handler', {
           body: {
             tableId: contextTableId,
             chatMessage: messageToSend,
+            userName: userName, // <-- Enviar o nome
           }
         }).catch(console.error); // Loga se der erro, mas não bloqueia
       }
-      // --- FIM DA MODIFICAÇÃO ---
+      // --- FIM DA MODIFICAÇÃO (DISCORD) ---
     }
     setLoading(false);
   };
