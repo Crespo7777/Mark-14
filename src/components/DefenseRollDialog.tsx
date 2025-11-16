@@ -72,12 +72,20 @@ export const DefenseRollDialog = ({
       });
     }
 
+    // Mensagem para o chat da APLICAÇÃO (HTML)
     const chatMessage = formatDefenseRoll(
       characterName,
       result,
     );
 
+    // Objeto de dados para o DISCORD
+    const discordRollData = {
+      rollType: "defense",
+      result: result
+    };
+
     if (isHidden && isMaster) {
+      // (Mensagens para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -93,6 +101,7 @@ export const DefenseRollDialog = ({
         recipient_id: masterId,
       });
     } else {
+      // (Mensagem pública para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -105,8 +114,8 @@ export const DefenseRollDialog = ({
       supabase.functions.invoke('discord-roll-handler', {
         body: {
           tableId: contextTableId,
-          chatMessage: chatMessage,
-          userName: characterName, // <-- Enviar o nome
+          rollData: discordRollData, // Envia o JSON
+          userName: characterName, 
         }
       }).catch(console.error);
       // --- FIM DA MODIFICAÇÃO (DISCORD) ---
