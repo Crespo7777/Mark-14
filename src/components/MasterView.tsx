@@ -23,6 +23,7 @@ import {
   Copy,
   MoreVertical,
   Share2,
+  Bot, // <-- 1. IMPORTAR ÍCONE
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -51,6 +52,7 @@ import { JournalRenderer } from "./JournalRenderer";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useTableContext, TableMember } from "@/features/table/TableContext"; // Importa TableMember
+import { DiscordSettingsDialog } from "./DiscordSettingsDialog"; // <-- 2. IMPORTAR NOVO DIÁLOGO
 
 const JournalEntryDialog = lazy(() =>
   import("./JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -122,7 +124,7 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
 
   // A função loadData() permanece a mesma, para a carga inicial
   const loadData = async () => {
-    const [charsRes, npcsRes, journalRes, membersRes] = await Promise.all([
+    const [charsRes, npcsRes, journalRes, membersRes, tableRes] = await Promise.all([
       supabase
         .from("characters")
         .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
@@ -158,8 +160,8 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
     if (journalRes.data) setJournalEntries(journalRes.data as any);
     
     // Atualiza a lista de membros no contexto (caso venha do realtime)
-    if (membersRes.data && membersRes.data.length > 0) {
-        const masterProfile = (membersRes.data[0] as any).master;
+    if (membersRes.data && tableRes.data) {
+        const masterProfile = (tableRes.data as any).master;
         const memberList: TableMember[] = [
           { 
             id: masterProfile.id, 
@@ -508,7 +510,14 @@ export const MasterView = ({ tableId, masterId }: MasterViewProps) => {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold mb-2">Painel do Mestre</h2>
+        {/* --- 3. BOTÃO ADICIONADO AQUI --- */}
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-2"> 
+          <h2 className="text-3xl font-bold">Painel do Mestre</h2>
+          <Suspense fallback={<Button variant="outline" size="sm" disabled>Carregando...</Button>}>
+            <DiscordSettingsDialog />
+          </Suspense>
+        </div>
+        {/* --- FIM DA ADIÇÃO --- */}
         <p className="text-muted-foreground">Controle total sobre a mesa</p>
       </div>
 
