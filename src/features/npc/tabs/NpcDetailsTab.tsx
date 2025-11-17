@@ -13,7 +13,6 @@ import {
 import { Textarea } from "@/components/ui/textarea"; 
 
 export const NpcDetailsTab = () => { 
-  // --- 1. OBTER 'isReadOnly' DO CONTEXTO ---
   const { form, isReadOnly } = useNpcSheet(); 
 
   return (
@@ -33,7 +32,7 @@ export const NpcDetailsTab = () => {
                   <Input
                     placeholder="Nome do NPC"
                     {...field}
-                    readOnly={isReadOnly} // <-- ADICIONADO
+                    readOnly={isReadOnly}
                   />
                 </FormControl>
                 <FormMessage />
@@ -52,7 +51,7 @@ export const NpcDetailsTab = () => {
                     <Input 
                       placeholder="Criatura" 
                       {...field} 
-                      readOnly={isReadOnly} // <-- ADICIONADO
+                      readOnly={isReadOnly}
                     />
                   </FormControl>
                   <FormMessage />
@@ -69,7 +68,7 @@ export const NpcDetailsTab = () => {
                     <Input
                       placeholder="Ex: Normal, Forte, Fraco" 
                       {...field}
-                      readOnly={isReadOnly} // <-- ADICIONADO
+                      readOnly={isReadOnly}
                     />
                   </FormControl>
                   <FormMessage />
@@ -77,6 +76,7 @@ export const NpcDetailsTab = () => {
               )}
             />
             
+            {/* --- ATUALIZADO: Sombra e Objetivo Pessoal com Textarea --- */}
             <FormField
               control={form.control}
               name="shadow"
@@ -86,9 +86,9 @@ export const NpcDetailsTab = () => {
                   <FormControl>
                     <Textarea
                       placeholder="Ex: Negro-carvão, com bordas puídas..."
-                      className="min-h-[80px]"
+                      className="min-h-[80px] resize-none"
                       {...field}
-                      readOnly={isReadOnly} // <-- ADICIONADO
+                      readOnly={isReadOnly}
                     />
                   </FormControl>
                   <FormMessage />
@@ -104,15 +104,16 @@ export const NpcDetailsTab = () => {
                   <FormControl>
                     <Textarea
                       placeholder="Ex: Proteger o ninho a todo custo..."
-                      className="min-h-[80px]"
+                      className="min-h-[80px] resize-none"
                       {...field}
-                      readOnly={isReadOnly} // <-- ADICIONADO
+                      readOnly={isReadOnly}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {/* --- FIM DA ATUALIZAÇÃO --- */}
           </div>
         </CardContent>
       </Card>
@@ -131,9 +132,9 @@ export const NpcDetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Ex: O líder da tribo, a bruxa que o controla..."
-                    className="min-h-[150px]"
+                    className="min-h-[150px] resize-none"
                     {...field}
-                    readOnly={isReadOnly} // <-- ADICIONADO
+                    readOnly={isReadOnly}
                   />
                 </FormControl>
                 <FormMessage />
@@ -159,9 +160,9 @@ export const NpcDetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Lembretes, táticas, etc..."
-                    className="min-h-[150px]"
+                    className="min-h-[150px] resize-none"
                     {...field}
-                    readOnly={isReadOnly} // <-- ADICIONADO
+                    readOnly={isReadOnly}
                   />
                 </FormControl>
                 <FormMessage />
