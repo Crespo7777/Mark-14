@@ -10,15 +10,12 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-// --- 1. IMPORTAR O TEXTAREA ---
-import { Textarea } from "@/components/ui/textarea"; 
-// --- FIM DA IMPORTAÇÃO ---
+import { Textarea } from "@/components/ui/textarea"; // Já estava importado, vamos usar agora
 
 export const DetailsTab = () => {
   const { form } = useCharacterSheet();
 
   return (
-    // --- 2. ENVOLVER TUDO EM UM 'space-y-6' PARA SEPARAR OS CARDS ---
     <div className="space-y-6"> 
       <Card>
         <CardHeader>
@@ -42,7 +39,6 @@ export const DetailsTab = () => {
             )}
           />
           
-          {/* --- 3. GRID ATUALIZADO PARA 2x2 --- */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -77,7 +73,7 @@ export const DetailsTab = () => {
               )}
             />
             
-            {/* --- CAMPOS NOVOS ADICIONADOS AO GRID --- */}
+            {/* --- ALTERAÇÃO AQUI: Input -> Textarea --- */}
             <FormField
               control={form.control}
               name="shadow"
@@ -85,8 +81,9 @@ export const DetailsTab = () => {
                 <FormItem>
                   <FormLabel>Sombra (Cor)</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Ex: Verde-tinta"
+                    <Textarea
+                      placeholder="Ex: Verde-tinta..."
+                      className="min-h-[80px] resize-none" 
                       {...field}
                     />
                   </FormControl>
@@ -101,8 +98,9 @@ export const DetailsTab = () => {
                 <FormItem>
                   <FormLabel>Objetivo Pessoal</FormLabel>
                   <FormControl>
-                    <Input
+                    <Textarea
                       placeholder="Ex: Encontrar a cura..."
+                      className="min-h-[80px] resize-none"
                       {...field}
                     />
                   </FormControl>
@@ -110,14 +108,12 @@ export const DetailsTab = () => {
                 </FormItem>
               )}
             />
-            {/* --- FIM DA ADIÇÃO DO GRID --- */}
+            {/* --- FIM DA ALTERAÇÃO --- */}
           </div>
-          {/* --- FIM DA ATUALIZAÇÃO DO GRID --- */}
 
         </CardContent>
       </Card>
 
-      {/* --- 4. NOVO CARD PARA 'PESSOAS E ALIADOS' --- */}
       <Card>
         <CardHeader>
           <CardTitle>Pessoas e Aliados Importantes</CardTitle>
@@ -132,7 +128,7 @@ export const DetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Ex: Kaelar (Anão Ferreiro), Lysandra (Bruxa)..."
-                    className="min-h-[150px]" // altura ligeiramente reduzida
+                    className="min-h-[150px]"
                     {...field}
                   />
                 </FormControl>
@@ -142,9 +138,7 @@ export const DetailsTab = () => {
           />
         </CardContent>
       </Card>
-      {/* --- FIM DO NOVO CARD --- */}
 
-      {/* --- 5. NOVO CARD PARA 'ANOTAÇÕES GERAIS' --- */}
       <Card>
         <CardHeader>
           <CardTitle>Anotações Gerais</CardTitle>
@@ -161,7 +155,7 @@ export const DetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Lembretes, pistas, itens a comprar..."
-                    className="min-h-[150px]" // altura ligeiramente reduzida
+                    className="min-h-[150px]"
                     {...field}
                   />
                 </FormControl>
@@ -171,8 +165,7 @@ export const DetailsTab = () => {
           />
         </CardContent>
       </Card>
-      {/* --- FIM DO NOVO CARD --- */}
 
-    </div> // --- FIM do 'space-y-6' ---
+    </div>
   );
 };
