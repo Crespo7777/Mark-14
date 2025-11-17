@@ -58,22 +58,22 @@ export const experienceSchema = z.object({
 // 6. ARMAS (Limpar valores padrão)
 export const weaponSchema = z.object({
   id: z.string().default(() => simpleUUID()),
-  name: z.string().default(""), // <-- MUDADO
-  quality: z.string().default(""), // <-- MUDADO
+  name: z.string().default(""), 
+  quality: z.string().default(""), 
   quality_desc: z.string().default(""),
-  damage: z.string().default(""), // <-- MUDADO
-  attribute: z.string().default(""), // <-- MUDADO
-  attackAttribute: z.string().default(""), // <-- MUDADO
+  damage: z.string().default(""), 
+  attribute: z.string().default(""), 
+  attackAttribute: z.string().default(""), 
   projectileId: z.string().optional(),
 });
 
 // 7. ARMADURAS (Limpar valores padrão)
 export const armorSchema = z.object({
   id: z.string().default(() => simpleUUID()),
-  name: z.string().default(""), // <-- MUDADO
-  quality: z.string().default(""), // <-- MUDADO
+  name: z.string().default(""), 
+  quality: z.string().default(""), 
   quality_desc: z.string().default(""),
-  protection: z.string().default(""), // <-- MUDADO
+  protection: z.string().default(""), 
   obstructive: z.number().default(0),
   equipped: z.boolean().default(true),
 });
@@ -82,10 +82,10 @@ export const armorSchema = z.object({
 export const abilitySchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
-  level: z.string().default(""), // <-- MUDADO
-  type: z.string().default(""), // <-- MUDADO
+  level: z.string().default(""), 
+  type: z.string().default(""), 
   description: z.string().default(""),
-  associatedAttribute: z.string().default(""), // <-- MUDADO
+  associatedAttribute: z.string().default(""), 
   corruptionCost: z.number().default(0),
 });
 
@@ -93,7 +93,7 @@ export const abilitySchema = z.object({
 export const traitSchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
-  type: z.string().default(""), // <-- MUDADO
+  type: z.string().default(""), 
   description: z.string().default(""),
 });
 
@@ -102,14 +102,14 @@ export const inventoryItemSchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
   quantity: z.number().default(1),
-  weight: z.number().default(0), // <-- MUDADO (peso padrão 0)
+  weight: z.number().default(0), 
   description: z.string().default(""),
 });
 
 // 11. PROJÉTEIS (Limpar valores padrão)
 export const projectileSchema = z.object({
   id: z.string().default(() => simpleUUID()),
-  name: z.string().default(""), // <-- MUDADO
+  name: z.string().default(""), 
   quantity: z.number().default(0),
 });
 
@@ -122,7 +122,7 @@ export type Trait = z.infer<typeof traitSchema>;
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 export type Projectile = z.infer<typeof projectileSchema>;
 
-// Funções para criar itens padrão (agora vêm limpos)
+// Funções para criar itens padrão
 export const getDefaultWeapon = (): Weapon => weaponSchema.parse({});
 export const getDefaultArmor = (): Armor => armorSchema.parse({});
 export const getDefaultAbility = (): Ability => abilitySchema.parse({});
@@ -139,21 +139,23 @@ export const characterSheetSchema = z.object({
   race: z.string().default("Humano"),
   occupation: z.string().default("Aventureiro"),
 
+  // --- NOVOS CAMPOS ADICIONADOS ---
+  age: z.string().default(""),
+  height: z.string().default(""),
+  weight: z.string().default(""),
+  // -------------------------------
+
   // Campos da aba Detalhes
   shadow: z.string().default(""), 
   personalGoal: z.string().default(""), 
   importantAllies: z.string().default(""), 
   notes: z.string().default(""), // Anotações rápidas
 
-  // 'journal' foi REMOVIDO daqui.
-
   attributes: attributesSchema.default({}),
   toughness: toughnessSchema.default({}),
   corruption: corruptionSchema.default({}),
   
-  // --- INÍCIO DA CORREÇÃO ---
-  painThresholdBonus: z.number().default(0), // <-- ADICIONADO
-  // --- FIM DA CORREÇÃO ---
+  painThresholdBonus: z.number().default(0), 
 
   money: moneySchema.default({}),
   experience: experienceSchema.default({}),
