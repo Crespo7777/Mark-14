@@ -52,7 +52,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { JournalRenderer } from "@/components/JournalRenderer";
 import { EntityListManager } from "@/components/EntityListManager";
 import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
-import { JournalReadDialog } from "@/components/JournalReadDialog"; // <-- NOVO
+import { JournalReadDialog } from "@/components/JournalReadDialog";
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -88,7 +88,6 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
   const [journalSearch, setJournalSearch] = useState("");
   const [showArchivedJournal, setShowArchivedJournal] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntryWithRelations | null>(null);
-  // Estado para leitura
   const [entryToRead, setEntryToRead] = useState<JournalEntryWithRelations | null>(null);
 
   const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
@@ -165,7 +164,7 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
     return (
       <Card 
         className={`border-border/50 flex flex-col h-[280px] hover:shadow-glow transition-shadow cursor-pointer group ${entry.is_archived ? "opacity-60 bg-muted/20" : ""}`}
-        onClick={() => setEntryToRead(entry)} // <-- Clique no card abre leitura
+        onClick={() => setEntryToRead(entry)}
       >
         <CardHeader className="pb-2">
           <CardTitle className="flex justify-between items-start text-lg truncate">
@@ -174,18 +173,14 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
           </CardTitle>
           <CardDescription className="text-xs">{description}</CardDescription>
         </CardHeader>
-        
         <CardContent className="flex-1 overflow-hidden text-sm pt-2 pb-2 relative">
             <JournalRenderer content={entry.content} className="line-clamp-6 text-sm" />
-            
-            {/* Overlay visual de "Clique para ler" */}
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
                 <span className="bg-background/80 px-3 py-1 rounded-full text-xs font-medium flex items-center shadow-sm">
                    <Eye className="w-3 h-3 mr-1" /> Ler
                 </span>
             </div>
         </CardContent>
-        
         <CardFooter className="flex justify-end items-center pt-0 pb-3 px-4 gap-2 h-12" onClick={e => e.stopPropagation()}>
              {isMyEntry && (
                  <div className="flex gap-1">
@@ -260,7 +255,6 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
             </AlertDialogContent>
         </AlertDialog>
 
-        {/* DIÁLOGO DE LEITURA */}
         <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
     </>
   );

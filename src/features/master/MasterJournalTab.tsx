@@ -53,7 +53,7 @@ import { JournalRenderer } from "@/components/JournalRenderer";
 import { EntityListManager } from "@/components/EntityListManager";
 import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
 import { JournalReadDialog } from "@/components/JournalReadDialog";
-import { useTableContext } from "@/features/table/TableContext";
+import { useTableContext } from "@/features/table/TableContext"; // <-- IMPORTADO CORRETAMENTE
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -149,7 +149,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
      return (
         <Card 
           className={`border-border/50 flex flex-col h-[280px] hover:shadow-glow transition-shadow cursor-pointer group ${entry.is_archived ? "opacity-60 bg-muted/20" : ""}`}
-          onClick={() => setEntryToRead(entry)} // O clique no card abre a leitura
+          onClick={() => setEntryToRead(entry)}
         >
             <CardHeader className="pb-2">
                 <CardTitle className="flex justify-between items-start text-lg truncate">
@@ -164,13 +164,8 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                   <span className="bg-background/80 px-3 py-1 rounded-full text-xs font-medium flex items-center shadow-sm"><Eye className="w-3 h-3 mr-1" /> Ler</span>
                 </div>
             </CardContent>
-            
-            {/* --- CORREÇÃO AQUI: 'onClick={e => e.stopPropagation()}' no CardFooter --- */}
-            <CardFooter 
-              className="flex justify-between items-center pt-0 pb-3 px-4 h-12"
-              onClick={(e) => e.stopPropagation()}
-            >
-                <div>
+            <CardFooter className="flex justify-between items-center pt-0 pb-3 px-4 h-12" onClick={(e) => e.stopPropagation()}>
+                <div onClick={e => e.stopPropagation()}>
                     {canShare ? (
                         <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
                             <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>

@@ -80,7 +80,6 @@ export const BackpackTab = () => {
     maxEncumbrance,
     encumbrancePenalty,
     currentExperience,
-    vigorous,
   } = useCharacterCalculations();
 
   const [taler, shekel, ortega] = form.watch(["money.taler", "money.shekel", "money.ortega"]);
@@ -93,10 +92,8 @@ export const BackpackTab = () => {
   return (
     <div className="space-y-6">
       
-      {/* --- RECURSOS (Cards de Topo - Mantém 3 colunas) --- */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
-        {/* Card de Dinheiro */}
+        {/* Card Dinheiro */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><Coins className="w-4 h-4"/> Dinheiro</CardTitle>
@@ -119,7 +116,7 @@ export const BackpackTab = () => {
           </CardContent>
         </Card>
 
-        {/* Card de Experiência */}
+        {/* Card Experiência */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="w-4 h-4"/> Experiência</CardTitle>
@@ -137,7 +134,7 @@ export const BackpackTab = () => {
           </CardContent>
         </Card>
 
-        {/* Card de Carga */}
+        {/* Card Carga */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><Weight className="w-4 h-4"/> Carga</CardTitle>
@@ -149,9 +146,9 @@ export const BackpackTab = () => {
                   <span>Peso: <strong>{currentWeight}</strong></span>
                   <span className="text-muted-foreground">Máx: {maxEncumbrance}</span>
                </div>
-               <Progress value={weightPercentage} className="h-2" indicatorColor={weightBarClass} />
+               {/* CORREÇÃO AQUI: Usando indicatorClassName */}
+               <Progress value={weightPercentage} className="h-2" indicatorClassName={weightBarClass} />
             </div>
-            
             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground pt-2">
                 <div>Limiar: {encumbranceThreshold}</div>
                 <div className="text-right">Imóvel: {maxEncumbrance}</div>
@@ -160,14 +157,10 @@ export const BackpackTab = () => {
         </Card>
       </div>
 
-      {/* --- LISTAS DE ITENS (LAYOUT CORRIGIDO: Vertical Stack) --- */}
-      {/* Removemos o grid lateral para evitar que a munição fique esmagada */}
-      
       <div className="space-y-6">
         <SharedProjectileList control={form.control} name="projectiles" />
         <SharedInventoryList control={form.control} name="inventory" title="Mochila & Equipamento" />
       </div>
-
     </div>
   );
 };
