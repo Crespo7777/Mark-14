@@ -1,5 +1,3 @@
-// src/features/npc/npc.schema.ts
-
 import { z } from "zod";
 import {
   abilitySchema,
@@ -12,7 +10,7 @@ import {
 // Schema para um item de atributo do NPC
 // ---
 const attributeItemSchema = z.object({
-  value: z.number().default(0), // <-- MUDADO (de 10 para 0)
+  value: z.number().default(0),
   note: z.string().default(""), 
 });
 
@@ -31,44 +29,40 @@ const npcAttributesSchema = z.object({
 });
 
 // ---
-// SCHEMA DE COMBATE (Atualizado)
+// SCHEMA DE COMBATE
 // ---
 const npcCombatSchema = z.object({
-  toughness_current: z.number().default(0), // <-- MUDADO (de 10 para 0)
-  toughness_max: z.number().default(0), // <-- MUDADO (de 10 para 0)
+  toughness_current: z.number().default(0),
+  toughness_max: z.number().default(0),
   defense: z.number().default(0), 
   armor_rd: z.number().default(0),
-  pain_threshold: z.number().default(0), // <-- MUDADO (de 5 para 0)
-  
-  // --- INÍCIO DA CORREÇÃO ---
-  pain_threshold_bonus: z.number().default(0), // <-- ADICIONADO
-  // --- FIM DA CORREÇÃO ---
+  pain_threshold: z.number().default(0),
+  pain_threshold_bonus: z.number().default(0),
 });
 
 // ---
 // SCHEMA DE ARMADURA (Simplificado)
 // ---
 export const npcArmorSchema = z.object({
-  id: z.string().default(() => simpleUUID()),
-  name: z.string().default(""), // <-- MUDADO
-  protection: z.string().default(""), // <-- MUDADO
+  id: z.string().default(simpleUUID),
+  name: z.string().default(""),
+  protection: z.string().default(""),
   quality: z.string().default(""),
 });
 
 // ---
-// NOVO: Schema de Arma (Simplificado para o NPC)
+// Schema de Arma (Simplificado para o NPC)
 // ---
 export const npcWeaponSchema = z.object({
-  id: z.string().default(() => simpleUUID()),
-  name: z.string().default(""), // <-- MUDADO
+  id: z.string().default(simpleUUID),
+  name: z.string().default(""),
   quality: z.string().default(""),
-  damage: z.string().default(""), // <-- MUDADO
-  attackAttribute: z.string().default(""), // <-- MUDADO
+  damage: z.string().default(""),
+  attackAttribute: z.string().default(""),
 });
-// --- FIM DO NOVO ---
 
 // ---
-// 3. O SCHEMA PRINCIPAL DO NPC (ATUALIZADO)
+// 3. O SCHEMA PRINCIPAL DO NPC
 // ---
 export const npcSheetSchema = z.object({
   // Detalhes Básicos
@@ -81,8 +75,6 @@ export const npcSheetSchema = z.object({
   personalGoal: z.string().default(""), 
   importantAllies: z.string().default(""), 
   notes: z.string().default(""), // Anotações rápidas
-
-  // 'journal' foi REMOVIDO daqui.
 
   // Atributos
   attributes: npcAttributesSchema.default({}),
@@ -97,7 +89,6 @@ export const npcSheetSchema = z.object({
   armors: z.array(npcArmorSchema).default([]),
   inventory: z.array(inventoryItemSchema).default([]),
 });
-
 
 // Tipos e Valores Padrão
 export type NpcSheetData = z.infer<typeof npcSheetSchema>;

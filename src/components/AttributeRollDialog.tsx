@@ -3,27 +3,13 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import {
-  rollAttributeTest,
-  formatAttributeTest,
-} from "@/lib/dice-parser";
-// --- INÍCIO DA CORREÇÃO ---
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { rollAttributeTest, formatAttributeTest } from "@/lib/dice-parser";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Dices } from "lucide-react";
 import { Separator } from "@/components/ui/separator"; 
 import { useTableContext } from "@/features/table/TableContext"; 
-// --- FIM DA CORREÇÃO ---
+import { BaseRollDialog } from "@/components/BaseRollDialog"; // <-- IMPORTADO
 
 interface AttributeRollDialogProps {
   open: boolean;
@@ -46,7 +32,7 @@ export const AttributeRollDialog = ({
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { isMaster, masterId, userId, tableId: contextTableId } = useTableContext();
+  const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
   
   const handleRoll = async () => {
@@ -75,7 +61,6 @@ export const AttributeRollDialog = ({
     }
 
     const chatMessage = formatAttributeTest(characterName, attributeName, result);
-    
     const discordRollData = {
       rollType: "attribute",
       attributeName: attributeName,
@@ -83,7 +68,6 @@ export const AttributeRollDialog = ({
     };
     
     if (isHidden && isMaster) {
-      // (Mensagem para o Mestre no chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -91,7 +75,6 @@ export const AttributeRollDialog = ({
         message_type: "roll",
         recipient_id: masterId,
       });
-      // (Mensagem genérica para todos no chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -100,7 +83,6 @@ export const AttributeRollDialog = ({
         recipient_id: null,
       });
     } else {
-      // (Mensagem pública para o chat da app)
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
@@ -110,11 +92,7 @@ export const AttributeRollDialog = ({
       });
       
       supabase.functions.invoke('discord-roll-handler', {
-        body: {
-          tableId: contextTableId,
-          rollData: discordRollData,
-          userName: characterName,
-        }
+        body: { tableId: contextTableId, rollData: discordRollData, userName: characterName }
       }).catch(console.error);
     }
 
@@ -124,64 +102,49 @@ export const AttributeRollDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Teste de {attributeName}</DialogTitle>
-          <DialogDescription>
-            O alvo da rolagem (1d20) é {attributeValue}.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
+    <BaseRollDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Teste de ${attributeName}`}
+      description={`O alvo da rolagem (1d20) é ${attributeValue}.`}
+      onRoll={handleRoll}
+      loading={loading}
+    >
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="advantage"
+          checked={withAdvantage}
+          onCheckedChange={(checked) => setWithAdvantage(checked as boolean)}
+        />
+        <Label htmlFor="advantage">Vantagem (+1d4 na rolagem)</Label>
+      </div>
+      
+      <div className="space-y-2">
+        <Label htmlFor="modifier">Modificador (no alvo)</Label>
+        <Input
+          id="modifier"
+          type="number"
+          value={modifier}
+          onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)}
+          placeholder="Ex: -2 ou +1"
+        />
+      </div>
+
+      {isMaster && (
+        <>
+          <Separator className="my-4" />
           <div className="flex items-center space-x-2">
             <Checkbox
-              id="advantage"
-              checked={withAdvantage}
-              onCheckedChange={(checked) => setWithAdvantage(checked as boolean)}
+              id="hidden-roll"
+              checked={isHidden}
+              onCheckedChange={(checked) => setIsHidden(checked as boolean)}
             />
-            <Label htmlFor="advantage">Vantagem (+1d4 na rolagem)</Label>
+            <Label htmlFor="hidden-roll" className="text-purple-400">
+              Rolar Escondido (Apenas Mestre)
+            </Label>
           </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="modifier">Modificador (no alvo)</Label>
-            <Input
-              id="modifier"
-              type="number"
-              value={modifier}
-              onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)}
-              placeholder="Ex: -2 ou +1"
-            />
-          </div>
-
-          {isMaster && (
-            <>
-              <Separator className="my-4" />
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="hidden-roll"
-                  checked={isHidden}
-                  onCheckedChange={(checked) => setIsHidden(checked as boolean)}
-                />
-                <Label htmlFor="hidden-roll" className="text-purple-400">
-                  Rolar Escondido (Apenas Mestre)
-                </Label>
-              </div>
-            </>
-          )}
-
-        </div>
-        <DialogFooter>
-          <Button
-            type="button"
-            className="w-full"
-            onClick={handleRoll}
-            disabled={loading}
-          >
-            {loading ? "Rolando..." : <Dices className="w-4 h-4 mr-2" />}
-            Rolar
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      )}
+    </BaseRollDialog>
   );
 };

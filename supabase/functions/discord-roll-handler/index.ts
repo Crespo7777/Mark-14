@@ -1,5 +1,3 @@
-// supabase/functions/discord-roll-handler/index.ts
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.44.4";
 
 const corsHeaders = {
@@ -7,9 +5,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// --- NOVAS DEFINIÇÕES DE TIPO ---
+// --- CONSTANTES DE COR (Decimal) ---
+const DISCORD_COLORS = {
+  CRITICAL: 3066993,  // Verde
+  SUCCESS: 5763719,   // Verde claro
+  FUMBLE: 15158332,   // Vermelho escuro
+  FAILURE: 10038562,  // Vermelho
+  INFO: 14981709      // Âmbar
+};
 
-// Resultado de uma rolagem de atributo (copiado de dice-parser.ts)
+// --- TIPOS ---
+
 interface AttributeRollResult {
   mainRoll: number;
   advantageRoll: number | null;
@@ -21,7 +27,6 @@ interface AttributeRollResult {
   isFumble: boolean;
 }
 
-// Tipos de dados de rolagem que recebemos dos diálogos
 interface ManualRollData {
   rollType: "manual";
   command: string;
@@ -60,17 +65,15 @@ interface DamageRollData {
 
 type RollData = ManualRollData | AttributeRollData | AbilityRollData | AttackRollData | DefenseRollData | DamageRollData;
 
-// --- NOVAS FUNÇÕES DE FORMATAÇÃO DE EMBED ---
+// --- HELPERS DE FORMATAÇÃO ---
 
-// Define a cor da borda com base no sucesso
 const getResultColor = (result: AttributeRollResult): number => {
-  if (result.isCrit) return 3066993; // Verde (Sucesso Crítico)
-  if (result.isSuccess) return 5763719; // Verde claro (Sucesso)
-  if (result.isFumble) return 15158332; // Vermelho escuro (Falha Crítica)
-  return 10038562; // Vermelho (Falha)
+  if (result.isCrit) return DISCORD_COLORS.CRITICAL;
+  if (result.isSuccess) return DISCORD_COLORS.SUCCESS;
+  if (result.isFumble) return DISCORD_COLORS.FUMBLE;
+  return DISCORD_COLORS.FAILURE;
 };
 
-// Formata o emoji do resultado
 const formatResultString = (result: AttributeRollResult): string => {
   if (result.isCrit) return "✨ **Sucesso Crítico!**";
   if (result.isSuccess) return "✔️ **Sucesso**";
@@ -78,7 +81,6 @@ const formatResultString = (result: AttributeRollResult): string => {
   return "❌ **Falha**";
 };
 
-// Formata a string da rolagem (ex: "1 (d20) = 1")
 const formatRollString = (result: AttributeRollResult): string => {
   let rollStr = `${result.mainRoll} (d20)`;
   if (result.advantageRoll) {
@@ -87,7 +89,6 @@ const formatRollString = (result: AttributeRollResult): string => {
   return `\`${rollStr} = ${result.totalRoll}\``;
 };
 
-// Formata a string do alvo (ex: "Alvo: 10 [-2]")
 const formatTargetString = (result: AttributeRollResult): string => {
   let modStr = "";
   if (result.modifier > 0) modStr = ` [${result.target - result.modifier} +${result.modifier}]`;
@@ -95,7 +96,7 @@ const formatTargetString = (result: AttributeRollResult): string => {
   return `\`${result.target}\`${modStr}`;
 };
 
-// Cria um embed padrão para testes de Atributo (Ataque, Defesa, Habilidade)
+// Cria um embed padrão para testes de Atributo
 const buildTestEmbed = (
   title: string, 
   authorName: string, 
@@ -116,7 +117,6 @@ const buildTestEmbed = (
   };
 };
 
-// Função principal que constrói o Payload
 const buildPayload = (rollData: RollData, userName: string) => {
   let embed = {};
 
@@ -131,29 +131,24 @@ const buildPayload = (rollData: RollData, userName: string) => {
         author: { name: userName || "Rolagem" },
         title: `Rolou ${command}`,
         description: description,
-        color: 14981709, // Âmbar
+        color: DISCORD_COLORS.INFO,
         footer: { text: "Symbaroum VTT" }
       };
       break;
     }
-    
     case "attribute":
       embed = buildTestEmbed(`Teste de ${rollData.attributeName}`, userName, rollData.result);
       break;
-      
     case "attack":
       embed = buildTestEmbed(`Ataque com ${rollData.weaponName}`, userName, rollData.result, `Atributo: ${rollData.attributeName}`);
       break;
-
     case "defense":
       embed = buildTestEmbed(`Teste de Defesa`, userName, rollData.result);
       break;
-
     case "ability":
       const footer = rollData.corruptionCost > 0 ? `+${rollData.corruptionCost} Corrupção | Atributo: ${rollData.attributeName}` : `Atributo: ${rollData.attributeName}`;
       embed = buildTestEmbed(`Usou ${rollData.abilityName}`, userName, rollData.result, footer);
       break;
-
     case "damage": {
       let rollStr = `[${rollData.baseRoll.rolls.join(", ")}] (Base)`;
       if (rollData.advantageRoll) {
@@ -164,12 +159,11 @@ const buildPayload = (rollData: RollData, userName: string) => {
       } else if (rollData.modifier < 0) {
         rollStr += ` - ${Math.abs(rollData.modifier)} (Mod)`;
       }
-      
       embed = {
         author: { name: userName },
         title: `Dano com ${rollData.weaponName}`,
         description: `${rollStr}\nTotal = **${rollData.totalDamage}** Dano`,
-        color: 14981709, // Âmbar
+        color: DISCORD_COLORS.INFO,
         footer: { text: "Symbaroum VTT" }
       };
       break;
@@ -178,14 +172,10 @@ const buildPayload = (rollData: RollData, userName: string) => {
 
   return {
     username: "Symbaroum VTT",
-    // avatar_url: "URL_DO_ICONE_AQUI",
     embeds: [embed]
   };
 };
 
-/**
- * Função de fallback para limpar o HTML (agora usada apenas para rolagens não-padrão)
- */
 function formatHtmlFallback(html: string): string {
   let text = html;
   text = text.replace(/<br\s*\/?>/gi, '\n');
@@ -206,9 +196,6 @@ function formatHtmlFallback(html: string): string {
   text = text.replace(/<[^>]*?>/g, '');
   return text.trim();
 }
-
-
-// --- SERVIDOR PRINCIPAL (ATUALIZADO) ---
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -243,27 +230,18 @@ Deno.serve(async (req: Request) => {
       });
     }
     
-    // --- LÓGICA DE PAYLOAD ATUALIZADA ---
     let payload = {};
-
-    // CASO A: Temos dados estruturados (TODAS as rolagens de diálogo e /r)
     if (rollData) {
       payload = buildPayload(rollData as RollData, userName || "Rolagem");
-    } 
-    // CASO B: Recebemos HTML (Fallback para rolagens de Proteção, etc.)
-    else if (chatMessage) {
+    } else if (chatMessage) {
       const formattedContent = formatHtmlFallback(chatMessage as string);
       payload = {
         username: userName || "Symbaroum VTT",
         content: formattedContent,
       };
-    } 
-    // CASO C: Erro
-    else {
+    } else {
       throw new Error("Payload inválido");
     }
-    
-    // --- FIM DA LÓGICA DO PAYLOAD ---
     
     const discordResponse = await fetch(webhookUrl, {
       method: "POST",

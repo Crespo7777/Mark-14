@@ -119,9 +119,13 @@ export const rollAttributeTest = (options: {
   const advantageRoll = withAdvantage ? rollDie(4) : null;
 
   const target = attributeValue + modifier;
-  const totalRoll = mainRoll + (advantageRoll || 0);
+  
+  // --- CORREÇÃO DE REGRA: ---
+  // Em Symbaroum (Roll Under), a vantagem ajuda a baixar o resultado.
+  // Subtraímos o d4 do d20.
+  const totalRoll = mainRoll - (advantageRoll || 0);
 
-  const isSuccess = totalRoll <= target;
+  const isSuccess = totalRoll <= target && mainRoll !== 20; // 20 é sempre falha
   const isCrit = mainRoll === 1;
   const isFumble = mainRoll === 20;
 
@@ -161,7 +165,8 @@ const formatTestResult = (
 
   let rollStr = `<span class="font-bold text-primary-foreground">${mainRoll}</span> (d20)`;
   if (advantageRoll) {
-    rollStr += ` + <span class="font-bold text-primary-foreground">${advantageRoll}</span> (d4)`;
+    // CORREÇÃO VISUAL: Mostra o sinal de menos para a Vantagem
+    rollStr += ` - <span class="font-bold text-green-400">${advantageRoll}</span> (Vantagem)`;
   }
 
   let modStr = "";

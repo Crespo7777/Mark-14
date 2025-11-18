@@ -3,7 +3,6 @@
 import { useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Database } from "@/integrations/supabase/types";
 import {
   Card,
   CardContent,
@@ -13,21 +12,16 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import {
-  Search,
   Plus,
-  Folder,
   MoreVertical,
   Edit,
   Trash2,
   Archive,
   ArchiveRestore,
   FolderOpen,
-  Share2
+  Share2,
+  Eye
 } from "lucide-react";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
@@ -56,6 +50,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { JournalRenderer } from "@/components/JournalRenderer";
+import { EntityListManager } from "@/components/EntityListManager";
+import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
+import { JournalReadDialog } from "@/components/JournalReadDialog";
 import { useTableContext } from "@/features/table/TableContext";
 
 const JournalEntryDialog = lazy(() =>
@@ -63,21 +60,11 @@ const JournalEntryDialog = lazy(() =>
 );
 
 const SheetLoadingFallback = () => (
-  <Card className="border-border/50 flex flex-col">
+  <Card className="border-border/50 flex flex-col h-[200px]">
     <CardHeader><Skeleton className="h-6 w-1/2" /><Skeleton className="h-4 w-1/3" /></CardHeader>
     <CardContent className="flex-1"><Skeleton className="h-4 w-3/4" /></CardContent>
-    <CardFooter><Skeleton className="h-9 w-full" /></CardFooter>
   </Card>
 );
-
-type JournalEntry = Database["public"]["Tables"]["journal_entries"]["Row"] & {
-  player: { display_name: string } | null;
-  character: { name: string } | null;
-  npc: { name: string } | null;
-  folder_id?: string | null;
-  is_archived?: boolean;
-};
-type FolderType = { id: string; name: string };
 
 const fetchJournalEntries = async (tableId: string) => {
   const { data, error } = await supabase
@@ -86,7 +73,7 @@ const fetchJournalEntries = async (tableId: string) => {
     .eq("table_id", tableId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data as JournalEntry[];
+  return data as JournalEntryWithRelations[];
 };
 
 const fetchFolders = async (tableId: string) => {
@@ -102,7 +89,8 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
 
   const [journalSearch, setJournalSearch] = useState("");
   const [showArchivedJournal, setShowArchivedJournal] = useState(false);
-  const [entryToDelete, setEntryToDelete] = useState<JournalEntry | null>(null);
+  const [entryToDelete, setEntryToDelete] = useState<JournalEntryWithRelations | null>(null);
+  const [entryToRead, setEntryToRead] = useState<JournalEntryWithRelations | null>(null);
 
   const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
     queryKey: ['journal', tableId],
@@ -124,21 +112,15 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   };
 
   const handleArchiveItem = async (id: string, currentValue: boolean) => {
-    const { error } = await supabase.from("journal_entries").update({ is_archived: !currentValue }).eq("id", id);
-    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else {
-        toast({ title: !currentValue ? "Arquivado" : "Restaurado" });
-        invalidateJournal();
-    }
+    await supabase.from("journal_entries").update({ is_archived: !currentValue }).eq("id", id);
+    toast({ title: !currentValue ? "Arquivado" : "Restaurado" });
+    invalidateJournal();
   };
 
   const handleMoveItem = async (id: string, folderId: string | null) => {
-    const { error } = await supabase.from("journal_entries").update({ folder_id: folderId }).eq("id", id);
-    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else {
-        toast({ title: "Movido com sucesso" });
-        invalidateJournal();
-    }
+    await supabase.from("journal_entries").update({ folder_id: folderId }).eq("id", id);
+    toast({ title: "Movido com sucesso" });
+    invalidateJournal();
   };
 
   const handleUpdateSharing = async (id: string, players: string[]) => {
@@ -156,13 +138,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
     return matchesSearch && matchesArchive;
   });
 
-  const entriesInFolders = folders.map(f => ({
-    ...f,
-    items: filteredEntries.filter(i => i.folder_id === f.id)
-  }));
-  const entriesNoFolder = filteredEntries.filter(i => !i.folder_id);
-
-  const JournalCard = ({ entry }: { entry: JournalEntry }) => {
+  const renderJournalCard = (entry: JournalEntryWithRelations) => {
      let description = "Anotação do Mestre";
      let canShare = true;
      if (entry.player) { description = `De: ${entry.player.display_name}`; canShare = false; }
@@ -171,27 +147,40 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
      else if (entry.is_shared) { description = "Público"; }
      
      return (
-        <Card className={`border-border/50 flex flex-col ${entry.is_archived ? "opacity-60 bg-muted/20" : ""}`}>
-            <CardHeader>
-                <CardTitle className="flex justify-between items-start">
-                    {entry.title}
-                    {entry.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
+        <Card 
+          className={`border-border/50 flex flex-col h-[280px] hover:shadow-glow transition-shadow cursor-pointer group ${entry.is_archived ? "opacity-60 bg-muted/20" : ""}`}
+          onClick={() => setEntryToRead(entry)} // O clique no card abre a leitura
+        >
+            <CardHeader className="pb-2">
+                <CardTitle className="flex justify-between items-start text-lg truncate">
+                    <span className="truncate pr-2">{entry.title}</span>
+                    {entry.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded shrink-0">Arq</span>}
                 </CardTitle>
-                <CardDescription>{description}</CardDescription>
+                <CardDescription className="text-xs">{description}</CardDescription>
             </CardHeader>
-            <CardContent className="flex-1"><JournalRenderer content={entry.content} className="line-clamp-3" /></CardContent>
-            <CardFooter className="flex justify-between items-center">
-                <div onClick={e => e.stopPropagation()}>
+            <CardContent className="flex-1 overflow-hidden text-sm pt-2 pb-2 relative">
+                <JournalRenderer content={entry.content} className="line-clamp-6 text-sm" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
+                  <span className="bg-background/80 px-3 py-1 rounded-full text-xs font-medium flex items-center shadow-sm"><Eye className="w-3 h-3 mr-1" /> Ler</span>
+                </div>
+            </CardContent>
+            
+            {/* --- CORREÇÃO AQUI: 'onClick={e => e.stopPropagation()}' no CardFooter --- */}
+            <CardFooter 
+              className="flex justify-between items-center pt-0 pb-3 px-4 h-12"
+              onClick={(e) => e.stopPropagation()}
+            >
+                <div>
                     {canShare ? (
                         <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
                             <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>
                         </ShareDialog>
                     ) : <div/>}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-1">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent>
+                        <DropdownMenuContent align="end">
                              <DropdownMenuItem onClick={() => handleArchiveItem(entry.id, !!entry.is_archived)}>
                                 {entry.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
                                 {entry.is_archived ? "Restaurar" : "Arquivar"}
@@ -214,7 +203,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                     
                     <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
                         <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} entry={entry} isPlayerNote={!!entry.player_id} characterId={entry.character_id || undefined} npcId={entry.npc_id || undefined}>
-                            <Button variant="outline" size="icon"><Edit className="w-4 h-4" /></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="w-4 h-4" /></Button>
                         </JournalEntryDialog>
                     </Suspense>
                 </div>
@@ -223,54 +212,30 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
      );
   };
 
+  if (isLoadingJournal) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
+
   return (
-    <div className="space-y-4">
-         <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap justify-between items-end gap-4 bg-muted/30 p-4 rounded-lg border">
-                <div className="flex flex-1 items-center gap-2 min-w-[200px]">
-                    <Search className="w-4 h-4 text-muted-foreground" />
-                    <Input placeholder="Pesquisar no Diário..." value={journalSearch} onChange={(e) => setJournalSearch(e.target.value)} className="h-9" />
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <Switch id="show-archived-journal" checked={showArchivedJournal} onCheckedChange={setShowArchivedJournal} />
-                        <Label htmlFor="show-archived-journal" className="text-sm cursor-pointer">Arquivados</Label>
-                    </div>
+    <>
+        <EntityListManager
+            items={filteredEntries}
+            folders={folders}
+            searchTerm={journalSearch}
+            onSearch={setJournalSearch}
+            showArchived={showArchivedJournal}
+            onToggleArchived={setShowArchivedJournal}
+            renderItem={renderJournalCard}
+            emptyMessage="Nenhuma anotação encontrada."
+            actions={
+                <>
                     <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Diário" />
                     <Suspense fallback={<Button size="sm" disabled>...</Button>}>
                         <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal}>
                             <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Entrada</Button>
                         </JournalEntryDialog>
                     </Suspense>
-                </div>
-            </div>
-
-            {isLoadingJournal ? <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div> : (
-               <div className="space-y-6">
-                  {entriesInFolders.length > 0 && (
-                     <Accordion type="multiple" className="w-full space-y-2">
-                        {entriesInFolders.map(f => (
-                           <AccordionItem key={f.id} value={f.id} className="border rounded-lg bg-card px-4">
-                              <AccordionTrigger className="hover:no-underline py-3">
-                                 <div className="flex items-center gap-2"><Folder className="w-4 h-4 text-primary" /><span className="font-semibold">{f.name}</span><span className="text-muted-foreground text-sm ml-2">({f.items.length})</span></div>
-                              </AccordionTrigger>
-                              <AccordionContent className="pt-2 pb-4">
-                                 <div className="grid gap-4 md:grid-cols-2">{f.items.map(e => <JournalCard key={e.id} entry={e} />)}</div>
-                              </AccordionContent>
-                           </AccordionItem>
-                        ))}
-                     </Accordion>
-                  )}
-                  {entriesNoFolder.length > 0 && (
-                     <div>
-                        {folders.length > 0 && <h4 className="text-sm font-medium text-muted-foreground mb-3 uppercase tracking-wider">Outros</h4>}
-                        <div className="grid gap-4 md:grid-cols-2">{entriesNoFolder.map(e => <JournalCard key={e.id} entry={e} />)}</div>
-                     </div>
-                  )}
-                  {filteredEntries.length === 0 && <p className="text-muted-foreground text-center py-12 border rounded-lg border-dashed">Nenhuma anotação encontrada.</p>}
-               </div>
-            )}
-         </div>
+                </>
+            }
+        />
 
         <AlertDialog open={!!entryToDelete} onOpenChange={(open) => !open && setEntryToDelete(null)}>
             <AlertDialogContent>
@@ -278,6 +243,8 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                 <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteJournalEntry} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction></AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
-    </div>
+
+        <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
+    </>
   );
 };

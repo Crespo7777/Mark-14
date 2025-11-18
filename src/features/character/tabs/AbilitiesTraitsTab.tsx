@@ -1,7 +1,7 @@
-// src/features/npc/tabs/NpcSkillsTab.tsx
+// src/features/character/tabs/AbilitiesTraitsTab.tsx
 
 import { useState } from "react";
-import { useNpcSheet } from "../NpcSheetContext";
+import { useCharacterSheet } from "../CharacterSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Zap, Dices } from "lucide-react";
-import { getDefaultAbility } from "@/features/character/character.schema";
-import { attributesList } from "@/features/character/character.constants";
+import { getDefaultAbility } from "../character.schema";
+import { attributesList } from "../character.constants";
+import { AbilityRollDialog } from "@/components/AbilityRollDialog";
 import { Separator } from "@/components/ui/separator";
 import {
   Accordion,
@@ -31,23 +32,20 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
-import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
-import { useToast } from "@/hooks/use-toast";
+import { Switch } from "@/components/ui/switch";
+import { SharedTraitList } from "@/components/SharedTraitList";
 
 type AbilityRollData = {
   abilityName: string;
   attributeName: string;
   attributeValue: number;
+  corruptionCost: number;
 };
 
-export const NpcSkillsTab = () => {
-  const { form, npc, isReadOnly } = useNpcSheet();
-  const [selectedAbilityRoll, setSelectedAbilityRoll] =
-    useState<AbilityRollData | null>(null);
-  
-  const [openItems, setOpenItems] = useState<string[]>([]);
-  const { toast } = useToast();
+export const AbilitiesTraitsTab = () => {
+  const { form } = useCharacterSheet();
+  const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
+  const [openAbilityItems, setOpenAbilityItems] = useState<string[]>([]);
 
   const {
     fields: abilityFields,
@@ -61,33 +59,29 @@ export const NpcSkillsTab = () => {
   const handleRollClick = (index: number) => {
     const ability = form.getValues(`abilities.${index}`);
     const allAttributes = form.getValues("attributes");
-
-    const selectedAttr = attributesList.find(
-      (attr) => attr.key === ability.associatedAttribute,
-    );
+    const selectedAttr = attributesList.find((attr) => attr.key === ability.associatedAttribute);
 
     const attributeValue = selectedAttr
-      ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
+      ? allAttributes[selectedAttr.key as keyof typeof allAttributes]
       : 0;
-
-    if (attributeValue === 0 || !selectedAttr) {
-      toast({
-        title: "Atributo não definido",
-        description: "Selecione um Atributo Associado para esta habilidade.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     setSelectedAbilityRoll({
       abilityName: ability.name || "Habilidade",
       attributeName: selectedAttr?.label || "Nenhum",
       attributeValue: attributeValue,
+      corruptionCost: ability.corruptionCost || 0,
     });
   };
 
+  const characterName = form.watch("name");
+
   return (
-    <>
+    <div className="space-y-6">
+      
+      {/* --- 1. TRAÇOS AGORA VÊM PRIMEIRO --- */}
+      <SharedTraitList control={form.control} name="traits" />
+
+      {/* --- 2. HABILIDADES AGORA VÊM DEPOIS --- */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -97,14 +91,13 @@ export const NpcSkillsTab = () => {
             type="button"
             size="sm"
             onClick={() => appendAbility(getDefaultAbility())}
-            disabled={isReadOnly}
           >
             <Plus className="w-4 h-4 mr-2" /> Adicionar
           </Button>
         </CardHeader>
         <CardContent>
           {abilityFields.length === 0 && (
-            <p className="text-muted-foreground text-center py-12">
+            <p className="text-muted-foreground text-center py-8">
               Nenhuma habilidade adicionada.
             </p>
           )}
@@ -112,8 +105,8 @@ export const NpcSkillsTab = () => {
           <Accordion
             type="multiple"
             className="space-y-4"
-            value={openItems}
-            onValueChange={setOpenItems}
+            value={openAbilityItems}
+            onValueChange={setOpenAbilityItems}
           >
             {abilityFields.map((field, index) => (
               <AccordionItem
@@ -125,34 +118,47 @@ export const NpcSkillsTab = () => {
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                       <h4 className="font-semibold text-base text-primary-foreground truncate">
-                        {form.watch(`abilities.${index}.name`) ||
-                          "Nova Habilidade"}
+                        {form.watch(`abilities.${index}.name`) || "Nova Habilidade"}
                       </h4>
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="flex gap-1.5 flex-wrap items-center">
                         <Badge variant="secondary" className="px-1.5 py-0.5">
                           {form.watch(`abilities.${index}.level`)}
                         </Badge>
+
+                        {form.watch(`abilities.${index}.name`)?.toLowerCase().includes("amoque") && (
+                          <div className="flex items-center gap-2 bg-red-900/30 px-2 py-1 rounded-full border border-red-500/50 ml-2" onClick={(e) => e.stopPropagation()}>
+                             <Switch
+                                checked={form.watch(`abilities.${index}.isActive`)}
+                                onCheckedChange={(checked) => {
+                                  form.setValue(`abilities.${index}.isActive`, checked, { shouldDirty: true });
+                                }}
+                                className="scale-75 data-[state=checked]:bg-red-600"
+                             />
+                             <span className="text-xs font-bold text-red-200">ATIVO</span>
+                          </div>
+                        )}
+
                         <Badge variant="outline" className="px-1.5 py-0.5">
                           {attributesList.find(
-                            (a) =>
-                              a.key ===
-                              form.watch(
-                                `abilities.${index}.associatedAttribute`,
-                              ),
+                            (a) => a.key === form.watch(`abilities.${index}.associatedAttribute`)
                           )?.label || "N/A"}
                         </Badge>
+                        
+                        {form.watch(`abilities.${index}.corruptionCost`) > 0 && (
+                          <Badge variant="destructive" className="px-1.5 py-0.5">
+                            Custo: {form.watch(`abilities.${index}.corruptionCost`)}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   </AccordionTrigger>
 
-                  <div
-                    className="flex gap-1 pl-2 flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <div className="flex gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                     <Button
                       type="button"
                       size="sm"
                       onClick={() => handleRollClick(index)}
+                      disabled={form.watch(`abilities.${index}.associatedAttribute`) === "Nenhum"}
                     >
                       <Dices className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Rolar</span>
@@ -163,7 +169,6 @@ export const NpcSkillsTab = () => {
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
                       onClick={() => removeAbility(index)}
-                      disabled={isReadOnly}
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -179,13 +184,7 @@ export const NpcSkillsTab = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Nome</FormLabel>
-                            <FormControl>
-                              <Input
-                                placeholder="Nome da Habilidade / Poder"
-                                {...field}
-                                readOnly={isReadOnly}
-                              />
-                            </FormControl>
+                            <FormControl><Input placeholder="Nome da Habilidade" {...field} /></FormControl>
                           </FormItem>
                         )}
                       />
@@ -195,16 +194,8 @@ export const NpcSkillsTab = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Nível</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value}
-                              disabled={isReadOnly}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione o nível" />
-                                </SelectTrigger>
-                              </FormControl>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
                                 <SelectItem value="Novato">Novato</SelectItem>
                                 <SelectItem value="Adepto">Adepto</SelectItem>
@@ -220,20 +211,10 @@ export const NpcSkillsTab = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Tipo</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value}
-                              disabled={isReadOnly}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione o tipo" />
-                                </SelectTrigger>
-                              </FormControl>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
-                                <SelectItem value="Habilidade">
-                                  Habilidade
-                                </SelectItem>
+                                <SelectItem value="Habilidade">Habilidade</SelectItem>
                                 <SelectItem value="Poder">Poder</SelectItem>
                                 <SelectItem value="Ritual">Ritual</SelectItem>
                               </SelectContent>
@@ -242,37 +223,39 @@ export const NpcSkillsTab = () => {
                         )}
                       />
                     </div>
-                    <FormField
-                      control={form.control}
-                      name={`abilities.${index}.associatedAttribute`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Atributo Associado (para rolagem)
-                          </FormLabel>
-                          <Select
-                            onValueChange={field.onChange}
-                            value={field.value}
-                            disabled={isReadOnly}
-                          >
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <FormField
+                        control={form.control}
+                        name={`abilities.${index}.associatedAttribute`}
+                        render={({ field }) => (
+                          <FormItem className="md:col-span-2">
+                            <FormLabel>Atributo Associado (para rolagem)</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                              <SelectContent>
+                                <SelectItem value="Nenhum">Nenhum</SelectItem>
+                                <Separator />
+                                {attributesList.map((attr) => (
+                                  <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`abilities.${index}.corruptionCost`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Custo Corrupção</FormLabel>
                             <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione o atributo..." />
-                              </SelectTrigger>
+                              <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)} />
                             </FormControl>
-                            <SelectContent>
-                              <SelectItem value="Nenhum">Nenhum</SelectItem>
-                              <Separator />
-                              {attributesList.map((attr) => (
-                                <SelectItem key={attr.key} value={attr.key}>
-                                  {attr.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )}
-                    />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <FormField
                       control={form.control}
                       name={`abilities.${index}.description`}
@@ -280,12 +263,7 @@ export const NpcSkillsTab = () => {
                         <FormItem>
                           <FormLabel>Descrição (Regras)</FormLabel>
                           <FormControl>
-                            <Textarea
-                              placeholder="Descreva a habilidade, seus efeitos, etc..."
-                              {...field}
-                              className="min-h-[80px] text-sm"
-                              readOnly={isReadOnly}
-                            />
+                            <Textarea placeholder="Descreva a habilidade..." {...field} className="min-h-[80px] text-sm" />
                           </FormControl>
                         </FormItem>
                       )}
@@ -298,18 +276,16 @@ export const NpcSkillsTab = () => {
         </CardContent>
       </Card>
 
-      {/* --- INÍCIO DA CORREÇÃO --- */}
+      {/* Diálogo de Rolagem */}
       {selectedAbilityRoll && (
-        <NpcAbilityRollDialog
+        <AbilityRollDialog
           open={!!selectedAbilityRoll}
-          onOpenChange={(open) => {
-            if (!open) setSelectedAbilityRoll(null);
-          }}
+          onOpenChange={(open) => !open && setSelectedAbilityRoll(null)}
+          characterName={characterName}
+          tableId={(form.getValues() as any).table_id || ""} 
           {...selectedAbilityRoll}
-          buttonText="Usar Habilidade" // <-- 1. PASSAR O TEXTO CORRETO
         />
       )}
-      {/* --- FIM DA CORREÇÃO --- */}
-    </>
+    </div>
   );
 };

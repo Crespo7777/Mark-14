@@ -1,0 +1,476 @@
+// src/features/character/tabs/CombatEquipmentTab.tsx
+
+import { useState } from "react";
+import { useCharacterSheet } from "../CharacterSheetContext";
+import { useFieldArray } from "react-hook-form";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Trash2, Shield, Sword, Heart, Dices } from "lucide-react";
+import { getDefaultWeapon, getDefaultArmor, roundUpDiv } from "../character.schema";
+import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
+import { attributesList } from "../character.constants";
+import { Separator } from "@/components/ui/separator";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { parseDiceRoll, formatProtectionRoll } from "@/lib/dice-parser";
+import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
+import { WeaponDamageDialog } from "@/components/WeaponDamageDialog";
+import { DefenseRollDialog } from "@/components/DefenseRollDialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+
+// --- Tipos Locais ---
+type AttackRollData = {
+  weaponName: string;
+  attributeName: string;
+  attributeValue: number;
+  projectileId?: string;
+};
+type DamageRollData = {
+  weaponName: string;
+  damageString: string;
+};
+
+// --- Componente Auxiliar de Dano/Cura ---
+const DamageHealControl = ({
+  label,
+  onApply,
+}: {
+  label: string;
+  onApply: (amount: number) => void;
+}) => {
+  const [amount, setAmount] = useState(0);
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        type="number"
+        className="w-16 h-9 text-center"
+        value={amount}
+        onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)}
+      />
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          onApply(amount);
+          setAmount(0);
+        }}
+      >
+        {label}
+      </Button>
+    </div>
+  );
+};
+
+export const CombatEquipmentTab = () => {
+  const { form, character } = useCharacterSheet();
+  const {
+    toughnessMax,
+    painThreshold,
+    corruptionThreshold,
+    vigorous,
+    totalDefense,
+    activeBerserk,
+    quick,
+  } = useCharacterCalculations();
+  
+  const { toast } = useToast();
+  const projectiles = form.watch("projectiles");
+  const currentToughness = form.watch("toughness.current");
+
+  // --- Estados Locais ---
+  const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
+  const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null);
+  const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
+  const [openWeapons, setOpenWeapons] = useState<string[]>([]);
+  const [openArmors, setOpenArmors] = useState<string[]>([]);
+
+  // --- Field Arrays ---
+  const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({
+    control: form.control,
+    name: "weapons",
+  });
+
+  const { fields: armorFields, append: appendArmor, remove: removeArmor } = useFieldArray({
+    control: form.control,
+    name: "armors",
+  });
+
+  // --- Handlers de Vitalidade ---
+  const handleDamage = (amount: number) => {
+    const newValue = Math.max(0, currentToughness - amount);
+    form.setValue("toughness.current", newValue, { shouldDirty: true });
+  };
+
+  const handleHeal = (amount: number) => {
+    const newValue = Math.min(toughnessMax, currentToughness + amount);
+    form.setValue("toughness.current", newValue, { shouldDirty: true });
+  };
+
+  // --- Handlers de Combate ---
+  const handleAttackClick = (index: number) => {
+    const weapon = form.getValues(`weapons.${index}`);
+    const allAttributes = form.getValues("attributes");
+    const selectedAttr = attributesList.find((attr) => attr.key === weapon.attackAttribute);
+    
+    const attributeValue = selectedAttr
+      ? allAttributes[selectedAttr.key as keyof typeof allAttributes]
+      : 0;
+      
+    if (attributeValue === 0) {
+      toast({ title: "Atributo inválido", description: "Defina o atributo de ataque.", variant: "destructive" });
+      return;
+    }
+    setAttackRollData({
+      weaponName: weapon.name || "Arma",
+      attributeName: selectedAttr?.label || "N/D",
+      attributeValue: attributeValue,
+      projectileId: weapon.projectileId,
+    });
+  };
+
+  const handleDamageClick = (index: number) => {
+    const weapon = form.getValues(`weapons.${index}`);
+    if (!weapon.damage) {
+      toast({ title: "Dano não definido", variant: "destructive" });
+      return;
+    }
+    
+    let finalDamageString = weapon.damage;
+    if (activeBerserk) {
+       finalDamageString += "+1d6";
+       toast({ title: "Amoque Ativo!", description: "+1d6 de dano.", variant: "destructive" });
+    }
+
+    setDamageRollData({
+      weaponName: weapon.name || "Arma",
+      damageString: finalDamageString,
+    });
+  };
+
+  const handleProtectionRoll = async (index: number) => {
+    const armor = form.getValues(`armors.${index}`);
+    
+    let protectionString = armor.protection || "0";
+    if (activeBerserk && (activeBerserk.level === 'Adepto' || activeBerserk.level === 'Mestre')) {
+       protectionString += "+1d4";
+       toast({ title: "Pele de Ferro (Amoque)", description: "+1d4 proteção.", variant: "destructive" });
+    }
+
+    const protectionRoll = parseDiceRoll(protectionString);
+    if (!protectionRoll) {
+      toast({ title: "Erro", description: "Dado inválido.", variant: "destructive" });
+      return;
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    toast({ title: `Proteção: ${armor.name}`, description: `Total: ${protectionRoll.total}` });
+    
+    await supabase.from("chat_messages").insert({
+      table_id: character.table_id,
+      user_id: user.id,
+      message: formatProtectionRoll(character.name, armor.name, protectionRoll),
+      message_type: "roll",
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* --- SEÇÃO DE STATUS (VITALIDADE E CORRUPÇÃO) --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* VITALIDADE */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Heart className="text-red-500" /> Vitalidade
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="toughness.current"
+              render={({ field }) => (
+                <FormItem className="space-y-2">
+                  <div className="flex justify-between items-baseline">
+                    <FormLabel>Atual</FormLabel>
+                    <span className="text-sm text-muted-foreground">Máx: {toughnessMax}</span>
+                  </div>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      className="text-2xl font-bold h-12"
+                      {...field}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 0;
+                        field.onChange(Math.min(toughnessMax, Math.max(0, val)));
+                      }}
+                    />
+                  </FormControl>
+                  <Progress value={(field.value / toughnessMax) * 100} className="h-2" />
+                </FormItem>
+              )}
+            />
+            
+            <div className="flex gap-2 pt-2">
+                <DamageHealControl label="Dano" onApply={handleDamage} />
+                <DamageHealControl label="Cura" onApply={handleHeal} />
+            </div>
+
+            <Separator />
+            
+            <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                   <span className="text-muted-foreground block">Bônus Vitalidade</span>
+                   <FormField
+                      control={form.control}
+                      name="toughness.bonus"
+                      render={({ field }) => (
+                        <Input type="number" className="h-8" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                      )}
+                    />
+                </div>
+                <div>
+                   <span className="text-muted-foreground block">Limiar de Dor: <strong className="text-foreground">{painThreshold}</strong></span>
+                   <FormField
+                      control={form.control}
+                      name="painThresholdBonus"
+                      render={({ field }) => (
+                        <Input type="number" className="h-8" placeholder="Bônus" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                      )}
+                    />
+                </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CORRUPÇÃO */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Shield className="text-purple-500" /> Corrupção
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="corruption.temporary"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Temporária</FormLabel>
+                  <FormControl>
+                    <Input type="number" className="text-2xl font-bold h-12" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+            <div className="flex justify-between items-center text-sm pt-2">
+              <span className="text-muted-foreground">Limiar:</span>
+              <span className="font-medium text-lg">{corruptionThreshold}</span>
+            </div>
+            <FormField
+              control={form.control}
+              name="corruption.permanent"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Permanente</FormLabel>
+                  <FormControl>
+                    <Input type="number" className="h-9" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* --- SEÇÃO DE EQUIPAMENTO --- */}
+      
+      {/* ARMAS */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <CardTitle className="flex items-center gap-2 text-lg"><Sword /> Armas</CardTitle>
+          <Button size="sm" onClick={() => appendWeapon(getDefaultWeapon())}><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
+        </CardHeader>
+        <CardContent>
+          {weaponFields.length === 0 && <p className="text-muted-foreground text-center py-4">Nenhuma arma.</p>}
+          <Accordion type="multiple" className="space-y-4" value={openWeapons} onValueChange={setOpenWeapons}>
+             {weaponFields.map((field, index) => (
+                <AccordionItem key={field.id} value={field.id} className="p-3 rounded-md border bg-muted/20">
+                   <div className="flex justify-between items-center w-full gap-2 p-0">
+                      <AccordionTrigger className="p-0 hover:no-underline flex-1">
+                        <div className="flex-1 flex items-center gap-2 sm:gap-4 text-left">
+                           <h4 className="font-semibold text-base text-primary-foreground truncate">{form.watch(`weapons.${index}.name`) || "Nova Arma"}</h4>
+                           <div className="flex gap-1.5 flex-wrap">
+                              <Badge variant="secondary" className="px-1.5 py-0.5">Dano: {form.watch(`weapons.${index}.damage`) || "?"}</Badge>
+                           </div>
+                        </div>
+                      </AccordionTrigger>
+                      <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                         <Button size="sm" variant="outline" onClick={() => handleAttackClick(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Atq</span></Button>
+                         <Button size="sm" variant="destructive" onClick={() => handleDamageClick(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Dano</span></Button>
+                         <Button size="icon" variant="ghost" className="text-destructive" onClick={() => removeWeapon(index)}><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                   </div>
+                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                      <div className="space-y-4">
+                         <FormField control={form.control} name={`weapons.${index}.name`} render={({field}) => (
+                            <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Espada" {...field}/></FormControl></FormItem>
+                         )}/>
+                         <div className="grid grid-cols-2 gap-4">
+                             <FormField control={form.control} name={`weapons.${index}.attackAttribute`} render={({field}) => (
+                                <FormItem>
+                                   <FormLabel>Atributo Atq</FormLabel>
+                                   <Select onValueChange={field.onChange} value={field.value}>
+                                      <FormControl><SelectTrigger><SelectValue placeholder="..."/></SelectTrigger></FormControl>
+                                      <SelectContent>{attributesList.map(a => <SelectItem key={a.key} value={a.key}>{a.label}</SelectItem>)}</SelectContent>
+                                   </Select>
+                                </FormItem>
+                             )}/>
+                             <FormField control={form.control} name={`weapons.${index}.damage`} render={({field}) => (
+                                <FormItem><FormLabel>Dano</FormLabel><FormControl><Input placeholder="1d8" {...field}/></FormControl></FormItem>
+                             )}/>
+                         </div>
+                         {/* Campos opcionais simplificados */}
+                         <div className="grid grid-cols-2 gap-4">
+                            <FormField control={form.control} name={`weapons.${index}.projectileId`} render={({field}) => (
+                               <FormItem>
+                                  <FormLabel>Munição</FormLabel>
+                                  <Select onValueChange={v => field.onChange(v==="none"?undefined:v)} value={field.value||"none"}>
+                                     <FormControl><SelectTrigger><SelectValue placeholder="Nenhuma"/></SelectTrigger></FormControl>
+                                     <SelectContent>
+                                        <SelectItem value="none">Nenhuma</SelectItem>
+                                        {projectiles.map(p => <SelectItem key={p.id} value={p.id}>{p.name} ({p.quantity})</SelectItem>)}
+                                     </SelectContent>
+                                  </Select>
+                               </FormItem>
+                            )}/>
+                            <FormField control={form.control} name={`weapons.${index}.quality`} render={({field}) => (
+                               <FormItem><FormLabel>Qualidades</FormLabel><FormControl><Input placeholder="Precisa" {...field}/></FormControl></FormItem>
+                            )}/>
+                         </div>
+                      </div>
+                   </AccordionContent>
+                </AccordionItem>
+             ))}
+          </Accordion>
+        </CardContent>
+      </Card>
+
+      {/* ARMADURAS & DEFESA */}
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-start pb-4">
+             <div>
+                <CardTitle className="flex items-center gap-2 text-lg mb-1"><Shield /> Armaduras</CardTitle>
+                <p className="text-xs text-muted-foreground">Rápido ({quick}) - Obstrutiva - Carga {activeBerserk ? "- Amoque" : ""}</p>
+             </div>
+             <div className="text-right">
+                <span className="block text-xs uppercase tracking-wider text-muted-foreground">Defesa Total</span>
+                <span className="text-3xl font-bold">{totalDefense}</span>
+             </div>
+          </div>
+          <div className="flex gap-2">
+             <Button variant="outline" className="flex-1" onClick={() => setIsDefenseRollOpen(true)}><Dices className="w-4 h-4 mr-2"/> Rolar Defesa</Button>
+             <Button size="sm" onClick={() => appendArmor(getDefaultArmor())}><Plus className="w-4 h-4 mr-2"/> Add</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {armorFields.length === 0 && <p className="text-muted-foreground text-center py-4">Nenhuma armadura.</p>}
+          <Accordion type="multiple" className="space-y-4" value={openArmors} onValueChange={setOpenArmors}>
+             {armorFields.map((field, index) => (
+                <AccordionItem key={field.id} value={field.id} className="p-3 rounded-md border bg-muted/20">
+                   <div className="flex justify-between items-center w-full gap-2 p-0">
+                      <AccordionTrigger className="p-0 hover:no-underline flex-1">
+                        <div className="flex-1 flex items-center gap-2 sm:gap-4 text-left">
+                           <h4 className="font-semibold text-base text-primary-foreground truncate">{form.watch(`armors.${index}.name`) || "Nova Armadura"}</h4>
+                           <div className="flex gap-1.5">
+                              <Badge variant="secondary" className="px-1.5 py-0.5">Prot: {form.watch(`armors.${index}.protection`) || "0"}</Badge>
+                              <Badge variant="outline" className="px-1.5 py-0.5">Obst: {form.watch(`armors.${index}.obstructive`) || 0}</Badge>
+                           </div>
+                        </div>
+                      </AccordionTrigger>
+                      <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                         <Button size="sm" variant="outline" onClick={() => handleProtectionRoll(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Rolar</span></Button>
+                         <Button size="icon" variant="ghost" className="text-destructive" onClick={() => removeArmor(index)}><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                   </div>
+                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
+                      <div className="space-y-4">
+                         <FormField control={form.control} name={`armors.${index}.name`} render={({field}) => (
+                            <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Cota de Malha" {...field}/></FormControl></FormItem>
+                         )}/>
+                         <div className="grid grid-cols-2 gap-4">
+                             <FormField control={form.control} name={`armors.${index}.protection`} render={({field}) => (
+                                <FormItem><FormLabel>Proteção</FormLabel><FormControl><Input placeholder="1d4" {...field}/></FormControl></FormItem>
+                             )}/>
+                             <FormField control={form.control} name={`armors.${index}.obstructive`} render={({field}) => (
+                                <FormItem><FormLabel>Obstrutiva</FormLabel><FormControl><Input type="number" placeholder="2" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)}/></FormControl></FormItem>
+                             )}/>
+                         </div>
+                         <FormField control={form.control} name={`armors.${index}.equipped`} render={({field}) => (
+                            <FormItem className="flex items-center gap-2 space-y-0"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange}/></FormControl><FormLabel>Equipada</FormLabel></FormItem>
+                         )}/>
+                      </div>
+                   </AccordionContent>
+                </AccordionItem>
+             ))}
+          </Accordion>
+        </CardContent>
+      </Card>
+
+      {/* Dialogs */}
+      {attackRollData && (
+        <WeaponAttackDialog
+          open={!!attackRollData}
+          onOpenChange={(open) => !open && setAttackRollData(null)}
+          characterName={character.name}
+          tableId={character.table_id}
+          {...attackRollData}
+        />
+      )}
+      {damageRollData && (
+        <WeaponDamageDialog
+          open={!!damageRollData}
+          onOpenChange={(open) => !open && setDamageRollData(null)}
+          characterName={character.name}
+          tableId={character.table_id}
+          {...damageRollData}
+        />
+      )}
+      <DefenseRollDialog
+        open={isDefenseRollOpen}
+        onOpenChange={setIsDefenseRollOpen}
+        defenseValue={totalDefense}
+        characterName={character.name}
+        tableId={character.table_id}
+      />
+    </div>
+  );
+};

@@ -1,30 +1,14 @@
-// src/components/NpcAbilityRollDialog.tsx
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import {
-  rollAttributeTest,
-  formatAbilityTest,
-} from "@/lib/dice-parser";
-// --- INÍCIO DA CORREÇÃO ---
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { rollAttributeTest, formatAbilityTest } from "@/lib/dice-parser";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dices } from "lucide-react";
-import { useNpcSheet } from "@/features/npc/NpcSheetContext";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
+import { useNpcSheet } from "@/features/npc/NpcSheetContext";
 import { useTableContext } from "@/features/table/TableContext";
-// --- FIM DA CORREÇÃO ---
+import { BaseRollDialog } from "@/components/BaseRollDialog"; // <-- IMPORTADO
 
 interface NpcAbilityRollDialogProps {
   open: boolean;
@@ -32,7 +16,7 @@ interface NpcAbilityRollDialogProps {
   abilityName: string;
   attributeName: string;
   attributeValue: number;
-  buttonText?: string; 
+  buttonText?: string;
 }
 
 export const NpcAbilityRollDialog = ({
@@ -41,90 +25,37 @@ export const NpcAbilityRollDialog = ({
   abilityName,
   attributeName,
   attributeValue,
-  buttonText = "Usar Habilidade", 
+  buttonText = "Usar Habilidade",
 }: NpcAbilityRollDialogProps) => {
   const [modifier, setModifier] = useState(0);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { npc } = useNpcSheet(); 
+  const { npc } = useNpcSheet();
   const { isMaster, masterId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
 
   const handleRoll = async () => {
     setLoading(true);
-
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setLoading(false);
-      return;
-    }
+    if (!user) { setLoading(false); return; }
 
-    const result = rollAttributeTest({
-      attributeValue,
-      modifier,
-      withAdvantage: false,
-    });
-
-    const localToastDescription = `Rolagem: ${result.totalRoll} (Alvo: ${result.target}) - ${
-      result.isCrit ? "Crítico!" : result.isFumble ? "Falha Crítica!" : result.isSuccess ? "Sucesso!" : "Falha"
-    }`;
+    const result = rollAttributeTest({ attributeValue, modifier, withAdvantage: false });
 
     if (!isHidden || isMaster) {
-      toast({
-        title: `Teste de ${abilityName}`,
-        description: localToastDescription,
-      });
+      toast({ title: `Teste de ${abilityName}`, description: `Rolagem: ${result.totalRoll} (Alvo: ${result.target})` });
     }
 
-    const chatMessage = formatAbilityTest(
-      npc.name,
-      abilityName,
-      attributeName,
-      result,
-      0, // NPCs não têm custo de corrupção
-    );
-    
-    const discordRollData = {
-      rollType: "ability",
-      abilityName: abilityName,
-      attributeName: attributeName,
-      corruptionCost: 0,
-      result: result
-    };
+    const chatMessage = formatAbilityTest(npc.name, abilityName, attributeName, result, 0);
+    const discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: 0, result };
 
     if (isHidden && isMaster) {
-      // (Mensagens para o chat da app)
-      await supabase.from("chat_messages").insert({
-        table_id: npc.table_id,
-        user_id: user.id,
-        message: `${npc.name} usou ${abilityName} em segredo.`,
-        message_type: "info",
-        recipient_id: null,
-      });
-      await supabase.from("chat_messages").insert({
-        table_id: npc.table_id,
-        user_id: user.id,
-        message: `[SECRETO] ${chatMessage}`,
-        message_type: "roll",
-        recipient_id: masterId,
-      });
+      await supabase.from("chat_messages").insert([
+        { table_id: npc.table_id, user_id: user.id, message: `${npc.name} usou ${abilityName} em segredo.`, message_type: "info" },
+        { table_id: npc.table_id, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
+      ]);
     } else {
-      // (Mensagem pública para o chat da app)
-      await supabase.from("chat_messages").insert({
-        table_id: npc.table_id,
-        user_id: user.id,
-        message: chatMessage,
-        message_type: "roll",
-        recipient_id: null,
-      });
-
-      supabase.functions.invoke('discord-roll-handler', {
-        body: {
-          tableId: npc.table_id,
-          rollData: discordRollData,
-          userName: npc.name,
-        }
-      }).catch(console.error);
+      await supabase.from("chat_messages").insert({ table_id: npc.table_id, user_id: user.id, message: chatMessage, message_type: "roll" });
+      supabase.functions.invoke('discord-roll-handler', { body: { tableId: npc.table_id, rollData: discordRollData, userName: npc.name } }).catch(console.error);
     }
 
     setLoading(false);
@@ -133,55 +64,28 @@ export const NpcAbilityRollDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Usar: {abilityName}</DialogTitle>
-          <DialogDescription>
-            Teste de {attributeName} (Alvo: {attributeValue}).
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="modifier-npc-ability">Modificador (no alvo)</Label>
-            <Input
-              id="modifier-npc-ability"
-              type="number"
-              value={modifier}
-              onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)}
-              placeholder="Ex: -2 ou +1"
-            />
+    <BaseRollDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={`Usar: ${abilityName}`}
+      description={`Teste de ${attributeName} (Alvo: ${attributeValue}).`}
+      onRoll={handleRoll}
+      loading={loading}
+      buttonLabel={buttonText}
+    >
+      <div className="space-y-2">
+        <Label htmlFor="mod-npc">Modificador (no alvo)</Label>
+        <Input id="mod-npc" type="number" value={modifier} onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)} placeholder="Ex: -2" />
+      </div>
+      {isMaster && (
+        <>
+          <Separator className="my-4" />
+          <div className="flex items-center space-x-2">
+            <Checkbox id="hide-npc" checked={isHidden} onCheckedChange={(c) => setIsHidden(c as boolean)} />
+            <Label htmlFor="hide-npc" className="text-purple-400">Rolar Escondido</Label>
           </div>
-
-          {isMaster && (
-            <>
-              <Separator className="my-4" />
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="hidden-roll-npc-ability"
-                  checked={isHidden}
-                  onCheckedChange={(checked) => setIsHidden(checked as boolean)}
-                />
-                <Label htmlFor="hidden-roll-npc-ability" className="text-purple-400">
-                  Rolar Escondido (Apenas Mestre)
-                </Label>
-              </div>
-            </>
-          )}
-          
-        </div>
-        <DialogFooter>
-          <Button
-            type="button"
-            className="w-full"
-            onClick={handleRoll}
-            disabled={loading}
-          >
-            {loading ? "Rolando..." : <Dices className="w-4 h-4 mr-2" />}
-            {buttonText}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </>
+      )}
+    </BaseRollDialog>
   );
 };

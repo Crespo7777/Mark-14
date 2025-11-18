@@ -1,8 +1,11 @@
-// src/features/character/character.schema.ts
-
 import { z } from "zod";
 
+// Função moderna e segura para gerar UUIDs
 export const simpleUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback para ambientes antigos (se necessário)
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
     var r = (Math.random() * 16) | 0,
       v = c == "x" ? r : (r & 0x3) | 0x8;
@@ -14,7 +17,7 @@ export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
 };
 
-// --- SCHEMAS BÁSICOS (Sub-partes da Ficha) ---
+// --- SCHEMAS BÁSICOS ---
 
 // 1. ATRIBUTOS
 export const attributesSchema = z.object({
@@ -55,7 +58,7 @@ export const experienceSchema = z.object({
 
 // 6. ARMAS
 export const weaponSchema = z.object({
-  id: z.string().default(() => simpleUUID()),
+  id: z.string().default(simpleUUID),
   name: z.string().default(""), 
   quality: z.string().default(""), 
   quality_desc: z.string().default(""),
@@ -67,7 +70,7 @@ export const weaponSchema = z.object({
 
 // 7. ARMADURAS
 export const armorSchema = z.object({
-  id: z.string().default(() => simpleUUID()),
+  id: z.string().default(simpleUUID),
   name: z.string().default(""), 
   quality: z.string().default(""), 
   quality_desc: z.string().default(""),
@@ -78,19 +81,19 @@ export const armorSchema = z.object({
 
 // 8. HABILIDADES
 export const abilitySchema = z.object({
-  id: z.string().default(() => simpleUUID()),
+  id: z.string().default(simpleUUID),
   name: z.string().default(""),
   level: z.string().default(""), 
   type: z.string().default(""), 
   description: z.string().default(""),
   associatedAttribute: z.string().default(""), 
   corruptionCost: z.number().default(0),
-  isActive: z.boolean().default(false), // <-- NOVO CAMPO
+  isActive: z.boolean().default(false),
 });
 
 // 9. TRAÇOS
 export const traitSchema = z.object({
-  id: z.string().default(() => simpleUUID()),
+  id: z.string().default(simpleUUID),
   name: z.string().default(""),
   type: z.string().default(""), 
   description: z.string().default(""),
@@ -98,7 +101,7 @@ export const traitSchema = z.object({
 
 // 10. INVENTÁRIO
 export const inventoryItemSchema = z.object({
-  id: z.string().default(() => simpleUUID()),
+  id: z.string().default(simpleUUID),
   name: z.string().default(""),
   quantity: z.number().default(1),
   weight: z.number().default(0), 
@@ -107,7 +110,7 @@ export const inventoryItemSchema = z.object({
 
 // 11. PROJÉTEIS
 export const projectileSchema = z.object({
-  id: z.string().default(() => simpleUUID()),
+  id: z.string().default(simpleUUID),
   name: z.string().default(""), 
   quantity: z.number().default(0),
 });
