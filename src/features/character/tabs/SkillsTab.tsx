@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Zap, Dices } from "lucide-react";
-import { Ability, getDefaultAbility } from "../character.schema";
+import { getDefaultAbility } from "../character.schema";
 import { attributesList } from "../character.constants";
 import { AbilityRollDialog } from "@/components/AbilityRollDialog";
 import { Separator } from "@/components/ui/separator";
@@ -32,6 +32,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch"; // <-- Importado Switch
 
 type AbilityRollData = {
   abilityName: string;
@@ -41,11 +42,10 @@ type AbilityRollData = {
 };
 
 export const SkillsTab = () => {
-  const { form, character } = useCharacterSheet();
+  const { form } = useCharacterSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] =
     useState<AbilityRollData | null>(null);
   
-  // <-- MUDANÇA: Controlar o estado do acordeão
   const [openItems, setOpenItems] = useState<string[]>([]);
 
   const {
@@ -99,7 +99,6 @@ export const SkillsTab = () => {
             </p>
           )}
 
-          {/* <-- MUDANÇA: Acordeão controlado --> */}
           <Accordion
             type="multiple"
             className="space-y-4"
@@ -112,18 +111,33 @@ export const SkillsTab = () => {
                 value={field.id}
                 className="p-3 rounded-md border bg-muted/20"
               >
-                {/* --- INÍCIO DA CORREÇÃO HTML --- */}
                 <div className="flex justify-between items-center w-full p-0">
+                  {/* --- CABEÇALHO DO ACORDEÃO COM SWITCH --- */}
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
                       <h4 className="font-semibold text-base text-primary-foreground truncate">
                         {form.watch(`abilities.${index}.name`) ||
                           "Nova Habilidade"}
                       </h4>
-                      <div className="flex gap-1.5 flex-wrap">
+                      <div className="flex gap-1.5 flex-wrap items-center">
                         <Badge variant="secondary" className="px-1.5 py-0.5">
                           {form.watch(`abilities.${index}.level`)}
                         </Badge>
+
+                        {/* SWITCH DE AMOQUE */}
+                        {form.watch(`abilities.${index}.name`)?.toLowerCase().includes("amoque") && (
+                          <div className="flex items-center gap-2 bg-red-900/30 px-2 py-1 rounded-full border border-red-500/50 ml-2" onClick={(e) => e.stopPropagation()}>
+                             <Switch 
+                                checked={form.watch(`abilities.${index}.isActive`)}
+                                onCheckedChange={(checked) => {
+                                  form.setValue(`abilities.${index}.isActive`, checked, { shouldDirty: true });
+                                }}
+                                className="scale-75 data-[state=checked]:bg-red-600"
+                             />
+                             <span className="text-xs font-bold text-red-200">ATIVO</span>
+                          </div>
+                        )}
+
                         <Badge variant="outline" className="px-1.5 py-0.5">
                           {attributesList.find(
                             (a) =>
@@ -145,6 +159,7 @@ export const SkillsTab = () => {
                       </div>
                     </div>
                   </AccordionTrigger>
+                  {/* --- FIM DO CABEÇALHO --- */}
 
                   <div
                     className="flex gap-1 pl-2 flex-shrink-0"
@@ -174,7 +189,6 @@ export const SkillsTab = () => {
                     </Button>
                   </div>
                 </div>
-                {/* --- FIM DA CORREÇÃO --- */}
 
                 <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                   <div className="space-y-4">

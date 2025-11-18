@@ -17,7 +17,6 @@ export const roundUpDiv = (value: number, divisor: number) => {
 // --- SCHEMAS BÁSICOS (Sub-partes da Ficha) ---
 
 // 1. ATRIBUTOS
-// (Já começam em 0, está correto)
 export const attributesSchema = z.object({
   cunning: z.number().min(0).max(15).default(0),
   discreet: z.number().min(0).max(15).default(0),
@@ -30,32 +29,31 @@ export const attributesSchema = z.object({
 });
 
 // 2. VITALIDADE
-// (Começa em 10, que é o valor base mesmo com Vigoroso 0. Está correto)
 export const toughnessSchema = z.object({
   bonus: z.number().default(0),
   current: z.number().default(10),
 });
 
-// 3. CORRUPÇÃO (Já começa em 0)
+// 3. CORRUPÇÃO
 export const corruptionSchema = z.object({
   temporary: z.number().default(0),
   permanent: z.number().default(0),
 });
 
-// 4. DINHEIRO (Já começa em 0)
+// 4. DINHEIRO
 export const moneySchema = z.object({
   taler: z.number().default(0),
   shekel: z.number().default(0),
   ortega: z.number().default(0),
 });
 
-// 5. EXPERIÊNCIA (Já começa em 0)
+// 5. EXPERIÊNCIA
 export const experienceSchema = z.object({
   total: z.number().default(0),
   spent: z.number().default(0),
 });
 
-// 6. ARMAS (Limpar valores padrão)
+// 6. ARMAS
 export const weaponSchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""), 
@@ -67,7 +65,7 @@ export const weaponSchema = z.object({
   projectileId: z.string().optional(),
 });
 
-// 7. ARMADURAS (Limpar valores padrão)
+// 7. ARMADURAS
 export const armorSchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""), 
@@ -78,7 +76,7 @@ export const armorSchema = z.object({
   equipped: z.boolean().default(true),
 });
 
-// 8. HABILIDADES (Limpar valores padrão)
+// 8. HABILIDADES
 export const abilitySchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
@@ -87,9 +85,10 @@ export const abilitySchema = z.object({
   description: z.string().default(""),
   associatedAttribute: z.string().default(""), 
   corruptionCost: z.number().default(0),
+  isActive: z.boolean().default(false), // <-- NOVO CAMPO
 });
 
-// 9. TRAÇOS (Limpar valores padrão)
+// 9. TRAÇOS
 export const traitSchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
@@ -97,7 +96,7 @@ export const traitSchema = z.object({
   description: z.string().default(""),
 });
 
-// 10. INVENTÁRIO (Limpar valores padrão)
+// 10. INVENTÁRIO
 export const inventoryItemSchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""),
@@ -106,7 +105,7 @@ export const inventoryItemSchema = z.object({
   description: z.string().default(""),
 });
 
-// 11. PROJÉTEIS (Limpar valores padrão)
+// 11. PROJÉTEIS
 export const projectileSchema = z.object({
   id: z.string().default(() => simpleUUID()),
   name: z.string().default(""), 
@@ -122,7 +121,6 @@ export type Trait = z.infer<typeof traitSchema>;
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 export type Projectile = z.infer<typeof projectileSchema>;
 
-// Funções para criar itens padrão
 export const getDefaultWeapon = (): Weapon => weaponSchema.parse({});
 export const getDefaultArmor = (): Armor => armorSchema.parse({});
 export const getDefaultAbility = (): Ability => abilitySchema.parse({});
@@ -132,24 +130,21 @@ export const getDefaultInventoryItem = (): InventoryItem =>
 export const getDefaultProjectile = (): Projectile =>
   projectileSchema.parse({});
 
-// --- O SCHEMA PRINCIPAL (A Ficha Completa) ---
+// --- O SCHEMA PRINCIPAL ---
 
 export const characterSheetSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").default("Novo Personagem"),
   race: z.string().default("Humano"),
   occupation: z.string().default("Aventureiro"),
 
-  // --- NOVOS CAMPOS ADICIONADOS ---
   age: z.string().default(""),
   height: z.string().default(""),
   weight: z.string().default(""),
-  // -------------------------------
 
-  // Campos da aba Detalhes
   shadow: z.string().default(""), 
   personalGoal: z.string().default(""), 
   importantAllies: z.string().default(""), 
-  notes: z.string().default(""), // Anotações rápidas
+  notes: z.string().default(""), 
 
   attributes: attributesSchema.default({}),
   toughness: toughnessSchema.default({}),
@@ -169,7 +164,6 @@ export const characterSheetSchema = z.object({
 
 export type CharacterSheetData = z.infer<typeof characterSheetSchema>;
 
-// Função para criar uma ficha padrão
 export const getDefaultCharacterSheetData = (
   name: string,
 ): CharacterSheetData => {

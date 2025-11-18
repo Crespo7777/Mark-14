@@ -4,9 +4,6 @@ import { useMemo } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { roundUpDiv, Armor, InventoryItem } from "../character.schema";
 
-/**
- * Este Hook isola toda a lógica de cálculos derivados da ficha.
- */
 export const useCharacterCalculations = () => {
   const { form } = useCharacterSheet();
 
@@ -25,10 +22,8 @@ export const useCharacterCalculations = () => {
   const armors = form.watch("armors");
   const inventory = form.watch("inventory");
   const experience = form.watch("experience");
-  
-  // --- INÍCIO DA CORREÇÃO ---
   const painThresholdBonus = form.watch("painThresholdBonus");
-  // --- FIM DA CORREÇÃO ---
+  const abilities = form.watch("abilities"); // <-- NOVO
 
   const totalAttributePointsSpent = useMemo(() => {
     return (
@@ -47,34 +42,20 @@ export const useCharacterCalculations = () => {
     return 80 - totalAttributePointsSpent;
   }, [totalAttributePointsSpent]);
 
-  /**
-   * REGRA: Vitalidade Máx = Math.max(10, Vigoroso) + Bônus
-   */
   const toughnessMax = useMemo(() => {
     const base = Math.max(10, vigorous || 0);
     return base + (toughnessBonus || 0);
   }, [vigorous, toughnessBonus]);
 
-  /**
-   * REGRA: Limiar de Dor = (Vigoroso / 2) + Bônus
-   */
-  // --- INÍCIO DA CORREÇÃO ---
   const painThreshold = useMemo(() => {
     const base = roundUpDiv(vigorous || 0, 2);
     return base + (painThresholdBonus || 0);
   }, [vigorous, painThresholdBonus]);
-  // --- FIM DA CORREÇÃO ---
 
-  /**
-   * REGRA: Limiar de Corrupção = Resoluto / 2 (arredondado para cima)
-   */
   const corruptionThreshold = useMemo(() => {
     return roundUpDiv(resolute || 0, 2);
   }, [resolute]);
 
-  /**
-   * CÁLCULO DE PESO (CARGA)
-   */
   const currentWeight = useMemo(() => {
     if (!Array.isArray(inventory)) return 0;
     return inventory.reduce(
@@ -91,19 +72,30 @@ export const useCharacterCalculations = () => {
     return Math.max(0, currentWeight - encumbranceThreshold);
   }, [currentWeight, encumbranceThreshold]);
   
-  // --- REVERSÃO ---
-  // Calculamos a obstrutiva apenas para o 'totalDefense'
   const totalObstrutiva = useMemo(() => {
     if (!Array.isArray(armors)) return 0;
     return armors
       .filter((a: Armor) => a.equipped)
       .reduce((acc: number, a: Armor) => acc + (a.obstructive || 0), 0);
   }, [armors]);
-  // --- FIM DA REVERSÃO ---
+
+  // --- DETEÇÃO DE AMOQUE ---
+  const activeBerserk = useMemo(() => {
+    if (!Array.isArray(abilities)) return null;
+    return abilities.find(a => a.name.toLowerCase().includes("amoque") && a.isActive);
+  }, [abilities]);
+  // -------------------------
 
   const totalDefense = useMemo(() => {
-    return (quick || 0) - totalObstrutiva - encumbrancePenalty;
-  }, [quick, totalObstrutiva, encumbrancePenalty]);
+    let effectiveQuick = quick || 0;
+
+    // Regra de Amoque: Se ativo e não Mestre, Rápido conta como 5
+    if (activeBerserk && activeBerserk.level !== 'Mestre') {
+       effectiveQuick = 5;
+    }
+
+    return effectiveQuick - totalObstrutiva - encumbrancePenalty;
+  }, [quick, totalObstrutiva, encumbrancePenalty, activeBerserk]);
 
   const currentExperience = useMemo(() => {
     return (experience?.total || 0) - (experience?.spent || 0);
@@ -123,9 +115,6 @@ export const useCharacterCalculations = () => {
     currentExperience,
     totalAttributePointsSpent,
     remainingAttributePoints,
-    
-    // --- REVERSÃO ---
-    // 'totalObstrutiva' NÃO é mais exportado
-    // --- FIM DA REVERSÃO ---
+    activeBerserk, // <-- EXPORTADO
   };
 };

@@ -53,7 +53,8 @@ type DamageRollData = {
 
 export const EquipmentTab = () => {
   const { form, character } = useCharacterSheet();
-  const { totalDefense, quick } = useCharacterCalculations();
+  // --- 1. OBTER activeBerserk ---
+  const { totalDefense, quick, activeBerserk } = useCharacterCalculations();
   const { toast } = useToast();
   const projectiles = form.watch("projectiles");
 
@@ -64,8 +65,6 @@ export const EquipmentTab = () => {
     null,
   );
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
-
-  // <-- MUDANÇA: Estados para os acordeões
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
 
@@ -118,18 +117,37 @@ export const EquipmentTab = () => {
       toast({ title: "Dano não definido", variant: "destructive" });
       return;
     }
+
+    // --- 2. LÓGICA DE DANO AMOQUE ---
+    let finalDamageString = weapon.damage;
+    if (activeBerserk) {
+       finalDamageString += "+1d6";
+       toast({ title: "Amoque Ativo!", description: "Adicionado +1d6 de dano.", variant: "destructive" });
+    }
+    // -------------------------------
+
     setDamageRollData({
       weaponName: weapon.name || "Arma",
-      damageString: weapon.damage,
+      damageString: finalDamageString,
     });
   };
+
   const handleProtectionRoll = async (index: number) => {
     const armor = form.getValues(`armors.${index}`);
-    const protectionRoll = parseDiceRoll(armor.protection || "0");
+    
+    // --- 3. LÓGICA DE PROTEÇÃO AMOQUE ---
+    let protectionString = armor.protection || "0";
+    if (activeBerserk && (activeBerserk.level === 'Adepto' || activeBerserk.level === 'Mestre')) {
+       protectionString += "+1d4";
+       toast({ title: "Amoque (Pele de Ferro)", description: "Adicionado +1d4 de proteção.", variant: "destructive" });
+    }
+    // ------------------------------------
+
+    const protectionRoll = parseDiceRoll(protectionString);
     if (!protectionRoll) {
       toast({
         title: "Erro",
-        description: `Dado de proteção inválido: ${armor.protection}`,
+        description: `Dado de proteção inválido: ${protectionString}`,
         variant: "destructive",
       });
       return;
@@ -178,7 +196,6 @@ export const EquipmentTab = () => {
               </p>
             )}
 
-            {/* <-- MUDANÇA: Acordeão controlado --> */}
             <Accordion
               type="multiple"
               className="space-y-4"
@@ -191,7 +208,6 @@ export const EquipmentTab = () => {
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
                   <div className="flex justify-between items-center w-full gap-2 p-0">
                     <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
@@ -264,7 +280,6 @@ export const EquipmentTab = () => {
                       </Button>
                     </div>
                   </div>
-                  {/* --- FIM DA CORREÇÃO --- */}
 
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
@@ -423,7 +438,8 @@ export const EquipmentTab = () => {
                 Defesa Total: {totalDefense}
               </span>
               <p className="text-xs text-muted-foreground">
-                (Rápido {quick} - Obstrutiva Total - Penalidade de Carga)
+                {/* --- 4. DESCRIÇÃO ATUALIZADA --- */}
+                (Rápido {quick} - Obstrutiva - Carga {activeBerserk ? "- Amoque" : ""})
               </p>
               <Button
                 type="button"
@@ -443,7 +459,6 @@ export const EquipmentTab = () => {
               </p>
             )}
 
-            {/* <-- MUDANÇA: Acordeão controlado --> */}
             <Accordion
               type="multiple"
               className="space-y-4"
@@ -456,7 +471,6 @@ export const EquipmentTab = () => {
                   value={field.id}
                   className="p-3 rounded-md border bg-muted/20"
                 >
-                  {/* --- INÍCIO DA CORREÇÃO HTML --- */}
                   <div className="flex justify-between items-center w-full gap-2 p-0">
                     <AccordionTrigger className="p-0 hover:no-underline flex-1">
                       <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
@@ -504,7 +518,6 @@ export const EquipmentTab = () => {
                       </Button>
                     </div>
                   </div>
-                  {/* --- FIM DA CORREÇÃO --- */}
 
                   <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                     <div className="space-y-4">
