@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Dices, Trash2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { parseDiceRoll, formatRollResult, type DiceRoll } from "@/lib/dice-parser"; // Importa o tipo
+import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser"; 
 import { cn } from "@/lib/utils";
 import { useTableContext, TableMember } from "@/features/table/TableContext";
 import {
@@ -29,7 +30,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// (Interface Message, ChatPanelProps... permanecem iguais)
 interface Message {
   id: string;
   message: string;
@@ -39,14 +39,35 @@ interface Message {
     display_name: string;
   };
 }
+
 interface ChatPanelProps {
   tableId: string;
 }
 
-// (Funções parseMentions... permanecem iguais)
+// Função de Fetch (Busca inicial)
+const fetchMessages = async (tableId: string) => {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select(
+      `
+      id,
+      message,
+      message_type,
+      created_at,
+      user:profiles!chat_messages_user_id_fkey(display_name)
+    `
+    )
+    .eq("table_id", tableId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return data as Message[];
+};
+
 const escapeRegExp = (string: string) => {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 };
+
 const parseMentions = (text: string, members: TableMember[]): string => {
   let parsedText = text;
   members.forEach(member => {
@@ -58,10 +79,15 @@ const parseMentions = (text: string, members: TableMember[]): string => {
   return parsedText;
 };
 
-
 export const ChatPanel = ({ tableId }: ChatPanelProps) => {
-  // (Todos os hooks e states... permanecem iguais)
-  const [messages, setMessages] = useState<Message[]>([]);
+  const queryClient = useQueryClient();
+  
+  // Cache e Estado das Mensagens
+  const { data: messages = [] } = useQuery({
+    queryKey: ['chat_messages', tableId],
+    queryFn: () => fetchMessages(tableId),
+  });
+
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -69,16 +95,34 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const { isMaster, tableId: contextTableId, members } = useTableContext();
   const [isClearAlertOpen, setIsClearAlertOpen] = useState(false);
 
-  // (useEffect, loadMessages, subscribeToMessages... permanecem iguais)
+  // --- CORREÇÃO PRINCIPAL: Realtime Dedicado ao Chat ---
   useEffect(() => {
-    loadMessages();
-    const channel = subscribeToMessages();
+    // Cria um canal exclusivo para o chat desta mesa
+    const channel = supabase
+      .channel(`chat-room:${tableId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // Escuta INSERT, UPDATE e DELETE
+          schema: "public",
+          table: "chat_messages",
+          filter: `table_id=eq.${tableId}`,
+        },
+        () => {
+          // Assim que algo muda, invalida o cache para forçar atualização imediata
+          queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
+        }
+      )
+      .subscribe();
+
+    // Limpeza ao desmontar
     return () => {
-      if (channel && typeof channel.unsubscribe === "function") {
-        channel.unsubscribe();
-      }
+      supabase.removeChannel(channel);
     };
-  }, [tableId]);
+  }, [tableId, queryClient]);
+  // -----------------------------------------------------
+
+  // Scroll automático
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -87,87 +131,12 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const loadMessages = async () => {
-    const { data, error } = await supabase
-      .from("chat_messages")
-      .select(
-        `
-        id,
-        message,
-        message_type,
-        created_at,
-        user:profiles!chat_messages_user_id_fkey(display_name)
-      `,
-      )
-      .eq("table_id", tableId)
-      .order("created_at", { ascending: true });
-    if (error) {
-      console.error("Error loading messages:", error);
-      return;
-    }
-    setMessages(data || []);
-  };
-  const subscribeToMessages = () => {
-    const channel = supabase
-      .channel(`chat:${tableId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "chat_messages",
-          filter: `table_id=eq.${tableId}`,
-        },
-        async (payload) => {
-          if (!payload.new || !payload.new.id) {
-            console.warn("Payload de chat recebido sem ID:", payload);
-            return;
-          }
-          const { data } = await supabase
-            .from("chat_messages")
-            .select(
-              `
-              id,
-              message,
-              message_type,
-              created_at,
-              user:profiles!chat_messages_user_id_fkey(display_name)
-            `,
-            )
-            .eq("id", payload.new.id)
-            .single();
-          if (data) {
-            if (data.message_type === 'info_clear') {
-              setMessages([data]);
-            } else {
-              setMessages((prev) => [...prev, data]);
-            }
-          }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "chat_messages",
-          filter: `table_id=eq.${tableId}`,
-        },
-        (payload) => {
-          setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
-        },
-      )
-      .subscribe();
-    return channel;
-  };
-
   const handleSend = async () => {
     const messageContent = newMessage.trim();
     if (!messageContent) return;
     setLoading(true);
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setLoading(false);
       return;
@@ -178,8 +147,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
 
     let messageToSend = messageContent;
     let messageType = "chat";
-    
-    // --- Esta variável guardará os dados para o Discord ---
     let discordRollData: any = null; 
 
     if (messageContent.startsWith("/r ") || messageContent.startsWith("/roll ")) {
@@ -190,11 +157,10 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         messageToSend = formatRollResult(command, result);
         messageType = "roll";
         
-        // --- Preenche os dados estruturados para o Discord ---
         discordRollData = {
-          rollType: "manual", // O TIPO DA ROLAGEM
+          rollType: "manual",
           command: command,
-          result: result, // O objeto { rolls, modifier, total }
+          result: result,
         };
         
       } else {
@@ -215,21 +181,18 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     });
     
     if (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível enviar a mensagem",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "Não foi possível enviar a mensagem", variant: "destructive" });
     } else {
       setNewMessage("");
+      // Invalidação otimista (para garantir rapidez no próprio cliente)
+      queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
 
-      // --- Envia os dados estruturados se for uma rolagem de /r ---
       if (messageType === "roll" && discordRollData) {
         supabase.functions.invoke('discord-roll-handler', {
           body: {
             tableId: contextTableId,
             rollData: discordRollData,
-            userName: userName, // Envia o nome de utilizador
+            userName: userName,
           }
         }).catch(console.error);
       }
@@ -237,57 +200,39 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
     setLoading(false);
   };
 
-  // (handleKeyPress, handleClearChat... permanecem iguais)
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
+
   const handleClearChat = async () => {
     setLoading(true);
-    const { error } = await supabase
-      .from("chat_messages")
-      .delete()
-      .eq("table_id", contextTableId);
-    setLoading(false);
-    setIsClearAlertOpen(false);
+    const { error } = await supabase.from("chat_messages").delete().eq("table_id", contextTableId);
+    
     if (error) {
-      toast({
-        title: "Erro ao limpar o chat",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao limpar", description: error.message, variant: "destructive" });
     } else {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        const clearMessage = {
-          id: `local-${Date.now()}`,
-          message: "O Mestre limpou o histórico do chat.",
-          message_type: "info_clear",
-          created_at: new Date().toISOString(),
-          user: { display_name: "Sistema" }
-        };
-        setMessages([clearMessage as Message]);
-        await supabase.from("chat_messages").insert({
+         await supabase.from("chat_messages").insert({
           table_id: contextTableId,
           user_id: user.id,
-          message: clearMessage.message,
-          message_type: clearMessage.message_type,
+          message: "O Mestre limpou o histórico do chat.",
+          message_type: "info_clear",
           recipient_id: null,
         });
       }
-      toast({
-        title: "Chat Limpo!",
-        description: "O histórico de mensagens foi removido.",
-      });
+      toast({ title: "Chat Limpo!" });
+      queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
     }
+    setLoading(false);
+    setIsClearAlertOpen(false);
   };
 
-  // (O JSX do return... permanece igual)
   return (
     <div className="flex flex-col h-full bg-card">
-      
       <div className="p-4 border-b border-border">
         <div className="flex justify-between items-center">
           <h2 className="font-semibold">Chat da Mesa</h2>
@@ -313,43 +258,26 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
               key={msg.id}
               className={cn(
                 "p-3 rounded-lg",
-                msg.message_type === "roll"
-                  ? "bg-accent/20 border border-accent/30"
-                  : "bg-muted/50",
-                msg.message_type === "error" &&
-                  "bg-destructive/20 border border-destructive/30 text-destructive-foreground",
-                msg.message_type === "info" &&
-                  "bg-blue-900/30 border border-blue-500/30 text-center text-blue-300 italic",
-                msg.message_type === "info_clear" &&
-                  "bg-muted border border-border text-center text-muted-foreground italic text-xs py-2"
+                msg.message_type === "roll" ? "bg-accent/20 border border-accent/30" : "bg-muted/50",
+                msg.message_type === "error" && "bg-destructive/20 border border-destructive/30 text-destructive-foreground",
+                msg.message_type === "info" && "bg-blue-900/30 border border-blue-500/30 text-center text-blue-300 italic",
+                msg.message_type === "info_clear" && "bg-muted border border-border text-center text-muted-foreground italic text-xs py-2"
               )}
             >
               {msg.message_type.startsWith("info") ? (
-                <div
-                  className="text-sm whitespace-pre-wrap"
-                  dangerouslySetInnerHTML={{ __html: msg.message }}
-                />
+                <div className="text-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.message }} />
               ) : (
                 <>
                   <div className="flex justify-between items-start mb-1">
                     <span className="font-semibold text-sm flex items-center gap-2 text-foreground">
-                      {msg.message_type === "roll" && (
-                        <Dices className="w-4 h-4 text-accent" />
-                      )}
-                      {msg.user.display_name}
+                      {msg.message_type === "roll" && <Dices className="w-4 h-4 text-accent" />}
+                      {msg.user?.display_name || "Desconhecido"}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {new Date(msg.created_at).toLocaleTimeString("pt-BR", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
-                  
-                  <div
-                    className="text-sm whitespace-pre-wrap"
-                    dangerouslySetInnerHTML={{ __html: msg.message }}
-                  />
+                  <div className="text-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.message }} />
                 </>
               )}
             </div>
@@ -369,32 +297,16 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
           />
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon">
-                <HelpCircle className="w-4 h-4" />
-              </Button>
+              <Button variant="outline" size="icon"><HelpCircle className="w-4 h-4" /></Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Comandos do Chat</DialogTitle>
-                <DialogDescription>
-                  Comandos disponíveis para rolagens de dados.
-                </DialogDescription>
+                <DialogDescription>Comandos disponíveis para rolagens de dados.</DialogDescription>
               </DialogHeader>
               <div className="space-y-2">
-                <p className="font-mono p-2 bg-muted rounded-md text-sm">
-                  /r XdY+Z
-                </p>
-                <p>
-                  Rola X dados de Y lados, somando Z como modificador.
-                  (Ex: <code>/r 2d8+5</code>)
-                </p>
-                <p className="font-mono p-2 bg-muted rounded-md text-sm">
-                  /roll XdY-Z
-                </p>
-                <p>
-                  Rola X dados de Y lados, subtraindo Z como modificador.
-                  (Ex: <code>/roll 1d20-2</code>)
-                </p>
+                <p className="font-mono p-2 bg-muted rounded-md text-sm">/r XdY+Z</p>
+                <p>Rola X dados de Y lados, somando Z. (Ex: <code>/r 2d8+5</code>)</p>
               </div>
             </DialogContent>
           </Dialog>
@@ -405,26 +317,15 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         </div>
       </div>
 
-      <AlertDialog
-        open={isClearAlertOpen}
-        onOpenChange={setIsClearAlertOpen}
-      >
+      <AlertDialog open={isClearAlertOpen} onOpenChange={setIsClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Limpar o Chat?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta ação irá remover permanentemente **todas** as mensagens do
-              chat para **todos** os jogadores nesta mesa. Isso não pode ser
-              desfeito.
-            </AlertDialogDescription>
+            <AlertDialogDescription>Esta ação removerá permanentemente todas as mensagens.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className={cn(buttonVariants({ variant: "destructive" }))}
-              onClick={handleClearChat}
-              disabled={loading}
-            >
+            <AlertDialogAction className={cn(buttonVariants({ variant: "destructive" }))} onClick={handleClearChat} disabled={loading}>
               {loading ? "Limpando..." : "Limpar Chat"}
             </AlertDialogAction>
           </AlertDialogFooter>
