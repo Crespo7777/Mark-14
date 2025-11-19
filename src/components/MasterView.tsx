@@ -1,8 +1,6 @@
 // src/components/MasterView.tsx
 
-import { useEffect, useState, Suspense } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
@@ -10,7 +8,8 @@ import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
 import { MasterCharactersTab } from "@/features/master/MasterCharactersTab";
 import { MasterNpcsTab } from "@/features/master/MasterNpcsTab";
 import { MasterJournalTab } from "@/features/master/MasterJournalTab";
-import { MasterPlayersTab } from "@/features/master/MasterPlayersTab"; // <-- Importado
+import { MasterPlayersTab } from "@/features/master/MasterPlayersTab";
+import { useTableRealtime } from "@/hooks/useTableRealtime"; // <-- IMPORTADO
 
 interface MasterViewProps {
   tableId: string;
@@ -18,22 +17,11 @@ interface MasterViewProps {
 }
 
 export const MasterView = ({ tableId }: MasterViewProps) => {
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("characters");
 
-  // Realtime para atualizações gerais
-  useEffect(() => {
-    const channel = supabase
-      .channel(`master-view-updates:${tableId}`)
-      .on("postgres_changes", { event: "*", schema: "public", filter: `table_id=eq.${tableId}` }, (payload) => {
-         const table = payload.table;
-         if (['characters', 'character_folders'].includes(table)) queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
-         if (['npcs', 'npc_folders'].includes(table)) queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
-         if (['journal_entries', 'journal_folders'].includes(table)) queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [tableId, queryClient]);
+  // ✅ ATIVA O REALTIME GLOBAL PARA O MESTRE
+  // Isto substitui aquele useEffect enorme e complexo que tinhas antes
+  useTableRealtime(tableId);
 
   return (
     <div className="space-y-6">
@@ -57,12 +45,7 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
         
         <TabsContent value="characters"><MasterCharactersTab tableId={tableId} /></TabsContent>
         <TabsContent value="npcs"><MasterNpcsTab tableId={tableId} /></TabsContent>
-        
-        {/* Aba de Jogadores Extraída */}
-        <TabsContent value="players">
-            <MasterPlayersTab tableId={tableId} />
-        </TabsContent>
-
+        <TabsContent value="players"><MasterPlayersTab tableId={tableId} /></TabsContent>
         <TabsContent value="journal"><MasterJournalTab tableId={tableId} /></TabsContent>
       </Tabs>
     </div>

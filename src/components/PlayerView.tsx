@@ -1,8 +1,6 @@
 // src/components/PlayerView.tsx
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserSquare, Users, BookOpen } from "lucide-react";
 import { useTableContext } from "@/features/table/TableContext";
@@ -10,6 +8,7 @@ import { useTableContext } from "@/features/table/TableContext";
 import { PlayerCharactersTab } from "@/features/player/PlayerCharactersTab";
 import { PlayerNpcsTab } from "@/features/player/PlayerNpcsTab";
 import { PlayerJournalTab } from "@/features/player/PlayerJournalTab";
+import { useTableRealtime } from "@/hooks/useTableRealtime"; // <-- IMPORTADO
 
 interface PlayerViewProps {
   tableId: string;
@@ -17,28 +16,11 @@ interface PlayerViewProps {
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const { userId } = useTableContext();
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("characters");
   
-  // Realtime Global (Apenas para conteúdos)
-  useEffect(() => {
-    if (!userId) return;
-    const channel = supabase
-      .channel(`player-view:${tableId}:${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", filter: `table_id=eq.${tableId}` }, (payload) => {
-          const table = payload.table;
-          if (table === "characters" || table === "character_folders") queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
-          if (table === "character_folders") queryClient.invalidateQueries({ queryKey: ['character_folders', tableId] });
-
-          if (table === "npcs" || table === "npc_folders") queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
-          if (table === "npc_folders") queryClient.invalidateQueries({ queryKey: ['npc_folders', tableId] });
-
-          if (table === "journal_entries" || table === "journal_folders") queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
-          if (table === "journal_folders") queryClient.invalidateQueries({ queryKey: ['journal_folders', tableId] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [tableId, userId, queryClient]);
+  // ✅ ATIVA O REALTIME GLOBAL PARA O JOGADOR
+  // Garante que se o Mestre partilhar algo, aparece logo aqui.
+  useTableRealtime(tableId);
 
   return (
     <div className="space-y-6">
