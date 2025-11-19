@@ -1,7 +1,7 @@
 // src/features/npc/tabs/NpcDetailsTab.tsx
 
 import { useNpcSheet } from "../NpcSheetContext"; 
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   FormControl,
@@ -11,6 +11,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea"; 
+import { StigmaSelector } from "@/components/StigmaSelector"; 
 
 export const NpcDetailsTab = () => { 
   const { form, isReadOnly } = useNpcSheet(); 
@@ -76,17 +77,16 @@ export const NpcDetailsTab = () => {
               )}
             />
             
-            {/* --- ATUALIZADO: Sombra e Objetivo Pessoal com Textarea --- */}
             <FormField
               control={form.control}
               name="shadow"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>Sombra (Aparência)</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Ex: Negro-carvão, com bordas puídas..."
-                      className="min-h-[80px] resize-none"
+                      className="min-h-[60px] resize-none"
                       {...field}
                       readOnly={isReadOnly}
                     />
@@ -95,16 +95,17 @@ export const NpcDetailsTab = () => {
                 </FormItem>
               )}
             />
+            
             <FormField
               control={form.control}
               name="personalGoal"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>Objetivo Pessoal / Motivação</FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Ex: Proteger o ninho a todo custo..."
-                      className="min-h-[80px] resize-none"
+                      className="min-h-[60px] resize-none"
                       {...field}
                       readOnly={isReadOnly}
                     />
@@ -113,8 +114,11 @@ export const NpcDetailsTab = () => {
                 </FormItem>
               )}
             />
-            {/* --- FIM DA ATUALIZAÇÃO --- */}
           </div>
+
+          {/* --- ESTIGMAS (CORRETO) --- */}
+          <StigmaSelector control={form.control} name="corruption.stigma" isReadOnly={isReadOnly} />
+
         </CardContent>
       </Card>
 
@@ -132,7 +136,7 @@ export const NpcDetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Ex: O líder da tribo, a bruxa que o controla..."
-                    className="min-h-[150px] resize-none"
+                    className="min-h-[100px] resize-none"
                     {...field}
                     readOnly={isReadOnly}
                   />
@@ -147,9 +151,6 @@ export const NpcDetailsTab = () => {
       <Card>
         <CardHeader>
           <CardTitle>Anotações Gerais (Mestre)</CardTitle>
-          <CardDescription>
-            Anotações rápidas sobre o NPC. Para a história, use a aba "Diário".
-          </CardDescription>
         </CardHeader>
         <CardContent>
           <FormField
@@ -160,7 +161,7 @@ export const NpcDetailsTab = () => {
                 <FormControl>
                   <Textarea
                     placeholder="Lembretes, táticas, etc..."
-                    className="min-h-[150px] resize-none"
+                    className="min-h-[100px] resize-none"
                     {...field}
                     readOnly={isReadOnly}
                   />

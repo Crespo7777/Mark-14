@@ -45,13 +45,16 @@ export const NpcSheetProvider = ({
   const { toast } = useToast();
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   
-  // --- 1. Refs para evitar 'stale state' ---
+  // Refs para evitar 'stale state'
   const isSavingRef = useRef(isSaving);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
 
+  // --- VERIFICAÇÃO DE MESTRE ---
   const { isMaster } = useTableContext();
+  
+  // Se for Mestre, NÃO é ReadOnly. Se for Jogador, É ReadOnly.
   const isReadOnly = !isMaster;
 
   const form = useForm<NpcSheetData>({
@@ -61,7 +64,6 @@ export const NpcSheetProvider = ({
 
   const { isDirty } = form.formState;
 
-  // --- 2. Callbacks de salvamento (sem dependência de 'isSaving') ---
   const handleSaveSuccess = useCallback((data: NpcSheetData) => {
     form.reset(data); 
     toast({ title: "Ficha de NPC Salva!" });
@@ -90,7 +92,7 @@ export const NpcSheetProvider = ({
 
   // Save Programático (Auto-save)
   const programmaticSave = useCallback(async () => {
-    if (isReadOnly) return; // Segurança (o 'isSaving' é verificado no timer)
+    if (isReadOnly) return; // Jogadores não salvam NPCs
     setIsSaving(true);
     try {
       const currentData = form.getValues();
@@ -101,16 +103,15 @@ export const NpcSheetProvider = ({
     }
   }, [isReadOnly, form, onSave, handleSaveSuccess, handleSaveError]);
   
-  // Ref para a função
   const programmaticSaveRef = useRef(programmaticSave);
   useEffect(() => {
     programmaticSaveRef.current = programmaticSave;
   }, [programmaticSave]);
 
-  // Save Manual (Botão "Salvar")
+  // Save Manual
   const saveSheet = useCallback(
     () => form.handleSubmit(async (data) => {
-      if (isSavingRef.current || isReadOnly) return; // Segurança
+      if (isSavingRef.current || isReadOnly) return;
       setIsSaving(true);
       try {
         await onSave(data);
@@ -122,9 +123,9 @@ export const NpcSheetProvider = ({
     [isReadOnly, form, onSave, handleSaveSuccess, handleSaveError, handleSaveInvalid]
   );
 
-  // --- 3. Efeito de Auto-Save (Corrigido) ---
+  // Auto-Save
   useEffect(() => {
-    if (isReadOnly) return; // Não fazer nada se for apenas leitura (jogador)
+    if (isReadOnly) return;
 
     const subscription = form.watch((value, { name, type }) => {
       if (!type) return; 
@@ -134,12 +135,11 @@ export const NpcSheetProvider = ({
       }
 
       debounceTimer.current = setTimeout(() => {
-        // Usa os Refs
         if (form.formState.isDirty && !isSavingRef.current) {
           console.log("Auto-saving NPC sheet...");
-          programmaticSaveRef.current(); // Chama a função pelo ref
+          programmaticSaveRef.current(); 
         }
-      }, 2000); // 2 segundos
+      }, 2000); 
     });
 
     return () => {
@@ -148,7 +148,6 @@ export const NpcSheetProvider = ({
         clearTimeout(debounceTimer.current);
       }
     };
-  // --- 4. Dependência estável (só corre 1 vez) ---
   }, [form, isReadOnly]); 
   
   const npcContextValue: NpcSheetContextType = {

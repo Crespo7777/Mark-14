@@ -37,6 +37,7 @@ import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { roundUpDiv } from "@/features/character/character.schema";
+import { Separator } from "@/components/ui/separator"; // <-- IMPORTANTE: ESTÁ AQUI!
 
 // --- Tipos Locais ---
 type AttackRollData = {
@@ -128,7 +129,7 @@ export const NpcCombatEquipmentTab = () => {
     name: "armors",
   });
 
-  // --- Handlers de Vitalidade ---
+  // --- Handlers ---
   const handleDamage = (rawDamage: number) => {
     const armorRD = form.getValues("combat.armor_rd") || 0;
     const painThreshold = form.getValues("combat.pain_threshold") || 0;
@@ -161,7 +162,6 @@ export const NpcCombatEquipmentTab = () => {
     toast({ title: "Cura Aplicada!", description: `+${healAmount} Vitalidade.` });
   };
 
-  // --- Handlers de Combate ---
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -185,7 +185,7 @@ export const NpcCombatEquipmentTab = () => {
 
   return (
     <div className="space-y-6">
-      {/* --- STATUS: VITALIDADE & DEFESA --- */}
+      {/* --- STATUS --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Vitalidade */}
         <Card>
@@ -240,17 +240,19 @@ export const NpcCombatEquipmentTab = () => {
           </CardContent>
         </Card>
 
-        {/* Defesa */}
+        {/* Defesa & Corrupção */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Shield className="text-blue-500" /> Defesa (Modificador)</CardTitle>
+            <CardTitle className="flex items-center gap-2"><Shield className="text-blue-500" /> Defesa & Corrupção</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
+            {/* DEFESA */}
             <FormField
               control={form.control}
               name="combat.defense"
               render={({ field }) => (
                 <FormItem>
+                  <FormLabel>Defesa (Modificador)</FormLabel>
                   <FormControl>
                     <Input
                       type="text"
@@ -269,14 +271,44 @@ export const NpcCombatEquipmentTab = () => {
                 </FormItem>
               )}
             />
-            <p className="text-xs text-muted-foreground text-center">
-              Em Symbaroum, NPCs geralmente não rolam defesa. Este valor é aplicado como modificador negativo ao ataque dos jogadores.
-            </p>
+            
+            <Separator />
+            
+            {/* CORRUPÇÃO */}
+            <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="corruption.temporary"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Corr. Temp</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} readOnly={isReadOnly} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="corruption.permanent"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Corr. Perm</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} readOnly={isReadOnly} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* --- ARMAS --- */}
+      {/* --- ARMAS & ARMADURAS (Código das listas mantido igual para não quebrar layout) --- */}
+      {/* ... (Conteúdo das armas e armaduras) ... */}
+      {/* Vou incluir o bloco de armas/armaduras completo aqui para garantir que o ficheiro fica 100% funcional */}
+      
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
            <CardTitle className="flex items-center gap-2 text-lg"><Sword /> Armas</CardTitle>
@@ -329,7 +361,6 @@ export const NpcCombatEquipmentTab = () => {
         </CardContent>
       </Card>
 
-      {/* --- ARMADURAS --- */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
            <CardTitle className="flex items-center gap-2 text-lg"><Shield /> Armaduras</CardTitle>
@@ -372,7 +403,6 @@ export const NpcCombatEquipmentTab = () => {
         </CardContent>
       </Card>
 
-      {/* Dialog */}
       {attackRollData && (
         <NpcAbilityRollDialog
           open={!!attackRollData}

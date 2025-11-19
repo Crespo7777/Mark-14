@@ -53,7 +53,7 @@ import { JournalRenderer } from "@/components/JournalRenderer";
 import { EntityListManager } from "@/components/EntityListManager";
 import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
 import { JournalReadDialog } from "@/components/JournalReadDialog";
-import { useTableContext } from "@/features/table/TableContext"; // <-- IMPORTADO CORRETAMENTE
+import { useTableContext } from "@/features/table/TableContext"; // <-- IMPORTADO
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -165,7 +165,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                 </div>
             </CardContent>
             <CardFooter className="flex justify-between items-center pt-0 pb-3 px-4 h-12" onClick={(e) => e.stopPropagation()}>
-                <div onClick={e => e.stopPropagation()}>
+                <div>
                     {canShare ? (
                         <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
                             <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>

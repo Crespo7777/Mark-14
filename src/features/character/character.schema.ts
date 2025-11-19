@@ -1,11 +1,11 @@
+// src/features/character/character.schema.ts
+
 import { z } from "zod";
 
-// Função moderna e segura para gerar UUIDs
 export const simpleUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
   }
-  // Fallback para ambientes antigos (se necessário)
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
     var r = (Math.random() * 16) | 0,
       v = c == "x" ? r : (r & 0x3) | 0x8;
@@ -17,7 +17,7 @@ export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
 };
 
-// --- SCHEMAS BÁSICOS ---
+// --- SCHEMAS BÁSICOS (Sub-partes da Ficha) ---
 
 // 1. ATRIBUTOS
 export const attributesSchema = z.object({
@@ -41,6 +41,7 @@ export const toughnessSchema = z.object({
 export const corruptionSchema = z.object({
   temporary: z.number().default(0),
   permanent: z.number().default(0),
+  stigma: z.string().default(""), // <-- CAMPO ADICIONADO
 });
 
 // 4. DINHEIRO

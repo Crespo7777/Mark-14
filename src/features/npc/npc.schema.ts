@@ -1,3 +1,5 @@
+// src/features/npc/npc.schema.ts
+
 import { z } from "zod";
 import {
   abilitySchema,
@@ -74,13 +76,20 @@ export const npcSheetSchema = z.object({
   shadow: z.string().default(""), 
   personalGoal: z.string().default(""), 
   importantAllies: z.string().default(""), 
-  notes: z.string().default(""), // Anotações rápidas
+  notes: z.string().default(""),
 
   // Atributos
   attributes: npcAttributesSchema.default({}),
 
   // Combate
   combat: npcCombatSchema.default({}),
+
+  // --- CORRUPÇÃO (NOVO) ---
+  corruption: z.object({
+      temporary: z.number().default(0),
+      permanent: z.number().default(0),
+      stigma: z.string().default(""),
+  }).default({}),
 
   // Reutiliza os schemas
   weapons: z.array(npcWeaponSchema).default([]), 

@@ -11,6 +11,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { StigmaSelector } from "@/components/StigmaSelector"; // <-- IMPORTADO
 
 export const DetailsTab = () => {
   const { form } = useCharacterSheet();
@@ -22,25 +23,20 @@ export const DetailsTab = () => {
           <CardTitle>Detalhes do Personagem</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Nome (Linha Completa) */}
+          {/* Nome */}
           <FormField
             control={form.control}
             name="name"
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Nome</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="Nome do Personagem"
-                    {...field}
-                  />
-                </FormControl>
+                <FormControl><Input placeholder="Nome do Personagem" {...field}/></FormControl>
                 <FormMessage />
               </FormItem>
             )}
           />
           
-          {/* Raça e Ocupação (2 Colunas) */}
+          {/* Raça e Ocupação */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -48,12 +44,7 @@ export const DetailsTab = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Raça</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="Humano" 
-                      {...field} 
-                    />
-                  </FormControl>
+                  <FormControl><Input placeholder="Humano" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -64,72 +55,21 @@ export const DetailsTab = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Ocupação</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Aventureiro"
-                      {...field}
-                    />
-                  </FormControl>
+                  <FormControl><Input placeholder="Aventureiro" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </div>
 
-          {/* --- NOVO: Idade, Altura e Peso (3 Colunas) --- */}
+          {/* Idade, Altura, Peso */}
           <div className="grid grid-cols-3 gap-4">
-            <FormField
-              control={form.control}
-              name="age"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Idade</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="25 anos" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="height"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Altura</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="1.80m" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="weight"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Peso</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="80kg" 
-                      {...field} 
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormField control={form.control} name="age" render={({ field }) => (<FormItem><FormLabel>Idade</FormLabel><FormControl><Input placeholder="25 anos" {...field} /></FormControl></FormItem>)}/>
+            <FormField control={form.control} name="height" render={({ field }) => (<FormItem><FormLabel>Altura</FormLabel><FormControl><Input placeholder="1.80m" {...field} /></FormControl></FormItem>)}/>
+            <FormField control={form.control} name="weight" render={({ field }) => (<FormItem><FormLabel>Peso</FormLabel><FormControl><Input placeholder="80kg" {...field} /></FormControl></FormItem>)}/>
           </div>
-          {/* --- FIM DOS NOVOS CAMPOS --- */}
             
-          {/* Sombra e Objetivo (2 Colunas com Textarea) */}
+          {/* Sombra e Objetivo */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -137,13 +77,7 @@ export const DetailsTab = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Sombra (Cor)</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Ex: Verde-tinta..."
-                      className="min-h-[80px] resize-none" 
-                      {...field}
-                    />
-                  </FormControl>
+                  <FormControl><Textarea placeholder="Ex: Verde-tinta..." className="min-h-[80px] resize-none" {...field}/></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -154,18 +88,15 @@ export const DetailsTab = () => {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Objetivo Pessoal</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Ex: Encontrar a cura..."
-                      className="min-h-[80px] resize-none"
-                      {...field}
-                    />
-                  </FormControl>
+                  <FormControl><Textarea placeholder="Ex: Encontrar a cura..." className="min-h-[80px] resize-none" {...field}/></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
           </div>
+          
+          {/* --- ESTIGMAS (POSICIONADO AQUI, ANTES DE ALIADOS) --- */}
+          <StigmaSelector control={form.control} name="corruption.stigma" />
 
         </CardContent>
       </Card>
@@ -198,9 +129,7 @@ export const DetailsTab = () => {
       <Card>
         <CardHeader>
           <CardTitle>Anotações Gerais</CardTitle>
-          <CardDescription>
-            Anotações rápidas. Para notas longas, use a aba "Diário".
-          </CardDescription>
+          <CardDescription>Anotações rápidas. Para notas longas, use a aba "Diário".</CardDescription>
         </CardHeader>
         <CardContent>
           <FormField
@@ -221,7 +150,6 @@ export const DetailsTab = () => {
           />
         </CardContent>
       </Card>
-
     </div>
   );
 };
