@@ -1,6 +1,6 @@
 // src/features/npc/tabs/NpcDetailsTab.tsx
 
-import { useNpcSheet } from "../NpcSheetContext"; 
+import { useNpcSheet } from "../NpcSheetContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -10,11 +10,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea"; 
-import { StigmaSelector } from "@/components/StigmaSelector"; 
+import { Textarea } from "@/components/ui/textarea";
+import { StigmaSelector } from "@/components/StigmaSelector"; // <-- Importação do Componente
 
-export const NpcDetailsTab = () => { 
-  const { form, isReadOnly } = useNpcSheet(); 
+export const NpcDetailsTab = () => {
+  const { form, isReadOnly } = useNpcSheet();
 
   return (
     <div className="space-y-6">
@@ -23,6 +23,7 @@ export const NpcDetailsTab = () => {
           <CardTitle>Detalhes do NPC</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Nome */}
           <FormField
             control={form.control}
             name="name"
@@ -41,6 +42,7 @@ export const NpcDetailsTab = () => {
             )}
           />
           
+          {/* Raça e Ocupação/Resistência */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
@@ -116,8 +118,12 @@ export const NpcDetailsTab = () => {
             />
           </div>
 
-          {/* --- ESTIGMAS (CORRETO) --- */}
-          <StigmaSelector control={form.control} name="corruption.stigma" isReadOnly={isReadOnly} />
+          {/* --- SELETOR DE ESTIGMAS (IGUAL AO PERSONAGEM) --- */}
+          <StigmaSelector 
+             control={form.control} 
+             name="corruption.stigma" 
+             isReadOnly={isReadOnly} 
+          />
 
         </CardContent>
       </Card>

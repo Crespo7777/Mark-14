@@ -37,7 +37,8 @@ import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { roundUpDiv } from "@/features/character/character.schema";
-import { Separator } from "@/components/ui/separator"; // <-- IMPORTANTE: ESTÁ AQUI!
+import { Separator } from "@/components/ui/separator";
+// Importação do StigmaSelector removida daqui
 
 // --- Tipos Locais ---
 type AttackRollData = {
@@ -301,14 +302,14 @@ export const NpcCombatEquipmentTab = () => {
                   )}
                 />
             </div>
+            
+            {/* Estigmas Físicos removidos conforme solicitado */}
+
           </CardContent>
         </Card>
       </div>
 
-      {/* --- ARMAS & ARMADURAS (Código das listas mantido igual para não quebrar layout) --- */}
-      {/* ... (Conteúdo das armas e armaduras) ... */}
-      {/* Vou incluir o bloco de armas/armaduras completo aqui para garantir que o ficheiro fica 100% funcional */}
-      
+      {/* --- ARMAS & ARMADURAS --- */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
            <CardTitle className="flex items-center gap-2 text-lg"><Sword /> Armas</CardTitle>

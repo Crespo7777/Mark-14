@@ -41,7 +41,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { StigmaSelector } from "@/components/StigmaSelector"; // <-- O Seletor de Estigmas está aqui
+// Removida a importação do StigmaSelector daqui, pois ficará apenas em Detalhes
 
 // --- Tipos Locais ---
 type AttackRollData = {
@@ -306,10 +306,7 @@ export const CombatEquipmentTab = () => {
               )}
             />
             
-            <Separator />
-            
-            {/* --- SELETOR DE ESTIGMA AQUI --- */}
-            <StigmaSelector control={form.control} name="corruption.stigma" />
+            {/* A parte dos Estigmas Físicos foi removida daqui */}
             
           </CardContent>
         </Card>
