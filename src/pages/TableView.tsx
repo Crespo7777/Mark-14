@@ -1,5 +1,3 @@
-// src/pages/TableView.tsx
-
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,16 +7,11 @@ import { ArrowLeft, MessageSquare } from "lucide-react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
-
+import { ImmersiveOverlay } from "@/components/ImmersiveOverlay";
 import { TableProvider, TableMember } from "@/features/table/TableContext";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const TableView = () => {
-  // (Todos os hooks, states, e funções de loadTable... permanecem iguais)
   const { tableId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -108,39 +101,21 @@ const TableView = () => {
     userId: userId,
     isMaster: isMaster,
     members: members,
-    // --- INÍCIO DA CORREÇÃO ---
-    setMembers: setMembers, // Passando a função para o contexto
-    // --- FIM DA CORREÇÃO ---
+    setMembers: setMembers,
   };
 
-  // --- INÍCIO DA CORREÇÃO DE LAYOUT ---
   return (
     <Sheet>
       <TableProvider value={tableContextValue}>
-        {/* 1. Container principal ocupa a tela toda (min-h-screen)
-            - Em ecrãs 'md' (desktop), usamos 'flex' para criar as colunas.
-        */}
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-background relative">
           
-          {/* 2. O Painel do Chat (Desktop)
-              - Fica *fixo* (fixed) à direita, ocupando 100% da altura (h-screen).
-              - Tem uma largura fixa (w-96).
-              - 'border-l' (borda esquerda) o separa do conteúdo.
-              - 'hidden md:flex' o esconde em mobile e mostra em desktop.
-          */}
-          <div className="w-96 h-screen fixed right-0 top-0 border-l border-border bg-card hidden md:flex">
+          <ImmersiveOverlay tableId={tableId!} isMaster={isMaster} />
+
+          <div className="w-96 h-screen fixed right-0 top-0 border-l border-border bg-card hidden md:flex z-20">
             <ChatPanel tableId={tableId!} />
           </div>
 
-          {/* 3. O Conteúdo Principal (Cabeçalho + Master/Player)
-              - Em ecrãs 'md', aplicamos 'mr-96' (margem direita de 96)
-                para "empurrar" o conteúdo e dar espaço ao chat fixo.
-          */}
-          <div className="md:mr-96">
-            
-            {/* 4. O Cabeçalho (com o nome da mesa)
-                - O conteúdo dele é alinhado com 'max-w-6xl mx-auto'.
-            */}
+          <div className="md:mr-96 relative z-10">
             <div className="border-b border-border bg-card/50 backdrop-blur top-0 z-10 sticky">
               <div className="max-w-6xl mx-auto px-4 py-4">
                 <div className="flex items-center gap-4">
@@ -157,10 +132,6 @@ const TableView = () => {
               </div>
             </div>
 
-            {/* 5. O Painel de Conteúdo (Master/Player)
-                - Também alinhado com 'max-w-6xl mx-auto'.
-                - O 'p-4 md:p-6' dá o espaçamento interno.
-            */}
             <div className="p-4 md:p-6">
               <div className="max-w-6xl mx-auto">
                 {isMaster ? (
@@ -172,8 +143,6 @@ const TableView = () => {
             </div>
           </div>
 
-
-          {/* 6. O Chat Móvel (permanece igual) */}
           <SheetTrigger asChild>
             <Button
               variant="default"
@@ -193,7 +162,6 @@ const TableView = () => {
       </TableProvider>
     </Sheet>
   );
-  // --- FIM DA CORREÇÃO DE LAYOUT ---
 };
 
 export default TableView;

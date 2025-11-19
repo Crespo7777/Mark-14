@@ -5,13 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shop, ShopItem, CharacterWithRelations } from "@/types/app-types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ShoppingBag, Coins, Weight } from "lucide-react";
-import { convertFromOrtegas, convertToOrtegas } from "@/lib/economy-utils";
+import { convertFromOrtegas, convertToOrtegas, formatPrice } from "@/lib/economy-utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const fetchShops = async (tableId: string) => {
   const { data } = await supabase.from("shops").select("*").eq("table_id", tableId);
@@ -32,9 +31,11 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
-  const [isBuying, setIsBuying] = useState(false);
+  
+  // Removemos o estado 'isBuying' bloqueante para dar sensação de fluidez, 
+  // ou usamos apenas para desativar o botão momentaneamente sem loading spinner.
+  const [buyingId, setBuyingId] = useState<string | null>(null);
 
-  // Dados
   const { data: shops = [] } = useQuery({ queryKey: ['shops', tableId], queryFn: () => fetchShops(tableId) });
   const { data: items = [] } = useQuery({ 
     queryKey: ['shop_items', selectedShopId], 
@@ -43,24 +44,32 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
   });
   const { data: character } = useQuery({ queryKey: ['my_character_money', tableId, userId], queryFn: () => fetchMyCharacter(userId, tableId) });
 
-  // Cálculos
   const currentMoney = character ? (character.data as any).money : { taler:0, shekel:0, ortega:0 };
   const totalPlayerOrtegas = convertToOrtegas(currentMoney);
 
   const handleBuy = async (item: ShopItem) => {
     if (!character) return;
-    if (totalPlayerOrtegas < item.price) {
-      toast({ title: "Sem dinheiro!", description: `Você precisa de mais ${item.price - totalPlayerOrtegas} Ortegas.`, variant: "destructive" });
+    
+    const price = parseInt(item.price as any) || 0;
+    const playerMoney = parseInt(totalPlayerOrtegas as any) || 0;
+
+    if (playerMoney < price) {
+      toast({ 
+        title: "Saldo Insuficiente", 
+        description: `O item custa ${formatPrice(price)} e você só tem ${formatPrice(playerMoney)}.`, 
+        variant: "destructive" 
+      });
       return;
     }
     
-    setIsBuying(true);
+    setBuyingId(item.id);
 
-    // 1. Calcular novo saldo
-    const newTotalOrtegas = totalPlayerOrtegas - item.price;
+    // --- LÓGICA OTIMISTA ---
+    
+    // 1. Calcular os novos dados
+    const newTotalOrtegas = playerMoney - price;
     const newMoney = convertFromOrtegas(newTotalOrtegas);
 
-    // 2. Adicionar item ao inventário
     const newItemObj = {
       id: crypto.randomUUID(),
       name: item.name,
@@ -68,32 +77,57 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
       weight: item.weight,
       description: item.description
     };
+    
     const currentInventory = (character.data as any).inventory || [];
     const newInventory = [...currentInventory, newItemObj];
-
-    // 3. Atualizar ficha no banco
+    
     const newData = { 
       ...(character.data as any), 
       money: newMoney, 
       inventory: newInventory 
     };
 
+    // 2. Atualizar a CACHE instantaneamente (O truque de velocidade!)
+    const queryKey = ['my_character_money', tableId, userId];
+    
+    // Cancelar quaisquer refetches em andamento para não sobrescrever o nosso update otimista
+    await queryClient.cancelQueries({ queryKey });
+
+    // Guardar o estado anterior em caso de erro
+    const previousCharacter = queryClient.getQueryData(queryKey);
+
+    // Atualizar a UI imediatamente
+    queryClient.setQueryData(queryKey, (old: any) => {
+       if (!old) return old;
+       return {
+         ...old,
+         data: newData
+       };
+    });
+
+    toast({ title: "Item comprado!", description: `-${formatPrice(price)}. ${item.name} adicionado.` });
+
+    // 3. Enviar para o Servidor (em background)
     const { error } = await supabase.from("characters").update({ data: newData }).eq("id", character.id);
 
     if (error) {
-      toast({ title: "Erro na compra", description: error.message, variant: "destructive" });
+      // Se falhar, reverte para o estado anterior
+      toast({ title: "Erro na compra", description: "A compra falhou. O dinheiro foi devolvido.", variant: "destructive" });
+      queryClient.setQueryData(queryKey, previousCharacter);
     } else {
-      toast({ title: "Item comprado!", description: `-${item.price} Ortegas. ${item.name} adicionado.` });
-      queryClient.invalidateQueries({ queryKey: ['my_character_money', tableId, userId] });
-      // Feedback no Chat
-      await supabase.from("chat_messages").insert({
+      // Se der certo, manda a mensagem no chat (sem esperar resposta)
+      supabase.from("chat_messages").insert({
         table_id: tableId,
         user_id: userId,
-        message: `💰 **${character.name}** comprou **${item.name}** por ${item.price} ortegas.`,
+        message: `💰 **${character.name}** comprou **${item.name}** por ${formatPrice(price)}.`,
         message_type: "info"
+      }).then(() => {
+         // Invalida apenas para garantir consistência final, mas o utilizador já viu a mudança
+         queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
       });
     }
-    setIsBuying(false);
+    
+    setBuyingId(null);
   };
 
   if (!character) return <div className="p-8 text-center text-muted-foreground">Você precisa de uma ficha de personagem para comprar.</div>;
@@ -107,9 +141,9 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
         </div>
         <div className="text-right">
             <div className="text-sm font-mono text-accent font-bold flex items-center justify-end gap-1">
-                {totalPlayerOrtegas} <Coins className="w-3 h-3"/>
+                {formatPrice(totalPlayerOrtegas)}
             </div>
-            <span className="text-[10px] text-muted-foreground">Seu Saldo (Total em Ortegas)</span>
+            <span className="text-[10px] text-muted-foreground">Seu Saldo</span>
         </div>
       </div>
 
@@ -124,7 +158,7 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
               {shop.name}
            </Button>
         ))}
-        {shops.length === 0 && <p className="text-sm text-muted-foreground px-4">Nenhuma loja disponível na região.</p>}
+        {shops.length === 0 && <p className="text-sm text-muted-foreground px-4">Nenhuma loja disponível.</p>}
       </div>
 
       <Card className="flex-1">
@@ -135,30 +169,35 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
                 {selectedShopId && items.length === 0 && <div className="text-center py-20 text-muted-foreground">Esta loja está vazia.</div>}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {items.map(item => (
-                      <div key={item.id} className="border rounded-lg p-3 flex flex-col justify-between bg-muted/10 hover:bg-muted/30 transition-colors">
-                          <div>
-                              <div className="flex justify-between items-start">
-                                  <span className="font-bold">{item.name}</span>
-                                  <Badge variant="outline" className="font-mono">{item.weight} <Weight className="w-3 h-3 ml-1"/></Badge>
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
-                          </div>
-                          <div className="mt-4 flex justify-between items-center">
-                              <span className={`font-bold text-lg ${totalPlayerOrtegas >= item.price ? "text-accent" : "text-destructive"}`}>
-                                 {item.price} $
-                              </span>
-                              <Button 
-                                 size="sm" 
-                                 onClick={() => handleBuy(item)} 
-                                 disabled={isBuying || totalPlayerOrtegas < item.price}
-                                 variant={totalPlayerOrtegas >= item.price ? "default" : "secondary"}
-                              >
-                                 Comprar
-                              </Button>
-                          </div>
-                      </div>
-                   ))}
+                   {items.map(item => {
+                      const price = parseInt(item.price as any) || 0;
+                      const canAfford = totalPlayerOrtegas >= price;
+
+                      return (
+                        <div key={item.id} className="border rounded-lg p-3 flex flex-col justify-between bg-muted/10 hover:bg-muted/30 transition-colors">
+                            <div>
+                                <div className="flex justify-between items-start">
+                                    <span className="font-bold">{item.name}</span>
+                                    <Badge variant="outline" className="font-mono">{item.weight} <Weight className="w-3 h-3 ml-1"/></Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
+                            </div>
+                            <div className="mt-4 flex justify-between items-center">
+                                <span className={`font-bold text-lg ${canAfford ? "text-accent" : "text-destructive"}`}>
+                                   {formatPrice(price)}
+                                </span>
+                                <Button 
+                                   size="sm" 
+                                   onClick={() => handleBuy(item)} 
+                                   disabled={!!buyingId || !canAfford}
+                                   variant={canAfford ? "default" : "secondary"}
+                                >
+                                   {buyingId === item.id ? "..." : "Comprar"}
+                                </Button>
+                            </div>
+                        </div>
+                      );
+                   })}
                 </div>
             </ScrollArea>
          </CardContent>

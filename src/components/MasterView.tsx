@@ -4,14 +4,14 @@ import { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
-import { Store } from "lucide-react"; // Ícone para Lojas
+import { Store, Clapperboard } from "lucide-react";
 
-// Importação das Abas
 import { MasterCharactersTab } from "@/features/master/MasterCharactersTab";
 import { MasterNpcsTab } from "@/features/master/MasterNpcsTab";
 import { MasterJournalTab } from "@/features/master/MasterJournalTab";
 import { MasterPlayersTab } from "@/features/master/MasterPlayersTab";
-import { MasterShopsTab } from "@/features/master/MasterShopsTab"; // <-- NOVA IMPORTAÇÃO
+import { MasterShopsTab } from "@/features/master/MasterShopsTab";
+import { MasterMediaTab } from "@/features/master/MasterMediaTab";
 
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 
@@ -23,7 +23,6 @@ interface MasterViewProps {
 export const MasterView = ({ tableId }: MasterViewProps) => {
   const [activeTab, setActiveTab] = useState("characters");
 
-  // ✅ ATIVA O REALTIME GLOBAL PARA O MESTRE
   useTableRealtime(tableId);
 
   return (
@@ -39,14 +38,17 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
       </div>
 
       <Tabs defaultValue="characters" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        {/* Ajustado para grid-cols-5 para caber a nova aba */}
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="characters">Personagens</TabsTrigger>
           <TabsTrigger value="npcs">NPCs</TabsTrigger>
           <TabsTrigger value="players">Jogadores</TabsTrigger>
           <TabsTrigger value="journal">Diário</TabsTrigger>
           <TabsTrigger value="shops" className="flex items-center gap-2">
-             <Store className="w-4 h-4" /> Lojas & Loot
+             <Store className="w-4 h-4" /> Lojas
+          </TabsTrigger>
+          {/* Atualizado para "Studio" */}
+          <TabsTrigger value="media" className="flex items-center gap-2">
+             <Clapperboard className="w-4 h-4" /> Studio
           </TabsTrigger>
         </TabsList>
         
@@ -55,8 +57,8 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
             <TabsContent value="npcs"><MasterNpcsTab tableId={tableId} /></TabsContent>
             <TabsContent value="players"><MasterPlayersTab tableId={tableId} /></TabsContent>
             <TabsContent value="journal"><MasterJournalTab tableId={tableId} /></TabsContent>
-            {/* Nova Aba de Lojas */}
             <TabsContent value="shops"><MasterShopsTab tableId={tableId} /></TabsContent>
+            <TabsContent value="media"><MasterMediaTab tableId={tableId} /></TabsContent>
         </div>
       </Tabs>
     </div>
