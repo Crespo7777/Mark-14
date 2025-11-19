@@ -17,6 +17,9 @@ const Auth = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    // Verifica se já existe sessão. 
+    // NOTA: Se o link do e-mail fizer login automático, 
+    // este código vai redirecionar para o dashboard imediatamente após cair aqui.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
         navigate("/dashboard");
@@ -44,7 +47,10 @@ const Auth = () => {
           data: {
             display_name: displayName,
           },
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          // --- ALTERAÇÃO AQUI ---
+          // Mudamos de '/dashboard' para '/auth'
+          emailRedirectTo: `${window.location.origin}/auth`, 
+          // ----------------------
         },
       });
 
@@ -52,7 +58,7 @@ const Auth = () => {
 
       toast({
         title: "Conta criada!",
-        description: "Você foi automaticamente conectado.",
+        description: "Verifique o seu e-mail para confirmar a conta antes de entrar.",
       });
     } catch (error: any) {
       toast({
