@@ -32,3 +32,21 @@ export type FolderType = {
   id: string;
   name: string;
 };
+
+export interface Shop {
+  id: string;
+  table_id: string;
+  name: string;
+  description?: string | null;
+  created_at: string;
+}
+
+export interface ShopItem {
+  id: string;
+  shop_id: string;
+  name: string;
+  description?: string | null;
+  weight: number;
+  price: number; // Em Ortegas
+  quantity: number;
+}
