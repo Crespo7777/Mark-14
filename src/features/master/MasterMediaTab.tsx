@@ -43,7 +43,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
     }).eq("table_id", tableId);
     
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else toast({ title: "A projetar para todos!" });
+    else toast({ title: "Prios: A projetar para todos!" });
     setLoading(false);
   };
 
@@ -53,7 +53,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
       active_cutscene_type: 'none',
       active_cutscene_url: null
     }).eq("table_id", tableId);
-    toast({ title: "Projeção encerrada." });
+    toast({ title: "Prios: Projeção encerrada." });
     setLoading(false);
   };
 
@@ -67,14 +67,14 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
         is_music_playing: true,
         active_music_index: 0 
     }).eq("table_id", tableId);
-    toast({ title: "Música: Play ▶️" });
+    toast({ title: "Bardo: Play ▶️" });
   };
 
   const handlePauseMusic = async () => {
     await supabase.from("game_states").update({ 
         is_music_playing: false 
     }).eq("table_id", tableId);
-    toast({ title: "Música: Pause ⏸️" });
+    toast({ title: "Bardo: Pause ⏸️" });
   };
 
   const handleStopMusic = async () => {
@@ -83,7 +83,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
         active_music_url: null,
         active_music_index: 0
     }).eq("table_id", tableId);
-    toast({ title: "Música: Parada ⏹️" });
+    toast({ title: "Bardo: Parado ⏹️" });
   };
 
   const handleSkipTrack = async () => {
@@ -101,7 +101,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
             active_music_index: nextIndex
         }).eq("table_id", tableId);
 
-        toast({ title: "Música: Próxima Faixa ⏭️" });
+        toast({ title: "Bardo: Próxima Faixa ⏭️" });
     }
   };
 
@@ -116,13 +116,14 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
   return (
     <div className="grid gap-6 md:grid-cols-2">
       
-      {/* Controlo de Visual */}
+      {/* Controlo de Visual (PRIOS) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <MonitorPlay className="text-primary" /> Projeção Visual
+            {/* ALTERADO PARA PRIOS */}
+            <MonitorPlay className="text-primary" /> Prios
           </CardTitle>
-          <CardDescription>Imagens e vídeos em ecrã cheio.</CardDescription>
+          <CardDescription>Projeção de imagens e vídeos em ecrã cheio.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -162,7 +163,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
         </CardContent>
       </Card>
 
-      {/* Controlo de Áudio (Agora "Bardo") */}
+      {/* Controlo de Áudio (BARDO) */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
            <CardTitle className="flex items-center gap-2 text-xl">
