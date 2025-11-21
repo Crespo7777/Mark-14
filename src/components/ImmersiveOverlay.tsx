@@ -12,7 +12,7 @@ interface GameState {
   active_cutscene_type: 'image' | 'video' | 'none';
   active_music_url: string | null;
   is_music_playing: boolean;
-  active_music_index: number; // NOVA PROPRIEDADE
+  active_music_index: number; 
 }
 
 const getYouTubeEmbedUrl = (url: string) => {
@@ -21,7 +21,6 @@ const getYouTubeEmbedUrl = (url: string) => {
   try {
     const listMatch = url.match(/[?&]list=([^#\&\?]+)/);
     if (listMatch) {
-      // Playlist Nativa do YouTube (O controlo de Skip é feito pelo próprio YouTube)
       return `https://www.youtube.com/embed?listType=playlist&list=${listMatch[1]}&autoplay=1&controls=0&disablekb=1&fs=0&loop=1&playsinline=1`;
     }
     const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
@@ -42,13 +41,34 @@ export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMas
   
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // 1. CONEXÃO AO SUPABASE
+  // 1. CONEXÃO ROBUSTA AO SUPABASE (COM AUTO-CURA)
   useEffect(() => {
-    const fetchState = async () => {
-        const { data } = await supabase.from("game_states").select("*").eq("table_id", tableId).maybeSingle();
-        if (data) setGameState(data as any);
+    const initGameState = async () => {
+        // Tenta buscar o estado
+        const { data, error } = await supabase.from("game_states").select("*").eq("table_id", tableId).maybeSingle();
+        
+        if (data) {
+            setGameState(data as any);
+        } else {
+            // --- AUTO-CURA ---
+            // Se não existir estado (o bug que encontraste), criamos um agora mesmo!
+            console.warn("Estado de jogo não encontrado. Criando novo...");
+            const { data: newData, error: createError } = await supabase
+                .from("game_states")
+                .insert({ table_id: tableId })
+                .select()
+                .single();
+            
+            if (newData) {
+                setGameState(newData as any);
+            } else if (createError) {
+                console.error("Erro fatal ao criar estado:", createError);
+                toast({ title: "Erro no Sistema", description: "Não foi possível iniciar o sistema de áudio.", variant: "destructive" });
+            }
+        }
     };
-    fetchState();
+    
+    initGameState();
 
     const channel = supabase.channel(`game-state:${tableId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_states', filter: `table_id=eq.${tableId}` }, 
@@ -66,7 +86,6 @@ export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMas
     return gameState.active_music_url.split("|").filter(url => url.trim() !== "");
   }, [gameState?.active_music_url]);
 
-  // O índice agora vem do SERVIDOR, não do estado local
   const currentTrackIndex = gameState?.active_music_index || 0;
   const currentUrl = playlist[currentTrackIndex] || "";
 
@@ -80,17 +99,15 @@ export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMas
         audioRef.current.pause();
       }
     }
-  }, [volume, isRadioOn, gameState?.is_music_playing, currentUrl]); // currentUrl incluído para disparar play ao trocar
+  }, [volume, isRadioOn, gameState?.is_music_playing, currentUrl]); 
 
-  // --- Handler de Fim de Música (AUTOMÁTICO) ---
-  // APENAS O MESTRE atualiza o banco quando a música acaba, para evitar conflitos.
+  // Handler de Fim de Música (AUTOMÁTICO)
   const handleTrackEnd = async () => {
     if (isMaster && playlist.length > 0) {
         const nextIndex = (currentTrackIndex + 1) % playlist.length;
         await supabase.from("game_states").update({
             active_music_index: nextIndex
         }).eq("table_id", tableId);
-        // Não precisamos de toast aqui, a mudança visual é suficiente
     }
   };
 
@@ -103,6 +120,7 @@ export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMas
     toast({ title: "Projeção encerrada." });
   };
 
+  // Se o gameState ainda estiver a carregar (ou a ser criado), não mostramos nada
   if (!gameState) return null;
 
   return (
@@ -118,7 +136,7 @@ export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMas
         <audio
           ref={audioRef}
           src={currentUrl}
-          onEnded={handleTrackEnd} // O Mestre usa isto para avançar a lista para todos
+          onEnded={handleTrackEnd} 
           style={{ display: 'none' }}
         />
       )}
@@ -175,7 +193,7 @@ export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMas
                         defaultValue={[volume]} 
                         max={1} 
                         step={0.05} 
-                        onValueChange={(vals) => setLocalVolume(vals[0])}
+                        onValueChange={(vals) => setVolume(vals[0])}
                         className={`w-full ${youtubeUrl ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
                         disabled={!!youtubeUrl} 
                     />
