@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Image as ImageIcon, Music, Play, Square, Film, Cast, MonitorPlay, FolderOpen } from "lucide-react";
+import { Image as ImageIcon, Music, Play, Pause, Square, Film, Cast, MonitorPlay, FolderOpen, ListMusic, SkipForward } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { MediaLibrary } from "@/components/MediaLibrary";
@@ -27,6 +27,11 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
 
   const detectedType = useMemo(() => detectMediaType(mediaUrl), [mediaUrl]);
 
+  // Verifica se é playlist manual (vários URLs separados por |)
+  const isPlaylist = musicUrl.includes("|");
+  const playlistCount = isPlaylist ? musicUrl.split("|").length : 0;
+
+  // --- VISUAL (IMAGEM/VIDEO) ---
   const handleShowMedia = async () => {
     if (!mediaUrl) return;
     setLoading(true);
@@ -52,18 +57,52 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
     setLoading(false);
   };
 
+  // --- ÁUDIO (PLAY / PAUSE / STOP / SKIP) ---
+  
   const handlePlayMusic = async () => {
     if (!musicUrl) return;
+    // Reseta o índice para 0 sempre que damos Play numa nova lista/música
     await supabase.from("game_states").update({
         active_music_url: musicUrl,
-        is_music_playing: true
+        is_music_playing: true,
+        active_music_index: 0 
     }).eq("table_id", tableId);
-    toast({ title: "Música: Play" });
+    toast({ title: "Música: Play ▶️" });
+  };
+
+  const handlePauseMusic = async () => {
+    await supabase.from("game_states").update({ 
+        is_music_playing: false 
+    }).eq("table_id", tableId);
+    toast({ title: "Música: Pause ⏸️" });
   };
 
   const handleStopMusic = async () => {
-    await supabase.from("game_states").update({ is_music_playing: false }).eq("table_id", tableId);
-    toast({ title: "Música: Stop" });
+    await supabase.from("game_states").update({ 
+        is_music_playing: false,
+        active_music_url: null,
+        active_music_index: 0
+    }).eq("table_id", tableId);
+    toast({ title: "Música: Parada ⏹️" });
+  };
+
+  const handleSkipTrack = async () => {
+    // Para pular, precisamos saber o estado atual.
+    const { data } = await supabase.from("game_states").select("active_music_url, active_music_index").eq("table_id", tableId).single();
+    
+    if (data && data.active_music_url) {
+        const playlist = data.active_music_url.split("|");
+        const currentIndex = data.active_music_index || 0;
+        
+        // Lógica de Loop: Se for a última, volta para a 0, senão +1
+        const nextIndex = (currentIndex + 1) % playlist.length;
+
+        await supabase.from("game_states").update({
+            active_music_index: nextIndex
+        }).eq("table_id", tableId);
+
+        toast({ title: "Música: Próxima Faixa ⏭️" });
+    }
   };
 
   const handleLibrarySelect = (url: string, type: 'image' | 'video' | 'audio') => {
@@ -105,6 +144,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
                 />
                 <MediaLibrary 
                   filter="image" 
+                  multiSelect={false}
                   onSelect={handleLibrarySelect} 
                   trigger={<Button variant="outline" size="icon"><FolderOpen className="w-4 h-4"/></Button>} 
                 />
@@ -122,38 +162,56 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
         </CardContent>
       </Card>
 
-      {/* Controlo de Áudio */}
+      {/* Controlo de Áudio (Agora "Bardo") */}
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
            <CardTitle className="flex items-center gap-2 text-xl">
-             <Music className="text-accent" /> Ambiente Sonoro
+             <Music className="text-accent" /> Bardo
            </CardTitle>
-           <CardDescription>YouTube, SoundCloud, MP3 ou Biblioteca.</CardDescription>
+           <CardDescription>YouTube (Automático) ou Biblioteca.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
            <div className="space-y-2">
-            <Label>URL da Música</Label>
+            <div className="flex justify-between items-center">
+                <Label>URL / Playlist</Label>
+                {isPlaylist && (
+                    <Badge variant="secondary" className="flex items-center gap-1">
+                        <ListMusic className="w-3 h-3" /> {playlistCount} faixas
+                    </Badge>
+                )}
+            </div>
             <div className="flex gap-2">
                 <Input 
-                    // --- ATUALIZADO O PLACEHOLDER ---
-                    placeholder="Cole link do YouTube, MP3..." 
+                    placeholder="Link ou Seleção Múltipla..." 
                     value={musicUrl} 
                     onChange={e => setMusicUrl(e.target.value)} 
                     className="flex-1"
                 />
                 <MediaLibrary 
                   filter="audio" 
+                  multiSelect={true}
                   onSelect={handleLibrarySelect} 
                   trigger={<Button variant="outline" size="icon"><FolderOpen className="w-4 h-4"/></Button>} 
                 />
             </div>
           </div>
+          
+          {/* BARRA DE CONTROLO */}
           <div className="flex gap-2">
-             <Button onClick={handlePlayMusic} className="flex-1" variant="outline">
-                <Play className="w-4 h-4 mr-2 text-green-500"/> Tocar
+             <Button onClick={handlePlayMusic} className="flex-1 bg-green-600 hover:bg-green-700 text-white">
+                <Play className="w-4 h-4 mr-2"/> Play
              </Button>
-             <Button onClick={handleStopMusic} className="flex-1" variant="outline">
-                <Square className="w-4 h-4 mr-2 text-red-500"/> Parar
+             <Button onClick={handlePauseMusic} variant="secondary" className="flex-1 border border-input">
+                <Pause className="w-4 h-4 mr-2"/> Pause
+             </Button>
+             
+             {/* BOTÃO PULAR */}
+             <Button onClick={handleSkipTrack} variant="outline" className="flex-1" title="Próxima Faixa">
+                <SkipForward className="w-4 h-4 mr-2"/> Pular
+             </Button>
+
+             <Button onClick={handleStopMedia} variant="destructive" size="icon" title="Parar">
+                <Square className="w-4 h-4"/>
              </Button>
           </div>
         </CardContent>

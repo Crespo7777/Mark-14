@@ -2,19 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"; // <-- Importar Description
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Upload, Trash2, Image as ImageIcon, Music, File } from "lucide-react";
+import { Loader2, Upload, Trash2, Image as ImageIcon, Music, File, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface MediaLibraryProps {
-  onSelect: (url: string, type: 'image' | 'video' | 'audio') => void;
+  onSelect: (url: string, type: 'image' | 'video' | 'audio') => void; // Url única ou separada por |
   trigger?: React.ReactNode;
   filter?: 'all' | 'image' | 'audio';
+  multiSelect?: boolean; // NOVA PROP
 }
 
 interface MediaFile {
@@ -27,16 +29,22 @@ interface MediaFile {
 const BUCKET_NAME = "campaign-media";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
-export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibraryProps) => {
+export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = false }: MediaLibraryProps) => {
   const { toast } = useToast();
   const [files, setFiles] = useState<MediaFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [open, setOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(filter === 'audio' ? 'audio' : 'image');
+  
+  // Estado para multisseleção
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
 
   useEffect(() => {
-    if (open) fetchFiles();
+    if (open) {
+      fetchFiles();
+      setSelectedFiles([]); // Limpa seleção ao abrir
+    }
   }, [open]);
 
   const fetchFiles = async () => {
@@ -45,7 +53,9 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibrary
     if (error) {
       toast({ title: "Erro ao carregar", description: error.message, variant: "destructive" });
     } else {
-      setFiles(data as any[]);
+      // Ordena por mais recente
+      const sorted = (data as any[]).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+      setFiles(sorted);
     }
     setLoading(false);
   };
@@ -92,8 +102,26 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibrary
     let type: 'image' | 'video' | 'audio' = 'image';
     if (mime.startsWith('audio')) type = 'audio';
     else if (mime.startsWith('video')) type = 'video';
-    
-    onSelect(url, type);
+
+    if (multiSelect) {
+      // Lógica de toggle para multisseleção
+      setSelectedFiles(prev => {
+        if (prev.includes(url)) return prev.filter(u => u !== url);
+        return [...prev, url];
+      });
+    } else {
+      // Comportamento padrão (seleciona e fecha)
+      onSelect(url, type);
+      setOpen(false);
+    }
+  };
+
+  const handleConfirmSelection = () => {
+    if (selectedFiles.length === 0) return;
+    // Junta todos os URLs com um separador "|"
+    const joinedUrls = selectedFiles.join("|");
+    // O tipo assume-se pelo filtro atual ou pelo primeiro ficheiro (simplificação)
+    onSelect(joinedUrls, activeTab === 'audio' ? 'audio' : 'image');
     setOpen(false);
   };
 
@@ -109,12 +137,11 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibrary
       <DialogTrigger asChild>
         {trigger || <Button variant="outline">Abrir Biblioteca</Button>}
       </DialogTrigger>
-      <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Biblioteca de Média</DialogTitle>
-          {/* --- CORREÇÃO: Descrição adicionada para acessibilidade --- */}
           <DialogDescription>
-            Faça upload e selecione imagens ou sons para a sua campanha.
+            {multiSelect ? "Selecione um ou mais arquivos." : "Selecione um arquivo."}
           </DialogDescription>
         </DialogHeader>
 
@@ -137,7 +164,7 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibrary
           </TabsList>
           
           <div className="flex-1 overflow-hidden mt-2 border rounded-md bg-muted/10">
-             <ScrollArea className="h-[400px] p-4">
+             <ScrollArea className="h-[350px] p-4">
                 {loading && <div className="flex justify-center p-8"><Loader2 className="animate-spin"/></div>}
                 
                 {!loading && filteredFiles.length === 0 && (
@@ -148,11 +175,15 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibrary
                    {filteredFiles.map(file => {
                      const isImage = file.metadata?.mimetype?.startsWith('image');
                      const url = getPublicUrl(file.name);
+                     const isSelected = selectedFiles.includes(url);
                      
                      return (
                        <div 
                          key={file.id} 
-                         className="group relative border rounded-lg overflow-hidden cursor-pointer hover:ring-2 ring-primary transition-all bg-card"
+                         className={cn(
+                           "group relative border rounded-lg overflow-hidden cursor-pointer transition-all bg-card",
+                           isSelected ? "ring-2 ring-primary border-primary" : "hover:ring-2 hover:ring-muted-foreground/50"
+                         )}
                          onClick={() => handleFileClick(file)}
                        >
                           <div className="aspect-square w-full flex items-center justify-center bg-black/20">
@@ -163,18 +194,28 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibrary
                                   {activeTab === 'audio' ? <Music className="w-8 h-8 mb-2"/> : <File className="w-8 h-8"/>}
                                </div>
                              )}
+                             
+                             {/* Indicador de Seleção */}
+                             {isSelected && (
+                               <div className="absolute top-2 left-2 bg-primary text-primary-foreground rounded-full p-1 shadow-lg">
+                                 <CheckCircle2 className="w-4 h-4" />
+                               </div>
+                             )}
                           </div>
                           <div className="p-2 text-xs truncate bg-card/90 border-t">
                             {file.name}
                           </div>
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => handleDelete(file.name, e)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
+                          
+                          {!multiSelect && (
+                             <Button
+                                variant="destructive"
+                                size="icon"
+                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e) => handleDelete(file.name, e)}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                          )}
                        </div>
                      )
                    })}
@@ -182,6 +223,17 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all' }: MediaLibrary
              </ScrollArea>
           </div>
         </Tabs>
+
+        {multiSelect && (
+          <DialogFooter className="mt-4">
+             <div className="flex-1 flex items-center text-sm text-muted-foreground">
+                {selectedFiles.length} arquivo(s) selecionado(s)
+             </div>
+             <Button onClick={handleConfirmSelection} disabled={selectedFiles.length === 0}>
+               Confirmar Playlist
+             </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

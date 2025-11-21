@@ -1,11 +1,10 @@
 // src/components/ImmersiveOverlay.tsx
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Volume2, VolumeX, AlertCircle } from "lucide-react";
+import { X, Radio, Volume2, VolumeX, Zap, AlertTriangle, ListMusic, Pause, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useToast } from "@/hooks/use-toast";
-import ReactPlayer from 'react-player';
 import { Slider } from "@/components/ui/slider";
 
 interface GameState {
@@ -13,22 +12,43 @@ interface GameState {
   active_cutscene_type: 'image' | 'video' | 'none';
   active_music_url: string | null;
   is_music_playing: boolean;
+  active_music_index: number; // NOVA PROPRIEDADE
 }
+
+const getYouTubeEmbedUrl = (url: string) => {
+  if (!url) return null;
+  
+  try {
+    const listMatch = url.match(/[?&]list=([^#\&\?]+)/);
+    if (listMatch) {
+      // Playlist Nativa do YouTube (O controlo de Skip é feito pelo próprio YouTube)
+      return `https://www.youtube.com/embed?listType=playlist&list=${listMatch[1]}&autoplay=1&controls=0&disablekb=1&fs=0&loop=1&playsinline=1`;
+    }
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    const match = url.match(regExp);
+    if (match && match[2].length === 11) {
+      return `https://www.youtube.com/embed/${match[2]}?autoplay=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${match[2]}&playsinline=1`;
+    }
+  } catch (e) { console.error(e); }
+  return null;
+};
 
 export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMaster: boolean }) => {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const { toast } = useToast();
   
-  // Estados de Áudio
-  const [localVolume, setLocalVolume] = useState(0.5);
-  // Começamos MUDO por padrão para garantir que o vídeo carrega (Autoplay Policy)
-  const [isMuted, setIsMuted] = useState(true); 
-  const [audioError, setAudioError] = useState(false);
+  const [isRadioOn, setIsRadioOn] = useState(false); 
+  const [volume, setVolume] = useState(0.5); 
+  
+  const audioRef = useRef<HTMLAudioElement>(null);
 
-  // 1. Escutar o Estado do Jogo em Tempo Real
+  // 1. CONEXÃO AO SUPABASE
   useEffect(() => {
-    supabase.from("game_states").select("*").eq("table_id", tableId).maybeSingle()
-      .then(({ data }) => { if (data) setGameState(data as any); });
+    const fetchState = async () => {
+        const { data } = await supabase.from("game_states").select("*").eq("table_id", tableId).maybeSingle();
+        if (data) setGameState(data as any);
+    };
+    fetchState();
 
     const channel = supabase.channel(`game-state:${tableId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_states', filter: `table_id=eq.${tableId}` }, 
@@ -40,158 +60,143 @@ export const ImmersiveOverlay = ({ tableId, isMaster }: { tableId: string, isMas
     return () => { supabase.removeChannel(channel); };
   }, [tableId]);
 
-  // 2. Tentativa Automática de Unmute
-  // Quando o player começa, tentamos tirar o mudo. Se falhar, o botão aparece.
-  const handlePlayerStart = () => {
-    console.log("▶️ Player Iniciado (Mudo). Tentando ativar som...");
-    
-    // Pequeno delay para garantir que o player está estável
-    setTimeout(() => {
-        setIsMuted(false); // Tenta tirar o mudo
-        // Se o navegador bloquear, o estado visual não muda realmente sem interação,
-        // mas podemos verificar se o áudio está a fluir ou assumir sucesso.
-        // Para garantir, vamos deixar o botão de volume visível se estivermos 'mutados' logicamente.
-    }, 500);
+  // Analisa a Playlist
+  const playlist = useMemo(() => {
+    if (!gameState?.active_music_url) return [];
+    return gameState.active_music_url.split("|").filter(url => url.trim() !== "");
+  }, [gameState?.active_music_url]);
+
+  // O índice agora vem do SERVIDOR, não do estado local
+  const currentTrackIndex = gameState?.active_music_index || 0;
+  const currentUrl = playlist[currentTrackIndex] || "";
+
+  // Controlo de Volume e Play/Pause (MP3)
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+      if (isRadioOn && gameState?.is_music_playing) {
+        audioRef.current.play().catch(() => console.log("Autoplay bloqueado aguardando interação"));
+      } else {
+        audioRef.current.pause();
+      }
+    }
+  }, [volume, isRadioOn, gameState?.is_music_playing, currentUrl]); // currentUrl incluído para disparar play ao trocar
+
+  // --- Handler de Fim de Música (AUTOMÁTICO) ---
+  // APENAS O MESTRE atualiza o banco quando a música acaba, para evitar conflitos.
+  const handleTrackEnd = async () => {
+    if (isMaster && playlist.length > 0) {
+        const nextIndex = (currentTrackIndex + 1) % playlist.length;
+        await supabase.from("game_states").update({
+            active_music_index: nextIndex
+        }).eq("table_id", tableId);
+        // Não precisamos de toast aqui, a mudança visual é suficiente
+    }
   };
 
-  const handlePlayerError = (e: any) => {
-    // Ignora AbortError (troca rápida de música ou pause)
-    if (e && (e.name === 'AbortError' || e.message?.includes('interrupted'))) return;
-    
-    console.warn("⚠️ Erro no Player:", e);
-    setAudioError(true);
-  };
-
-  const shouldPlay = Boolean(
-    gameState?.is_music_playing && 
-    gameState?.active_music_url
-  );
+  const shouldPlay = isRadioOn && gameState?.is_music_playing && playlist.length > 0;
+  const youtubeUrl = shouldPlay ? getYouTubeEmbedUrl(currentUrl) : null;
+  const isDirectAudioUrl = shouldPlay && !youtubeUrl;
 
   const handleCloseCutscene = async () => {
-    await supabase.from("game_states").update({ 
-      active_cutscene_type: 'none', 
-      active_cutscene_url: null 
-    }).eq("table_id", tableId);
-    
-    toast({ title: "Cutscene encerrada." });
+    await supabase.from("game_states").update({ active_cutscene_type: 'none', active_cutscene_url: null }).eq("table_id", tableId);
+    toast({ title: "Projeção encerrada." });
   };
-
-  // Se o sistema tentar "desmutar" mas o navegador bloquear, o ReactPlayer pode não atualizar o estado interno.
-  // Vamos forçar o utilizador a interagir se ele não ouvir nada.
 
   if (!gameState) return null;
 
   return (
     <>
-      {/* --- LEITOR DE ÁUDIO (Escondido mas carregado) --- */}
-      <div 
-        style={{ 
-            position: 'fixed', 
-            top: '200%', 
-            left: 0, 
-            width: '640px', 
-            height: '360px', 
-            opacity: 0, 
-            pointerEvents: 'none',
-            zIndex: -1 
-        }}
-      >
-        <ReactPlayer
-          url={gameState.active_music_url || ""}
-          playing={shouldPlay}
-          loop={true}
-          volume={localVolume}
-          muted={isMuted} // Controlado pelo estado: começa true, tenta virar false
-          width="100%"
-          height="100%"
-          onStart={handlePlayerStart}
-          onError={handlePlayerError}
-          config={{
-            youtube: { 
-                playerVars: { 
-                    autoplay: 1,
-                    playsinline: 1,
-                    controls: 0,
-                    disablekb: 1,
-                    origin: window.location.origin
-                } 
-            },
-            file: { 
-                forceAudio: true, 
-                attributes: { preload: 'auto', autoPlay: true } 
-            }
-          }}
-        />
-      </div>
-
-      {/* --- WIDGET DE CONTROLO (Sempre visível se houver música) --- */}
-      {(gameState.active_music_url && gameState.is_music_playing) && (
-          <div className={`fixed bottom-4 left-4 z-[90] flex items-center gap-2 p-2 rounded-full border shadow-lg animate-in slide-in-from-bottom-5 transition-colors duration-300 ${audioError || isMuted ? "bg-destructive/90 border-destructive text-white" : "bg-black/80 border-border/50"}`}>
-             
-             <Button 
-                variant="ghost" 
-                size="icon" 
-                className={`h-8 w-8 rounded-full ${audioError || isMuted ? "hover:bg-destructive/80" : ""}`}
-                onClick={() => {
-                    // O clique do utilizador é a "Chave Mestra" para desbloquear o áudio
-                    setIsMuted(false);
-                    setAudioError(false);
-                    // Força um pequeno "soluço" no volume para garantir que o player acorda
-                    setLocalVolume(prev => prev === 1 ? 0.99 : prev + 0.001);
-                }}
-             >
-                {(audioError || isMuted) ? <VolumeX className="w-4 h-4 animate-pulse" /> : <Volume2 className="w-4 h-4 text-green-400" />}
-             </Button>
-             
-             {/* Se estiver tudo bem, mostra slider. Se houver erro/mudo, pede clique. */}
-             {(!audioError && !isMuted) ? (
-                 <div className="w-24 mr-2">
-                    <Slider 
-                        defaultValue={[localVolume]} 
-                        max={1} 
-                        step={0.01} 
-                        onValueChange={(vals) => setLocalVolume(vals[0])}
-                        className="cursor-pointer"
-                    />
-                 </div>
-             ) : (
-                 <span 
-                    className="text-xs font-bold pr-2 cursor-pointer"
-                    onClick={() => { setIsMuted(false); setAudioError(false); }}
-                 >
-                    {isMuted ? "Toque para ativar som" : "Erro: Toque aqui"}
-                 </span>
-             )}
-          </div>
+      {/* --- AUDIO ENGINES --- */}
+      {youtubeUrl && (
+        <div style={{ position: 'fixed', top: '-9999px', left: '-9999px', visibility: 'hidden', width:0, height:0 }}>
+          <iframe width="10" height="10" src={youtubeUrl} title="Radio" allow="autoplay" />
+        </div>
       )}
 
-      {/* --- OVERLAY VISUAL (CUTSCENES) --- */}
+      {isDirectAudioUrl && (
+        <audio
+          ref={audioRef}
+          src={currentUrl}
+          onEnded={handleTrackEnd} // O Mestre usa isto para avançar a lista para todos
+          style={{ display: 'none' }}
+        />
+      )}
+
+      {/* --- WIDGET --- */}
+      <div className={`fixed bottom-4 left-4 z-[90] flex items-center gap-3 p-3 rounded-xl border shadow-2xl backdrop-blur-xl transition-all duration-300 ${!isRadioOn ? "bg-destructive/90 border-destructive/50" : "bg-black/80 border-green-500/30"}`}>
+         
+         <Button 
+            variant="ghost" 
+            size="icon" 
+            className={`h-14 w-14 rounded-full border-2 shadow-inner transition-all ${!isRadioOn ? "bg-red-900/20 border-red-200 text-white animate-pulse" : "bg-green-900/20 border-green-500 text-green-400 hover:bg-green-900/40"}`}
+            onClick={() => setIsRadioOn(!isRadioOn)}
+         >
+            {!isRadioOn ? <VolumeX className="w-6 h-6" /> : <Radio className="w-6 h-6" />}
+         </Button>
+         
+         <div className="flex flex-col gap-1 min-w-[160px]">
+             <div className="flex justify-between items-center">
+                <span className={`text-xs font-black uppercase tracking-widest ${!isRadioOn ? "text-red-100" : "text-green-400"}`}>
+                    {isRadioOn ? "Sintonizado" : "Desconectado"}
+                </span>
+                {isRadioOn && <div className="h-2 w-2 rounded-full bg-green-500 animate-ping"/>}
+             </div>
+
+             {!isRadioOn ? (
+                 <div className="text-[10px] text-white/90 leading-tight cursor-pointer hover:underline" onClick={() => setIsRadioOn(true)}>
+                    Clique no botão para <br/>conectar ao áudio da mesa.
+                 </div>
+             ) : (
+                 <div className="text-[10px] font-mono text-muted-foreground">
+                    {gameState.is_music_playing ? (
+                        <div className="flex flex-col">
+                            <span className="text-green-300 flex items-center gap-1">
+                               <Zap className="w-3 h-3"/> A transmitir...
+                            </span>
+                            {playlist.length > 1 && (
+                                <span className="text-[9px] text-white/50 flex items-center gap-1 mt-0.5">
+                                   <ListMusic className="w-3 h-3"/> Faixa {currentTrackIndex + 1} / {playlist.length}
+                                </span>
+                            )}
+                        </div>
+                    ) : (
+                        <span className="flex items-center gap-1 text-yellow-500">
+                           <Pause className="w-3 h-3"/> Em Pausa
+                        </span>
+                    )}
+                 </div>
+             )}
+
+             {isRadioOn && (
+                 <div className="flex items-center gap-2 mt-1">
+                    <Volume2 className="w-3 h-3 text-muted-foreground"/>
+                    <Slider 
+                        defaultValue={[volume]} 
+                        max={1} 
+                        step={0.05} 
+                        onValueChange={(vals) => setLocalVolume(vals[0])}
+                        className={`w-full ${youtubeUrl ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+                        disabled={!!youtubeUrl} 
+                    />
+                 </div>
+             )}
+         </div>
+      </div>
+
+      {/* --- VISUAL OVERLAY --- */}
       {gameState.active_cutscene_type !== 'none' && gameState.active_cutscene_url && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center animate-in fade-in duration-700">
           {isMaster && (
-            <Button 
-              variant="destructive" size="icon" className="absolute top-6 right-6 z-[101]"
-              onClick={handleCloseCutscene}
-            >
+            <Button variant="destructive" size="icon" className="absolute top-6 right-6 z-[101]" onClick={handleCloseCutscene}>
               <X className="w-6 h-6" />
             </Button>
           )}
-
-          {gameState.active_cutscene_type === 'image' && (
-            <img src={gameState.active_cutscene_url} alt="Cutscene" className="max-w-full max-h-full object-contain shadow-2xl rounded-sm"/>
-          )}
-
-          {gameState.active_cutscene_type === 'video' && (
-            <div className="w-full h-full flex items-center justify-center">
-                <ReactPlayer 
-                    url={gameState.active_cutscene_url} 
-                    playing={true} 
-                    loop={true} 
-                    controls={false} 
-                    width="100%" 
-                    height="100%" 
-                    className="pointer-events-none"
-                />
+          {gameState.active_cutscene_type === 'image' ? (
+            <img src={gameState.active_cutscene_url} alt="Cutscene" className="max-w-full max-h-full object-contain shadow-2xl" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-white">
+               <video src={gameState.active_cutscene_url} autoPlay loop controls={false} className="max-w-full max-h-full" />
             </div>
           )}
         </div>
