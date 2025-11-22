@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { useFieldArray } from "react-hook-form";
+import { useFieldArray, useFormContext } from "react-hook-form"; // Adicionado useFormContext
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -46,6 +46,7 @@ export const AbilitiesTraitsTab = () => {
   const { form } = useCharacterSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const [openAbilityItems, setOpenAbilityItems] = useState<string[]>([]);
+  const { getValues } = useFormContext(); // Pegando o contexto
 
   const {
     fields: abilityFields,
@@ -78,10 +79,8 @@ export const AbilitiesTraitsTab = () => {
   return (
     <div className="space-y-6">
       
-      {/* --- 1. TRAÇOS AGORA VÊM PRIMEIRO --- */}
       <SharedTraitList control={form.control} name="traits" />
 
-      {/* --- 2. HABILIDADES AGORA VÊM DEPOIS --- */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -108,12 +107,15 @@ export const AbilitiesTraitsTab = () => {
             value={openAbilityItems}
             onValueChange={setOpenAbilityItems}
           >
-            {abilityFields.map((field, index) => (
-              <AccordionItem
-                key={field.id}
-                value={field.id}
-                className="p-3 rounded-md border bg-muted/20"
-              >
+            {abilityFields.map((field, index) => {
+              const stableId = getValues(`abilities.${index}.id`) || field.id;
+              
+              return (
+                <AccordionItem
+                  key={stableId}
+                  value={stableId}
+                  className="p-3 rounded-md border bg-muted/20"
+                >
                 <div className="flex justify-between items-center w-full p-0">
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
@@ -271,12 +273,12 @@ export const AbilitiesTraitsTab = () => {
                   </div>
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </CardContent>
       </Card>
 
-      {/* Diálogo de Rolagem */}
       {selectedAbilityRoll && (
         <AbilityRollDialog
           open={!!selectedAbilityRoll}

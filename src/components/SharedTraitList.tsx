@@ -1,7 +1,7 @@
 // src/components/SharedTraitList.tsx
 
 import { useState } from "react";
-import { Control, useFieldArray, useWatch } from "react-hook-form";
+import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form";
 import {
   Accordion,
   AccordionContent,
@@ -29,8 +29,6 @@ import { Plus, Trash2, Sparkles } from "lucide-react";
 import { getDefaultTrait } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// --- SUB-COMPONENTE PARA O ITEM INDIVIDUAL ---
-// Isto permite usar o useWatch individualmente sem quebrar regras de Hooks
 const TraitItem = ({ 
   index, 
   fieldId, 
@@ -47,7 +45,6 @@ const TraitItem = ({
   isReadOnly: boolean; 
 }) => {
   
-  // "Ouvir" as alterações nestes campos específicos
   const traitName = useWatch({
     control,
     name: `${name}.${index}.name`,
@@ -155,8 +152,6 @@ const TraitItem = ({
   );
 };
 
-// --- COMPONENTE PRINCIPAL ---
-
 interface SharedTraitListProps {
   control: Control<any>;
   name: string; 
@@ -169,6 +164,8 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
     control,
     name,
   });
+  
+  const { getValues } = useFormContext();
 
   return (
     <Card>
@@ -198,17 +195,20 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           value={openItems}
           onValueChange={setOpenItems}
         >
-          {fields.map((field, index) => (
-            <TraitItem 
-              key={field.id}
-              fieldId={field.id}
-              index={index}
-              control={control}
-              name={name}
-              remove={remove}
-              isReadOnly={isReadOnly}
-            />
-          ))}
+          {fields.map((field, index) => {
+            const stableId = getValues(`${name}.${index}.id`) || field.id;
+            return (
+              <TraitItem 
+                key={stableId}
+                fieldId={stableId}
+                index={index}
+                control={control}
+                name={name}
+                remove={remove}
+                isReadOnly={isReadOnly}
+              />
+            );
+          })}
         </Accordion>
       </CardContent>
     </Card>

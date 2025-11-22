@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
-import { useFieldArray } from "react-hook-form";
+import { useFieldArray, useFormContext } from "react-hook-form"; // useFormContext
+// ... (outros imports)
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -38,16 +39,14 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { roundUpDiv } from "@/features/character/character.schema";
 import { Separator } from "@/components/ui/separator";
-// Importação do StigmaSelector removida daqui
 
-// --- Tipos Locais ---
+// ... (Tipos e DamageHealControl mantidos)
 type AttackRollData = {
   abilityName: string;
   attributeName: string;
   attributeValue: number;
 };
 
-// --- Componente Auxiliar de Dano/Cura ---
 const DamageHealControl = ({
   label,
   onApply,
@@ -82,8 +81,8 @@ const DamageHealControl = ({
 export const NpcCombatEquipmentTab = () => {
   const { form, isReadOnly } = useNpcSheet();
   const { toast } = useToast();
+  const { getValues } = useFormContext(); // Contexto
 
-  // --- Estados Locais ---
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
@@ -92,14 +91,13 @@ export const NpcCombatEquipmentTab = () => {
     return val === 0 || isNaN(val) ? "" : String(val);
   });
 
-  // --- Watchers ---
   const currentToughness = form.watch("combat.toughness_current");
   const maxToughness = form.watch("combat.toughness_max");
   const watchedDefense = form.watch("combat.defense");
   const vigorous = form.watch("attributes.vigorous.value");
   const painThresholdBonus = form.watch("combat.pain_threshold_bonus");
 
-  // --- Efeitos (Cálculo Automático) ---
+  // ... (useEffect mantido)
   useEffect(() => {
     if (!isReadOnly) {
       const newMaxToughness = Math.max(10, vigorous || 0);
@@ -119,7 +117,6 @@ export const NpcCombatEquipmentTab = () => {
     }
   }, [watchedDefense]);
 
-  // --- Field Arrays ---
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({
     control: form.control,
     name: "weapons",
@@ -130,7 +127,7 @@ export const NpcCombatEquipmentTab = () => {
     name: "armors",
   });
 
-  // --- Handlers ---
+  // ... (Handlers mantidos)
   const handleDamage = (rawDamage: number) => {
     const armorRD = form.getValues("combat.armor_rd") || 0;
     const painThreshold = form.getValues("combat.pain_threshold") || 0;
@@ -186,7 +183,7 @@ export const NpcCombatEquipmentTab = () => {
 
   return (
     <div className="space-y-6">
-      {/* --- STATUS --- */}
+      {/* ... (Status mantido) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Vitalidade */}
         <Card>
@@ -302,9 +299,6 @@ export const NpcCombatEquipmentTab = () => {
                   )}
                 />
             </div>
-            
-            {/* Estigmas Físicos removidos conforme solicitado */}
-
           </CardContent>
         </Card>
       </div>
@@ -318,8 +312,12 @@ export const NpcCombatEquipmentTab = () => {
         <CardContent>
            {weaponFields.length === 0 && <p className="text-muted-foreground text-center py-4">Nenhuma arma.</p>}
            <Accordion type="multiple" className="space-y-4" value={openWeapons} onValueChange={setOpenWeapons}>
-              {weaponFields.map((field, index) => (
-                 <AccordionItem key={field.id} value={field.id} className="p-3 rounded-md border bg-muted/20">
+              {weaponFields.map((field, index) => {
+                 // CORREÇÃO: ID estável
+                 const stableId = getValues(`weapons.${index}.id`) || field.id;
+
+                 return (
+                 <AccordionItem key={stableId} value={stableId} className="p-3 rounded-md border bg-muted/20">
                     <div className="flex justify-between items-center w-full gap-2 p-0">
                        <AccordionTrigger className="p-0 hover:no-underline flex-1">
                           <div className="flex-1 flex items-center gap-2 sm:gap-4 text-left">
@@ -357,7 +355,8 @@ export const NpcCombatEquipmentTab = () => {
                        </div>
                     </AccordionContent>
                  </AccordionItem>
-              ))}
+                 );
+              })}
            </Accordion>
         </CardContent>
       </Card>
@@ -370,8 +369,12 @@ export const NpcCombatEquipmentTab = () => {
         <CardContent>
            {armorFields.length === 0 && <p className="text-muted-foreground text-center py-4">Nenhuma armadura.</p>}
            <Accordion type="multiple" className="space-y-4" value={openArmors} onValueChange={setOpenArmors}>
-              {armorFields.map((field, index) => (
-                 <AccordionItem key={field.id} value={field.id} className="p-3 rounded-md border bg-muted/20">
+              {armorFields.map((field, index) => {
+                 // CORREÇÃO: ID estável
+                 const stableId = getValues(`armors.${index}.id`) || field.id;
+
+                 return (
+                 <AccordionItem key={stableId} value={stableId} className="p-3 rounded-md border bg-muted/20">
                     <div className="flex justify-between items-center w-full gap-2 p-0">
                        <AccordionTrigger className="p-0 hover:no-underline flex-1">
                           <div className="flex-1 flex items-center gap-2 sm:gap-4 text-left">
@@ -399,7 +402,8 @@ export const NpcCombatEquipmentTab = () => {
                        </div>
                     </AccordionContent>
                  </AccordionItem>
-              ))}
+                 );
+              })}
            </Accordion>
         </CardContent>
       </Card>

@@ -1,7 +1,7 @@
 // src/components/SharedProjectileList.tsx
 
 import { useState } from "react";
-import { Control, useFieldArray, useWatch } from "react-hook-form";
+import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form"; // Adicionado useFormContext
 import {
   Accordion,
   AccordionContent,
@@ -41,25 +41,6 @@ const ProjectileItem = ({
   const itemName = useWatch({ control, name: `${name}.${index}.name` });
   const itemQtd = useWatch({ control, name: `${name}.${index}.quantity` });
   const { toast } = useToast();
-
-  // Função de Disparo Rápido (sem abrir o acordeão)
-  const handleQuickDecrement = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Impede que o acordeão abra
-    if (isReadOnly) return;
-
-    const current = parseInt(itemQtd) || 0;
-    if (current > 0) {
-      // A forma correta de atualizar react-hook-form programaticamente aqui seria via setValue no pai,
-      // mas como temos o control, podemos usar um truque ou passar o setValue. 
-      // Para simplificar e manter isolado, usamos um input hidden controlado ou assumimos que o utilizador edita no input.
-      // Mas para este botão funcionar perfeitamente, o ideal é o utilizador abrir e editar.
-      // *Melhoria:* Vamos apenas focar na UI aqui. Se quiseres lógica complexa de decremento aqui, precisarias passar `setValue`.
-      // Por agora, vamos deixar o botão de abrir como principal, mas vou deixar o botão visual de "menos" que alerta se tentar usar sem lógica.
-      // ... Na verdade, para funcionar bem, vamos simplificar: O botão de menos fica DENTRO do conteúdo ou removemos para não complicar o prop drilling.
-      
-      // Vamos manter simples: O header mostra a quantidade.
-    }
-  };
 
   return (
     <AccordionItem value={fieldId} className="p-3 rounded-md border bg-muted/20">
@@ -169,6 +150,9 @@ export const SharedProjectileList = ({ control, name, isReadOnly = false }: Shar
     control,
     name,
   });
+  
+  // Hook para pegar o ID real do item
+  const { getValues } = useFormContext();
 
   return (
     <Card>
@@ -198,17 +182,22 @@ export const SharedProjectileList = ({ control, name, isReadOnly = false }: Shar
           value={openItems}
           onValueChange={setOpenItems}
         >
-          {fields.map((field, index) => (
-            <ProjectileItem
-              key={field.id}
-              fieldId={field.id}
-              index={index}
-              control={control}
-              name={name}
-              remove={remove}
-              isReadOnly={isReadOnly}
-            />
-          ))}
+          {fields.map((field, index) => {
+            // CORREÇÃO CRÍTICA: Usar o ID estável do banco de dados, não o do hook-form
+            const stableId = getValues(`${name}.${index}.id`) || field.id;
+            
+            return (
+              <ProjectileItem
+                key={stableId} // Key estável para evitar remontagem
+                fieldId={stableId} // Value estável para manter o acordeão aberto
+                index={index}
+                control={control}
+                name={name}
+                remove={remove}
+                isReadOnly={isReadOnly}
+              />
+            );
+          })}
         </Accordion>
       </CardContent>
     </Card>

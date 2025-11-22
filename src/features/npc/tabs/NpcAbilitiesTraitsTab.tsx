@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
-import { useFieldArray } from "react-hook-form";
+import { useFieldArray, useFormContext } from "react-hook-form"; // useFormContext
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// ... (outros imports)
 import {
   FormControl,
   FormField,
@@ -46,6 +47,7 @@ export const NpcAbilitiesTraitsTab = () => {
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const [openItems, setOpenItems] = useState<string[]>([]);
   const { toast } = useToast();
+  const { getValues } = useFormContext(); // Contexto
 
   const {
     fields: abilityFields,
@@ -57,6 +59,7 @@ export const NpcAbilitiesTraitsTab = () => {
   });
 
   const handleRollClick = (index: number) => {
+    // ... (mantido)
     const ability = form.getValues(`abilities.${index}`);
     const allAttributes = form.getValues("attributes");
     const selectedAttr = attributesList.find((attr) => attr.key === ability.associatedAttribute);
@@ -79,10 +82,8 @@ export const NpcAbilitiesTraitsTab = () => {
   return (
     <div className="space-y-6">
       
-      {/* --- 1. TRAÇOS (Primeiro, igual à ficha de personagem) --- */}
       <SharedTraitList control={form.control} name="traits" isReadOnly={isReadOnly} />
 
-      {/* --- 2. HABILIDADES --- */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -110,10 +111,14 @@ export const NpcAbilitiesTraitsTab = () => {
             value={openItems}
             onValueChange={setOpenItems}
           >
-            {abilityFields.map((field, index) => (
+            {abilityFields.map((field, index) => {
+              // CORREÇÃO: ID estável
+              const stableId = getValues(`abilities.${index}.id`) || field.id;
+
+              return (
               <AccordionItem
-                key={field.id}
-                value={field.id}
+                key={stableId}
+                value={stableId}
                 className="p-3 rounded-md border bg-muted/20"
               >
                 <div className="flex justify-between items-center w-full p-0">
@@ -198,7 +203,8 @@ export const NpcAbilitiesTraitsTab = () => {
                   </div>
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </CardContent>
       </Card>

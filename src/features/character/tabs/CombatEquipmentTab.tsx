@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { useFieldArray } from "react-hook-form";
+import { useFieldArray, useFormContext } from "react-hook-form"; // useFormContext
+// ... (outros imports mantidos)
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -41,9 +42,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-// Removida a importação do StigmaSelector daqui, pois ficará apenas em Detalhes
 
-// --- Tipos Locais ---
+// ... (Tipos e DamageHealControl mantidos)
 type AttackRollData = {
   weaponName: string;
   attributeName: string;
@@ -55,7 +55,6 @@ type DamageRollData = {
   damageString: string;
 };
 
-// --- Componente Auxiliar de Dano/Cura ---
 const DamageHealControl = ({
   label,
   onApply,
@@ -89,6 +88,9 @@ const DamageHealControl = ({
 
 export const CombatEquipmentTab = () => {
   const { form, character } = useCharacterSheet();
+  const { getValues } = useFormContext(); // Pegando contexto
+  
+  // ... (restante da lógica de hooks mantida)
   const {
     toughnessMax,
     painThreshold,
@@ -102,14 +104,12 @@ export const CombatEquipmentTab = () => {
   const projectiles = form.watch("projectiles");
   const currentToughness = form.watch("toughness.current");
 
-  // --- Estados Locais ---
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null);
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
 
-  // --- Field Arrays ---
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({
     control: form.control,
     name: "weapons",
@@ -119,8 +119,8 @@ export const CombatEquipmentTab = () => {
     control: form.control,
     name: "armors",
   });
-
-  // --- Handlers de Vitalidade ---
+  
+  // ... (Handlers mantidos: handleDamage, handleHeal, handleAttackClick, etc.)
   const handleDamage = (amount: number) => {
     const newValue = Math.max(0, currentToughness - amount);
     form.setValue("toughness.current", newValue, { shouldDirty: true });
@@ -131,7 +131,6 @@ export const CombatEquipmentTab = () => {
     form.setValue("toughness.current", newValue, { shouldDirty: true });
   };
 
-  // --- Handlers de Combate ---
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
     const allAttributes = form.getValues("attributes");
@@ -200,9 +199,10 @@ export const CombatEquipmentTab = () => {
     });
   };
 
+
   return (
     <div className="space-y-6">
-      {/* --- SEÇÃO DE STATUS (VITALIDADE E CORRUPÇÃO) --- */}
+      {/* ... (Seção de status mantida) ... */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* VITALIDADE */}
         <Card>
@@ -305,15 +305,10 @@ export const CombatEquipmentTab = () => {
                 </FormItem>
               )}
             />
-            
-            {/* A parte dos Estigmas Físicos foi removida daqui */}
-            
           </CardContent>
         </Card>
       </div>
 
-      {/* --- SEÇÃO DE EQUIPAMENTO --- */}
-      
       {/* ARMAS */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -341,12 +336,17 @@ export const CombatEquipmentTab = () => {
             value={openWeapons}
             onValueChange={setOpenWeapons}
           >
-            {weaponFields.map((field, index) => (
+            {weaponFields.map((field, index) => {
+              // CORREÇÃO: Usando ID estável
+              const stableId = getValues(`weapons.${index}.id`) || field.id;
+
+              return (
               <AccordionItem
-                key={field.id}
-                value={field.id}
+                key={stableId}
+                value={stableId}
                 className="p-3 rounded-md border bg-muted/20"
               >
+                {/* ... Conteúdo do Item ... */}
                 <div className="flex justify-between items-center w-full gap-2 p-0">
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
@@ -553,7 +553,8 @@ export const CombatEquipmentTab = () => {
                   </div>
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </CardContent>
       </Card>
@@ -603,12 +604,17 @@ export const CombatEquipmentTab = () => {
             value={openArmors}
             onValueChange={setOpenArmors}
           >
-            {armorFields.map((field, index) => (
+            {armorFields.map((field, index) => {
+              // CORREÇÃO: Usando ID estável
+              const stableId = getValues(`armors.${index}.id`) || field.id;
+
+              return (
               <AccordionItem
-                key={field.id}
-                value={field.id}
+                key={stableId}
+                value={stableId}
                 className="p-3 rounded-md border bg-muted/20"
               >
+                {/* ... Conteúdo do Item ... */}
                 <div className="flex justify-between items-center w-full gap-2 p-0">
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
@@ -758,11 +764,13 @@ export const CombatEquipmentTab = () => {
                   </div>
                 </AccordionContent>
               </AccordionItem>
-            ))}
+              );
+            })}
           </Accordion>
         </CardContent>
       </Card>
 
+      {/* ... (RollDialogs mantidos) */}
       {attackRollData && (
         <WeaponAttackDialog
           open={!!attackRollData}

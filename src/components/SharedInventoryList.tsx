@@ -1,7 +1,7 @@
 // src/components/SharedInventoryList.tsx
 
 import { useState } from "react";
-import { Control, useFieldArray, useWatch } from "react-hook-form";
+import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form"; // Adicionado useFormContext
 import {
   Accordion,
   AccordionContent,
@@ -165,6 +165,8 @@ export const SharedInventoryList = ({
     control,
     name,
   });
+  
+  const { getValues } = useFormContext();
 
   return (
     <Card>
@@ -194,17 +196,20 @@ export const SharedInventoryList = ({
           value={openItems}
           onValueChange={setOpenItems}
         >
-          {fields.map((field, index) => (
-            <InventoryItemDisplay
-              key={field.id}
-              fieldId={field.id}
-              index={index}
-              control={control}
-              name={name}
-              remove={remove}
-              isReadOnly={isReadOnly}
-            />
-          ))}
+          {fields.map((field, index) => {
+            const stableId = getValues(`${name}.${index}.id`) || field.id;
+            return (
+              <InventoryItemDisplay
+                key={stableId}
+                fieldId={stableId}
+                index={index}
+                control={control}
+                name={name}
+                remove={remove}
+                isReadOnly={isReadOnly}
+              />
+            );
+          })}
         </Accordion>
       </CardContent>
     </Card>
