@@ -50,3 +50,16 @@ export interface ShopItem {
   price: number; // Em Ortegas
   quantity: number;
 }
+// src/types/app-types.ts
+
+// ... (mantenha o código existente)
+
+export interface ItemTemplate {
+  id: string;
+  table_id: string;
+  name: string;
+  description?: string;
+  category: 'weapon' | 'armor' | 'item' | 'ability';
+  weight: number;
+  data: any; // JSON flexível para dados específicos
+}

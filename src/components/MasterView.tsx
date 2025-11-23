@@ -4,7 +4,7 @@ import { useState, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
-import { Store, Clapperboard } from "lucide-react";
+import { Store, Clapperboard, Database } from "lucide-react";
 
 import { MasterCharactersTab } from "@/features/master/MasterCharactersTab";
 import { MasterNpcsTab } from "@/features/master/MasterNpcsTab";
@@ -12,6 +12,7 @@ import { MasterJournalTab } from "@/features/master/MasterJournalTab";
 import { MasterPlayersTab } from "@/features/master/MasterPlayersTab";
 import { MasterShopsTab } from "@/features/master/MasterShopsTab";
 import { MasterMediaTab } from "@/features/master/MasterMediaTab";
+import { MasterDatabaseTab } from "@/features/master/MasterDatabaseTab";
 
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 
@@ -38,7 +39,7 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
       </div>
 
       <Tabs defaultValue="characters" value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="characters">Personagens</TabsTrigger>
           <TabsTrigger value="npcs">NPCs</TabsTrigger>
           <TabsTrigger value="players">Jogadores</TabsTrigger>
@@ -46,7 +47,9 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
           <TabsTrigger value="shops" className="flex items-center gap-2">
              <Store className="w-4 h-4" /> Lojas
           </TabsTrigger>
-          {/* Atualizado para "Studio" */}
+          <TabsTrigger value="database" className="flex items-center gap-2">
+             <Database className="w-4 h-4" /> Database
+          </TabsTrigger>
           <TabsTrigger value="media" className="flex items-center gap-2">
              <Clapperboard className="w-4 h-4" /> Studio
           </TabsTrigger>
@@ -58,6 +61,7 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
             <TabsContent value="players"><MasterPlayersTab tableId={tableId} /></TabsContent>
             <TabsContent value="journal"><MasterJournalTab tableId={tableId} /></TabsContent>
             <TabsContent value="shops"><MasterShopsTab tableId={tableId} /></TabsContent>
+            <TabsContent value="database"><MasterDatabaseTab tableId={tableId} /></TabsContent>
             <TabsContent value="media"><MasterMediaTab tableId={tableId} /></TabsContent>
         </div>
       </Tabs>

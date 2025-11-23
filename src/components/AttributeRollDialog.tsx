@@ -1,6 +1,6 @@
 // src/components/AttributeRollDialog.tsx
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // Adicionado useEffect
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { rollAttributeTest, formatAttributeTest } from "@/lib/dice-parser";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator"; 
 import { useTableContext } from "@/features/table/TableContext"; 
-import { BaseRollDialog } from "@/components/BaseRollDialog"; // <-- IMPORTADO
+import { BaseRollDialog } from "@/components/BaseRollDialog";
 
 interface AttributeRollDialogProps {
   open: boolean;
@@ -29,11 +29,17 @@ export const AttributeRollDialog = ({
   tableId,
 }: AttributeRollDialogProps) => {
   const [withAdvantage, setWithAdvantage] = useState(false);
-  const [modifier, setModifier] = useState(0);
+  // CORREÇÃO: Estado inicial vazio para permitir digitar livremente
+  const [modifier, setModifier] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
+  
+  // Resetar estado ao abrir
+  useEffect(() => {
+      if (open) setModifier("");
+  }, [open]);
   
   const handleRoll = async () => {
     setLoading(true);
@@ -44,9 +50,13 @@ export const AttributeRollDialog = ({
       return;
     }
 
+    // Converte para número apenas na hora do roll
+    // Se estiver vazio ou for apenas "-", considera 0
+    const modValue = parseInt(modifier) || 0;
+
     const result = rollAttributeTest({
       attributeValue,
-      modifier: modifier,
+      modifier: modValue,
       withAdvantage,
     });
 
@@ -68,27 +78,16 @@ export const AttributeRollDialog = ({
     };
     
     if (isHidden && isMaster) {
-      await supabase.from("chat_messages").insert({
-        table_id: contextTableId,
-        user_id: user.id,
-        message: `[SECRETO] ${chatMessage}`,
-        message_type: "roll",
-        recipient_id: masterId,
-      });
-      await supabase.from("chat_messages").insert({
-        table_id: contextTableId,
-        user_id: user.id,
-        message: `${characterName} rolou ${attributeName} em segredo.`,
-        message_type: "info",
-        recipient_id: null,
-      });
+      await supabase.from("chat_messages").insert([
+        { table_id: contextTableId, user_id: user.id, message: `${characterName} rolou ${attributeName} em segredo.`, message_type: "info" },
+        { table_id: contextTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
+      ]);
     } else {
       await supabase.from("chat_messages").insert({
         table_id: contextTableId,
         user_id: user.id,
         message: chatMessage,
         message_type: "roll",
-        recipient_id: null,
       });
       
       supabase.functions.invoke('discord-roll-handler', {
@@ -124,9 +123,10 @@ export const AttributeRollDialog = ({
         <Input
           id="modifier"
           type="number"
+          // CORREÇÃO: Valor controlado como string
           value={modifier}
-          onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)}
-          placeholder="Ex: -2 ou +1"
+          onChange={(e) => setModifier(e.target.value)}
+          placeholder="Ex: -2 ou 1"
         />
       </div>
 

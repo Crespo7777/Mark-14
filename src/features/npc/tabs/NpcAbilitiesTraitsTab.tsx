@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
-import { useFieldArray, useFormContext } from "react-hook-form"; // useFormContext
+import { useFieldArray, useFormContext } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-// ... (outros imports)
 import {
   FormControl,
   FormField,
@@ -21,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Zap, Dices } from "lucide-react";
+import { Plus, Trash2, Zap, Dices, Scroll, Hand } from "lucide-react"; // Hand icon
 import { getDefaultAbility } from "@/features/character/character.schema";
 import { attributesList } from "@/features/character/character.constants";
 import { Separator } from "@/components/ui/separator";
@@ -40,6 +39,7 @@ type AbilityRollData = {
   abilityName: string;
   attributeName: string;
   attributeValue: number;
+  corruptionCost: string; // Correção: Deve ser string para alinhar com o schema novo
 };
 
 export const NpcAbilitiesTraitsTab = () => {
@@ -47,7 +47,7 @@ export const NpcAbilitiesTraitsTab = () => {
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const [openItems, setOpenItems] = useState<string[]>([]);
   const { toast } = useToast();
-  const { getValues } = useFormContext(); // Contexto
+  const { getValues } = useFormContext();
 
   const {
     fields: abilityFields,
@@ -59,23 +59,20 @@ export const NpcAbilitiesTraitsTab = () => {
   });
 
   const handleRollClick = (index: number) => {
-    // ... (mantido)
     const ability = form.getValues(`abilities.${index}`);
     const allAttributes = form.getValues("attributes");
     const selectedAttr = attributesList.find((attr) => attr.key === ability.associatedAttribute);
+    
+    // Se não tiver atributo, valor 0
     const attributeValue = selectedAttr
       ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
       : 0;
-
-    if (attributeValue === 0 || !selectedAttr) {
-      toast({ title: "Atributo não definido", description: "Selecione um Atributo Associado.", variant: "destructive" });
-      return;
-    }
 
     setSelectedAbilityRoll({
       abilityName: ability.name || "Habilidade",
       attributeName: selectedAttr?.label || "Nenhum",
       attributeValue: attributeValue,
+      corruptionCost: String(ability.corruptionCost || "0"),
     });
   };
 
@@ -112,8 +109,8 @@ export const NpcAbilitiesTraitsTab = () => {
             onValueChange={setOpenItems}
           >
             {abilityFields.map((field, index) => {
-              // CORREÇÃO: ID estável
               const stableId = getValues(`abilities.${index}.id`) || field.id;
+              const hasAttribute = form.watch(`abilities.${index}.associatedAttribute`) !== "Nenhum";
 
               return (
               <AccordionItem
@@ -139,8 +136,15 @@ export const NpcAbilitiesTraitsTab = () => {
                   </AccordionTrigger>
 
                   <div className="flex gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Button type="button" size="sm" onClick={() => handleRollClick(index)}>
-                      <Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Rolar</span>
+                    <Button 
+                        type="button" 
+                        size="sm" 
+                        // MUDANÇA: Variante visual e remoção do disabled
+                        variant={hasAttribute ? "default" : "secondary"}
+                        onClick={() => handleRollClick(index)}
+                    >
+                      {hasAttribute ? <Dices className="w-4 h-4" /> : <Hand className="w-4 h-4" />}
+                      <span className="hidden sm:inline ml-2">{hasAttribute ? "Rolar" : "Usar"}</span>
                     </Button>
                     <Button
                       type="button"
@@ -194,7 +198,7 @@ export const NpcAbilitiesTraitsTab = () => {
                           </FormItem>
                         )}/>
                       <FormField control={form.control} name={`abilities.${index}.corruptionCost`} render={({ field }) => (
-                          <FormItem><FormLabel>Custo Corrupção</FormLabel><FormControl><Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)} readOnly={isReadOnly}/></FormControl></FormItem>
+                          <FormItem><FormLabel>Custo Corrupção</FormLabel><FormControl><Input placeholder="0 ou 1d4" {...field} readOnly={isReadOnly}/></FormControl></FormItem>
                         )}/>
                     </div>
                     <FormField control={form.control} name={`abilities.${index}.description`} render={({ field }) => (
@@ -209,11 +213,14 @@ export const NpcAbilitiesTraitsTab = () => {
         </CardContent>
       </Card>
 
+      {/* Nota: NpcAbilityRollDialog também precisaria de ajustes similares se for diferente do AbilityRollDialog, mas a lógica principal está no componente de Rolagem */}
       {selectedAbilityRoll && (
         <NpcAbilityRollDialog
           open={!!selectedAbilityRoll}
           onOpenChange={(open) => !open && setSelectedAbilityRoll(null)}
           {...selectedAbilityRoll}
+          // Passando o parametro de 'Nenhum' para o componente saber
+          attributeName={selectedAbilityRoll.attributeName}
         />
       )}
     </div>

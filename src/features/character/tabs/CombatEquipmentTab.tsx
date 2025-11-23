@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { useFieldArray, useFormContext } from "react-hook-form"; // useFormContext
-// ... (outros imports mantidos)
+import { useFieldArray, useFormContext } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -42,8 +41,9 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
+import { useTableContext } from "@/features/table/TableContext";
 
-// ... (Tipos e DamageHealControl mantidos)
 type AttackRollData = {
   weaponName: string;
   attributeName: string;
@@ -62,22 +62,22 @@ const DamageHealControl = ({
   label: string;
   onApply: (amount: number) => void;
 }) => {
-  const [amount, setAmount] = useState(0);
+  const [amount, setAmount] = useState("");
   return (
     <div className="flex items-center gap-2">
       <Input
         type="number"
         className="w-16 h-9 text-center"
         value={amount}
-        onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)}
+        onChange={(e) => setAmount(e.target.value)}
       />
       <Button
         type="button"
         size="sm"
         variant="outline"
         onClick={() => {
-          onApply(amount);
-          setAmount(0);
+          onApply(parseInt(amount) || 0);
+          setAmount("");
         }}
       >
         {label}
@@ -88,9 +88,9 @@ const DamageHealControl = ({
 
 export const CombatEquipmentTab = () => {
   const { form, character } = useCharacterSheet();
-  const { getValues } = useFormContext(); // Pegando contexto
+  const { getValues } = useFormContext();
+  const { tableId } = useTableContext();
   
-  // ... (restante da lógica de hooks mantida)
   const {
     toughnessMax,
     painThreshold,
@@ -102,7 +102,7 @@ export const CombatEquipmentTab = () => {
   
   const { toast } = useToast();
   const projectiles = form.watch("projectiles");
-  const currentToughness = form.watch("toughness.current");
+  const currentToughness = Number(form.watch("toughness.current")) || 0;
 
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null);
@@ -120,7 +120,6 @@ export const CombatEquipmentTab = () => {
     name: "armors",
   });
   
-  // ... (Handlers mantidos: handleDamage, handleHeal, handleAttackClick, etc.)
   const handleDamage = (amount: number) => {
     const newValue = Math.max(0, currentToughness - amount);
     form.setValue("toughness.current", newValue, { shouldDirty: true });
@@ -137,7 +136,7 @@ export const CombatEquipmentTab = () => {
     const selectedAttr = attributesList.find((attr) => attr.key === weapon.attackAttribute);
     
     const attributeValue = selectedAttr
-      ? allAttributes[selectedAttr.key as keyof typeof allAttributes]
+      ? Number(allAttributes[selectedAttr.key as keyof typeof allAttributes]) || 0
       : 0;
       
     if (attributeValue === 0) {
@@ -199,10 +198,8 @@ export const CombatEquipmentTab = () => {
     });
   };
 
-
   return (
     <div className="space-y-6">
-      {/* ... (Seção de status mantida) ... */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* VITALIDADE */}
         <Card>
@@ -222,17 +219,15 @@ export const CombatEquipmentTab = () => {
                     <span className="text-sm text-muted-foreground">Máx: {toughnessMax}</span>
                   </div>
                   <FormControl>
+                    {/* CORREÇÃO: Input direto, sem parseInt */}
                     <Input
                       type="number"
                       className="text-2xl font-bold h-12"
                       {...field}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10) || 0;
-                        field.onChange(Math.min(toughnessMax, Math.max(0, val)));
-                      }}
+                      onChange={(e) => field.onChange(e.target.value)}
                     />
                   </FormControl>
-                  <Progress value={(field.value / toughnessMax) * 100} className="h-2" />
+                  <Progress value={(Number(field.value) / toughnessMax) * 100} className="h-2" />
                 </FormItem>
               )}
             />
@@ -251,7 +246,7 @@ export const CombatEquipmentTab = () => {
                       control={form.control}
                       name="toughness.bonus"
                       render={({ field }) => (
-                        <Input type="number" className="h-8" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                        <Input type="number" className="h-8" {...field} onChange={e => field.onChange(e.target.value)} />
                       )}
                     />
                 </div>
@@ -261,7 +256,7 @@ export const CombatEquipmentTab = () => {
                       control={form.control}
                       name="painThresholdBonus"
                       render={({ field }) => (
-                        <Input type="number" className="h-8" placeholder="Bônus" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                        <Input type="number" className="h-8" placeholder="Bônus" {...field} onChange={e => field.onChange(e.target.value)} />
                       )}
                     />
                 </div>
@@ -284,7 +279,7 @@ export const CombatEquipmentTab = () => {
                 <FormItem>
                   <FormLabel>Temporária</FormLabel>
                   <FormControl>
-                    <Input type="number" className="text-2xl font-bold h-12" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                    <Input type="number" className="text-2xl font-bold h-12" {...field} onChange={e => field.onChange(e.target.value)} />
                   </FormControl>
                 </FormItem>
               )}
@@ -300,7 +295,7 @@ export const CombatEquipmentTab = () => {
                 <FormItem>
                   <FormLabel>Permanente</FormLabel>
                   <FormControl>
-                    <Input type="number" className="h-9" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} />
+                    <Input type="number" className="h-9" {...field} onChange={e => field.onChange(e.target.value)} />
                   </FormControl>
                 </FormItem>
               )}
@@ -315,13 +310,29 @@ export const CombatEquipmentTab = () => {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Sword /> Armas
           </CardTitle>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => appendWeapon(getDefaultWeapon())}
+          
+          <ItemSelectorDialog 
+              tableId={tableId} 
+              category="weapon" 
+              onSelect={(template) => {
+                  if (template) {
+                      appendWeapon({
+                          ...getDefaultWeapon(),
+                          name: template.name,
+                          damage: template.data.damage || "",
+                          attackAttribute: template.data.attackAttribute || "",
+                          quality: template.data.quality || "",
+                          quality_desc: template.description || ""
+                      });
+                  } else {
+                      appendWeapon(getDefaultWeapon());
+                  }
+              }}
           >
-            <Plus className="w-4 h-4 mr-2" /> Adicionar Arma
-          </Button>
+              <Button type="button" size="sm">
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar Arma
+              </Button>
+          </ItemSelectorDialog>
         </CardHeader>
         <CardContent>
           {weaponFields.length === 0 && (
@@ -337,7 +348,6 @@ export const CombatEquipmentTab = () => {
             onValueChange={setOpenWeapons}
           >
             {weaponFields.map((field, index) => {
-              // CORREÇÃO: Usando ID estável
               const stableId = getValues(`weapons.${index}.id`) || field.id;
 
               return (
@@ -346,7 +356,7 @@ export const CombatEquipmentTab = () => {
                 value={stableId}
                 className="p-3 rounded-md border bg-muted/20"
               >
-                {/* ... Conteúdo do Item ... */}
+                {/* Cabeçalho do Item */}
                 <div className="flex justify-between items-center w-full gap-2 p-0">
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
@@ -354,67 +364,31 @@ export const CombatEquipmentTab = () => {
                         {form.watch(`weapons.${index}.name`) || "Nova Arma"}
                       </h4>
                       <div className="flex gap-1.5 flex-wrap">
-                        <Badge
-                          variant="secondary"
-                          className="px-1.5 py-0.5"
-                        >
-                          Dano:{" "}
-                          {form.watch(`weapons.${index}.damage`) || "N/A"}
+                        <Badge variant="secondary" className="px-1.5 py-0.5">
+                          Dano: {form.watch(`weapons.${index}.damage`) || "N/A"}
                         </Badge>
                         <Badge variant="outline" className="px-1.5 py-0.5">
-                          Atq:{" "}
-                          {attributesList.find(
-                            (a) =>
-                              a.key ===
-                              form.watch(`weapons.${index}.attackAttribute`),
-                          )?.label || "N/A"}
+                          Atq: {attributesList.find((a) => a.key === form.watch(`weapons.${index}.attackAttribute`))?.label || "N/A"}
                         </Badge>
                         {form.watch(`weapons.${index}.projectileId`) && (
-                          <Badge
-                            variant="destructive"
-                            className="px-1.5 py-0.5"
-                          >
-                            Gasta:{" "}
-                            {projectiles.find(
-                              (p) =>
-                                p.id ===
-                                form.watch(`weapons.${index}.projectileId`),
-                            )?.name || "N/A"}
+                          <Badge variant="destructive" className="px-1.5 py-0.5">
+                            Gasta: {projectiles.find((p) => p.id === form.watch(`weapons.${index}.projectileId`))?.name || "N/A"}
                           </Badge>
                         )}
                       </div>
                     </div>
                   </AccordionTrigger>
 
-                  <div
-                    className="flex items-center gap-1 pl-2 flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleAttackClick(index)}
-                    >
+                  <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Button type="button" size="sm" variant="outline" onClick={() => handleAttackClick(index)}>
                       <Dices className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Atacar</span>
                     </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDamageClick(index)}
-                    >
+                    <Button type="button" size="sm" variant="destructive" onClick={() => handleDamageClick(index)}>
                       <Dices className="w-4 h-4" />
                       <span className="hidden sm:inline ml-2">Dano</span>
                     </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => removeWeapon(index)}
-                    >
+                    <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeWeapon(index)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -426,12 +400,7 @@ export const CombatEquipmentTab = () => {
                       control={form.control}
                       name={`weapons.${index}.name`}
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nome</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Espada Longa" {...field} />
-                          </FormControl>
-                        </FormItem>
+                        <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Espada Longa" {...field} /></FormControl></FormItem>
                       )}
                     />
                     <div className="grid grid-cols-2 gap-4">
@@ -441,20 +410,11 @@ export const CombatEquipmentTab = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Atributo de Ataque</FormLabel>
-                            <Select
-                              onValueChange={field.onChange}
-                              value={field.value}
-                            >
-                              <FormControl>
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Selecione..." />
-                                </SelectTrigger>
-                              </FormControl>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
                                 {attributesList.map((attr) => (
-                                  <SelectItem key={attr.key} value={attr.key}>
-                                    {attr.label}
-                                  </SelectItem>
+                                  <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
@@ -465,12 +425,7 @@ export const CombatEquipmentTab = () => {
                         control={form.control}
                         name={`weapons.${index}.damage`}
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Dano</FormLabel>
-                            <FormControl>
-                              <Input placeholder="1d8" {...field} />
-                            </FormControl>
-                          </FormItem>
+                          <FormItem><FormLabel>Dano</FormLabel><FormControl><Input placeholder="1d8" {...field} /></FormControl></FormItem>
                         )}
                       />
                     </div>
@@ -480,26 +435,13 @@ export const CombatEquipmentTab = () => {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Gasta Projétil (Opcional)</FormLabel>
-                          <Select
-                            onValueChange={(value) =>
-                              field.onChange(
-                                value === "none" ? undefined : value,
-                              )
-                            }
-                            value={field.value || "none"}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecione um projétil..." />
-                              </SelectTrigger>
-                            </FormControl>
+                          <Select onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} value={field.value || "none"}>
+                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione um projétil..." /></SelectTrigger></FormControl>
                             <SelectContent>
                               <SelectItem value="none">Nenhum</SelectItem>
                               {projectiles.length > 0 && <Separator />}
                               {projectiles.map((proj) => (
-                                <SelectItem key={proj.id} value={proj.id}>
-                                  {proj.name} (Qtd: {proj.quantity})
-                                </SelectItem>
+                                <SelectItem key={proj.id} value={proj.id}>{proj.name} (Qtd: {proj.quantity})</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -511,24 +453,14 @@ export const CombatEquipmentTab = () => {
                         control={form.control}
                         name={`weapons.${index}.attribute`}
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Atributo de Dano</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Vigoroso" {...field} />
-                            </FormControl>
-                          </FormItem>
+                          <FormItem><FormLabel>Atributo de Dano</FormLabel><FormControl><Input placeholder="Vigoroso" {...field} /></FormControl></FormItem>
                         )}
                       />
                       <FormField
                         control={form.control}
                         name={`weapons.${index}.quality`}
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Qualidades</FormLabel>
-                            <FormControl>
-                              <Input placeholder="Precisa" {...field} />
-                            </FormControl>
-                          </FormItem>
+                          <FormItem><FormLabel>Qualidades</FormLabel><FormControl><Input placeholder="Precisa" {...field} /></FormControl></FormItem>
                         )}
                       />
                     </div>
@@ -536,18 +468,7 @@ export const CombatEquipmentTab = () => {
                       control={form.control}
                       name={`weapons.${index}.quality_desc`}
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Descrição das Qualidades (Notas)
-                          </FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Precisa: +1d4 no dano..."
-                              {...field}
-                              className="min-h-[60px] text-sm"
-                            />
-                          </FormControl>
-                        </FormItem>
+                        <FormItem><FormLabel>Descrição das Qualidades (Notas)</FormLabel><FormControl><Textarea placeholder="Precisa: +1d4 no dano..." {...field} className="min-h-[60px] text-sm" /></FormControl></FormItem>
                       )}
                     />
                   </div>
@@ -559,19 +480,36 @@ export const CombatEquipmentTab = () => {
         </CardContent>
       </Card>
 
+      {/* ARMADURAS */}
       <Card>
         <CardHeader>
           <div className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Shield /> Armaduras
             </CardTitle>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => appendArmor(getDefaultArmor())}
+            
+            <ItemSelectorDialog 
+                tableId={tableId} 
+                category="armor" 
+                onSelect={(template) => {
+                    if (template) {
+                        appendArmor({
+                            ...getDefaultArmor(),
+                            name: template.name,
+                            protection: template.data.protection || "",
+                            obstructive: template.data.obstructive || 0,
+                            quality: template.data.quality || "",
+                            quality_desc: template.description || ""
+                        });
+                    } else {
+                        appendArmor(getDefaultArmor());
+                    }
+                }}
             >
-              <Plus className="w-4 h-4 mr-2" /> Adicionar Armadura
-            </Button>
+                <Button type="button" size="sm">
+                    <Plus className="w-4 h-4 mr-2" /> Adicionar Armadura
+                </Button>
+            </ItemSelectorDialog>
           </div>
           <div className="pt-4 space-y-2">
             <span className="text-3xl font-bold">
@@ -580,84 +518,35 @@ export const CombatEquipmentTab = () => {
             <p className="text-xs text-muted-foreground">
               (Rápido {quick} - Obstrutiva - Carga {activeBerserk ? "- Amoque" : ""})
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              onClick={() => setIsDefenseRollOpen(true)}
-            >
+            <Button type="button" variant="outline" className="w-full" onClick={() => setIsDefenseRollOpen(true)}>
               <Dices className="w-4 h-4" />
               Rolar Defesa (vs {totalDefense})
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {armorFields.length === 0 && (
-            <p className="text-muted-foreground text-center py-4">
-              Nenhuma armadura adicionada.
-            </p>
-          )}
+          {armorFields.length === 0 && <p className="text-muted-foreground text-center py-4">Nenhuma armadura adicionada.</p>}
 
-          <Accordion
-            type="multiple"
-            className="space-y-4"
-            value={openArmors}
-            onValueChange={setOpenArmors}
-          >
+          <Accordion type="multiple" className="space-y-4" value={openArmors} onValueChange={setOpenArmors}>
             {armorFields.map((field, index) => {
-              // CORREÇÃO: Usando ID estável
               const stableId = getValues(`armors.${index}.id`) || field.id;
-
               return (
-              <AccordionItem
-                key={stableId}
-                value={stableId}
-                className="p-3 rounded-md border bg-muted/20"
-              >
-                {/* ... Conteúdo do Item ... */}
+              <AccordionItem key={stableId} value={stableId} className="p-3 rounded-md border bg-muted/20">
                 <div className="flex justify-between items-center w-full gap-2 p-0">
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
-                      <h4 className="font-semibold text-base text-primary-foreground truncate shrink-0">
-                        {form.watch(`armors.${index}.name`) ||
-                          "Nova Armadura"}
-                      </h4>
+                      <h4 className="font-semibold text-base text-primary-foreground truncate shrink-0">{form.watch(`armors.${index}.name`) || "Nova Armadura"}</h4>
                       <div className="flex gap-1.5 flex-wrap">
-                        <Badge
-                          variant="secondary"
-                          className="px-1.5 py-0.5"
-                        >
-                          Prot:{" "}
-                          {form.watch(`armors.${index}.protection`) || "0"}
-                        </Badge>
-                        <Badge variant="outline" className="px-1.5 py-0.5">
-                          Obst:{" "}
-                          {form.watch(`armors.${index}.obstructive`) || 0}
-                        </Badge>
+                        <Badge variant="secondary" className="px-1.5 py-0.5">Prot: {form.watch(`armors.${index}.protection`) || "0"}</Badge>
+                        <Badge variant="outline" className="px-1.5 py-0.5">Obst: {form.watch(`armors.${index}.obstructive`) || 0}</Badge>
                       </div>
                     </div>
                   </AccordionTrigger>
-
-                  <div
-                    className="flex items-center gap-1 pl-2 flex-shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleProtectionRoll(index)}
-                    >
-                      <Dices className="w-4 h-4" />
-                      <span className="hidden sm:inline ml-2">Rolar</span>
+                  <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <Button type="button" size="sm" variant="outline" onClick={() => handleProtectionRoll(index)}>
+                      <Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Rolar</span>
                     </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => removeArmor(index)}
-                    >
+                    <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeArmor(index)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -669,12 +558,7 @@ export const CombatEquipmentTab = () => {
                       control={form.control}
                       name={`armors.${index}.name`}
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nome</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Cota de Malha" {...field} />
-                          </FormControl>
-                        </FormItem>
+                        <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Cota de Malha" {...field} /></FormControl></FormItem>
                       )}
                     />
                     <div className="grid grid-cols-2 gap-4">
@@ -682,16 +566,7 @@ export const CombatEquipmentTab = () => {
                         control={form.control}
                         name={`armors.${index}.protection`}
                         render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Proteção</FormLabel>
-                            <FormControl>
-                              <Input
-                                type="text"
-                                placeholder="1d4"
-                                {...field}
-                              />
-                            </FormControl>
-                          </FormItem>
+                          <FormItem><FormLabel>Proteção</FormLabel><FormControl><Input type="text" placeholder="1d4" {...field} /></FormControl></FormItem>
                         )}
                       />
                       <FormField
@@ -701,16 +576,8 @@ export const CombatEquipmentTab = () => {
                           <FormItem>
                             <FormLabel>Obstrutiva</FormLabel>
                             <FormControl>
-                              <Input
-                                type="number"
-                                placeholder="-2"
-                                {...field}
-                                onChange={(e) =>
-                                  field.onChange(
-                                    parseInt(e.target.value, 10) || 0,
-                                  )
-                                }
-                              />
+                                {/* CORREÇÃO: Input direto */}
+                                <Input type="number" placeholder="-2" {...field} onChange={(e) => field.onChange(e.target.value)} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -720,30 +587,14 @@ export const CombatEquipmentTab = () => {
                       control={form.control}
                       name={`armors.${index}.quality`}
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Qualidades</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Reforçada" {...field} />
-                          </FormControl>
-                        </FormItem>
+                        <FormItem><FormLabel>Qualidades</FormLabel><FormControl><Input placeholder="Reforçada" {...field} /></FormControl></FormItem>
                       )}
                     />
                     <FormField
                       control={form.control}
                       name={`armors.${index}.quality_desc`}
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            Descrição das Qualidades (Notas)
-                          </FormLabel>
-                          <FormControl>
-                            <Textarea
-                              placeholder="Reforçada: +1 na Proteção..."
-                              {...field}
-                              className="min-h-[60px] text-sm"
-                            />
-                          </FormControl>
-                        </FormItem>
+                        <FormItem><FormLabel>Descrição das Qualidades (Notas)</FormLabel><FormControl><Textarea placeholder="Reforçada: +1 na Proteção..." {...field} className="min-h-[60px] text-sm" /></FormControl></FormItem>
                       )}
                     />
                     <FormField
@@ -751,13 +602,7 @@ export const CombatEquipmentTab = () => {
                       name={`armors.${index}.equipped`}
                       render={({ field }) => (
                         <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                            />
-                          </FormControl>
-                          <FormLabel className="m-0">Equipada</FormLabel>
+                          <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Equipada</FormLabel>
                         </FormItem>
                       )}
                     />
@@ -770,7 +615,6 @@ export const CombatEquipmentTab = () => {
         </CardContent>
       </Card>
 
-      {/* ... (RollDialogs mantidos) */}
       {attackRollData && (
         <WeaponAttackDialog
           open={!!attackRollData}

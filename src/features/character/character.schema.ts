@@ -17,44 +17,53 @@ export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
 };
 
+// --- HELPER: Schema Numérico Flexível ---
+// Aceita string ou número, converte para número no final.
+// Permite que o formulário tenha estados temporários como "" ou "-"
+const numeric = z.union([z.string(), z.number()]).transform((val) => {
+  if (val === "") return 0;
+  const n = Number(val);
+  return isNaN(n) ? 0 : n;
+});
+
 // --- SCHEMAS BÁSICOS (Sub-partes da Ficha) ---
 
 // 1. ATRIBUTOS
 export const attributesSchema = z.object({
-  cunning: z.number().min(0).max(15).default(0),
-  discreet: z.number().min(0).max(15).default(0),
-  persuasive: z.number().min(0).max(15).default(0),
-  precise: z.number().min(0).max(15).default(0),
-  quick: z.number().min(0).max(15).default(0),
-  resolute: z.number().min(0).max(15).default(0),
-  vigilant: z.number().min(0).max(15).default(0),
-  vigorous: z.number().min(0).max(15).default(0),
+  cunning: numeric.default(0),
+  discreet: numeric.default(0),
+  persuasive: numeric.default(0),
+  precise: numeric.default(0),
+  quick: numeric.default(0),
+  resolute: numeric.default(0),
+  vigilant: numeric.default(0),
+  vigorous: numeric.default(0),
 });
 
 // 2. VITALIDADE
 export const toughnessSchema = z.object({
-  bonus: z.number().default(0),
-  current: z.number().default(10),
+  bonus: numeric.default(0),
+  current: numeric.default(10),
 });
 
 // 3. CORRUPÇÃO
 export const corruptionSchema = z.object({
-  temporary: z.number().default(0),
-  permanent: z.number().default(0),
-  stigma: z.string().default(""), // <-- CAMPO ADICIONADO
+  temporary: numeric.default(0),
+  permanent: numeric.default(0),
+  stigma: z.string().default(""),
 });
 
 // 4. DINHEIRO
 export const moneySchema = z.object({
-  taler: z.number().default(0),
-  shekel: z.number().default(0),
-  ortega: z.number().default(0),
+  taler: numeric.default(0),
+  shekel: numeric.default(0),
+  ortega: numeric.default(0),
 });
 
 // 5. EXPERIÊNCIA
 export const experienceSchema = z.object({
-  total: z.number().default(0),
-  spent: z.number().default(0),
+  total: numeric.default(0),
+  spent: numeric.default(0),
 });
 
 // 6. ARMAS
@@ -76,7 +85,7 @@ export const armorSchema = z.object({
   quality: z.string().default(""), 
   quality_desc: z.string().default(""),
   protection: z.string().default(""), 
-  obstructive: z.number().default(0),
+  obstructive: numeric.default(0),
   equipped: z.boolean().default(true),
 });
 
@@ -88,7 +97,8 @@ export const abilitySchema = z.object({
   type: z.string().default(""), 
   description: z.string().default(""),
   associatedAttribute: z.string().default(""), 
-  corruptionCost: z.number().default(0),
+  corruptionCost: z.union([z.string(), z.number()]).transform((v) => String(v)).default("0"),
+  tradition: z.string().optional().default(""),
   isActive: z.boolean().default(false),
 });
 
@@ -104,8 +114,8 @@ export const traitSchema = z.object({
 export const inventoryItemSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default(""),
-  quantity: z.number().default(1),
-  weight: z.number().default(0), 
+  quantity: numeric.default(1),
+  weight: numeric.default(0), 
   description: z.string().default(""),
 });
 
@@ -113,7 +123,7 @@ export const inventoryItemSchema = z.object({
 export const projectileSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default(""), 
-  quantity: z.number().default(0),
+  quantity: numeric.default(0),
 });
 
 // --- TIPOS E FUNÇÕES EXPORTADAS ---
@@ -154,7 +164,7 @@ export const characterSheetSchema = z.object({
   toughness: toughnessSchema.default({}),
   corruption: corruptionSchema.default({}),
   
-  painThresholdBonus: z.number().default(0), 
+  painThresholdBonus: numeric.default(0), 
 
   money: moneySchema.default({}),
   experience: experienceSchema.default({}),

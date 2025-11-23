@@ -8,15 +8,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Upload, Trash2, Image as ImageIcon, Music, File, CheckCircle2 } from "lucide-react";
+import { Loader2, Upload, Trash2, Image as ImageIcon, Music, File, CheckCircle2, Pencil } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
 
 interface MediaLibraryProps {
-  onSelect: (url: string, type: 'image' | 'video' | 'audio') => void; // Url única ou separada por |
+  onSelect: (url: string, type: 'image' | 'video' | 'audio') => void;
   trigger?: React.ReactNode;
   filter?: 'all' | 'image' | 'audio';
-  multiSelect?: boolean; // NOVA PROP
+  multiSelect?: boolean;
 }
 
 interface MediaFile {
@@ -40,12 +47,21 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
   // Estado para multisseleção
   const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
 
+  // Estados para Renomear
+  const [fileToRename, setFileToRename] = useState<MediaFile | null>(null);
+  const [newNameInput, setNewNameInput] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
   useEffect(() => {
     if (open) {
       fetchFiles();
-      setSelectedFiles([]); // Limpa seleção ao abrir
+      setSelectedFiles([]); 
     }
   }, [open]);
+
+  const getPublicUrl = (fileName: string) => {
+    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${fileName}`;
+  };
 
   const fetchFiles = async () => {
     setLoading(true);
@@ -53,7 +69,6 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
     if (error) {
       toast({ title: "Erro ao carregar", description: error.message, variant: "destructive" });
     } else {
-      // Ordena por mais recente
       const sorted = (data as any[]).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
       setFiles(sorted);
     }
@@ -80,19 +95,55 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
     setUploading(false);
   };
 
-  const handleDelete = async (fileName: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async (fileName: string) => {
     const { error } = await supabase.storage.from(BUCKET_NAME).remove([fileName]);
     if (error) {
       toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Ficheiro apagado" });
+      // Remove da seleção se estiver lá
+      const url = getPublicUrl(fileName);
+      setSelectedFiles(prev => prev.filter(u => u !== url));
       fetchFiles();
     }
   };
 
-  const getPublicUrl = (fileName: string) => {
-    return `${SUPABASE_URL}/storage/v1/object/public/${BUCKET_NAME}/${fileName}`;
+  // --- LÓGICA DE RENOMEAR ---
+  const openRenameDialog = (file: MediaFile) => {
+    setFileToRename(file);
+    const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+    setNewNameInput(nameWithoutExt);
+  };
+
+  const executeRename = async () => {
+    if (!fileToRename || !newNameInput.trim()) return;
+    setRenaming(true);
+
+    const originalExt = fileToRename.name.split('.').pop();
+    let finalName = newNameInput.trim();
+
+    if (originalExt && !finalName.endsWith(`.${originalExt}`)) {
+        finalName = `${finalName}.${originalExt}`;
+    }
+
+    const { error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .move(fileToRename.name, finalName);
+
+    if (error) {
+        toast({ title: "Erro ao renomear", description: error.message, variant: "destructive" });
+    } else {
+        toast({ title: "Renomeado com sucesso!" });
+        
+        // CORREÇÃO: Atualizar a seleção para o novo URL para não perder o item selecionado
+        const oldUrl = getPublicUrl(fileToRename.name);
+        const newUrl = getPublicUrl(finalName);
+        setSelectedFiles(prev => prev.map(u => u === oldUrl ? newUrl : u));
+
+        fetchFiles();
+        setFileToRename(null);
+    }
+    setRenaming(false);
   };
 
   const handleFileClick = (file: MediaFile) => {
@@ -104,13 +155,11 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
     else if (mime.startsWith('video')) type = 'video';
 
     if (multiSelect) {
-      // Lógica de toggle para multisseleção
       setSelectedFiles(prev => {
         if (prev.includes(url)) return prev.filter(u => u !== url);
         return [...prev, url];
       });
     } else {
-      // Comportamento padrão (seleciona e fecha)
       onSelect(url, type);
       setOpen(false);
     }
@@ -118,9 +167,7 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
 
   const handleConfirmSelection = () => {
     if (selectedFiles.length === 0) return;
-    // Junta todos os URLs com um separador "|"
     const joinedUrls = selectedFiles.join("|");
-    // O tipo assume-se pelo filtro atual ou pelo primeiro ficheiro (simplificação)
     onSelect(joinedUrls, activeTab === 'audio' ? 'audio' : 'image');
     setOpen(false);
   };
@@ -141,7 +188,7 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
         <DialogHeader>
           <DialogTitle>Biblioteca de Média</DialogTitle>
           <DialogDescription>
-            {multiSelect ? "Selecione um ou mais arquivos." : "Selecione um arquivo."}
+            {multiSelect ? "Selecione arquivos para a Playlist." : "Selecione um arquivo."}
           </DialogDescription>
         </DialogHeader>
 
@@ -178,45 +225,50 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
                      const isSelected = selectedFiles.includes(url);
                      
                      return (
-                       <div 
-                         key={file.id} 
-                         className={cn(
-                           "group relative border rounded-lg overflow-hidden cursor-pointer transition-all bg-card",
-                           isSelected ? "ring-2 ring-primary border-primary" : "hover:ring-2 hover:ring-muted-foreground/50"
-                         )}
-                         onClick={() => handleFileClick(file)}
-                       >
-                          <div className="aspect-square w-full flex items-center justify-center bg-black/20">
-                             {isImage ? (
-                               <img src={url} alt={file.name} className="w-full h-full object-cover" loading="lazy" />
-                             ) : (
-                               <div className="flex flex-col items-center text-muted-foreground">
-                                  {activeTab === 'audio' ? <Music className="w-8 h-8 mb-2"/> : <File className="w-8 h-8"/>}
-                               </div>
+                       <ContextMenu key={file.id}>
+                         <ContextMenuTrigger>
+                           <div 
+                             className={cn(
+                               "group relative border rounded-lg overflow-hidden cursor-pointer transition-all bg-card",
+                               isSelected ? "ring-2 ring-primary border-primary" : "hover:ring-2 hover:ring-muted-foreground/50"
                              )}
-                             
-                             {/* Indicador de Seleção */}
-                             {isSelected && (
-                               <div className="absolute top-2 left-2 bg-primary text-primary-foreground rounded-full p-1 shadow-lg">
-                                 <CheckCircle2 className="w-4 h-4" />
-                               </div>
-                             )}
-                          </div>
-                          <div className="p-2 text-xs truncate bg-card/90 border-t">
-                            {file.name}
-                          </div>
-                          
-                          {!multiSelect && (
-                             <Button
-                                variant="destructive"
-                                size="icon"
-                                className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => handleDelete(file.name, e)}
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </Button>
-                          )}
-                       </div>
+                             onClick={() => handleFileClick(file)}
+                           >
+                              <div className="aspect-square w-full flex items-center justify-center bg-black/20">
+                                 {isImage ? (
+                                   <img src={url} alt={file.name} className="w-full h-full object-cover" loading="lazy" />
+                                 ) : (
+                                   <div className="flex flex-col items-center text-muted-foreground">
+                                      {activeTab === 'audio' ? <Music className="w-8 h-8 mb-2"/> : <File className="w-8 h-8"/>}
+                                   </div>
+                                 )}
+                                 
+                                 {isSelected && (
+                                   <div className="absolute top-2 left-2 bg-primary text-primary-foreground rounded-full p-1 shadow-lg">
+                                     <CheckCircle2 className="w-4 h-4" />
+                                   </div>
+                                 )}
+                              </div>
+                              <div className="p-2 text-xs truncate bg-card/90 border-t">
+                                {file.name}
+                              </div>
+                           </div>
+                         </ContextMenuTrigger>
+                         
+                         {/* Menu de Contexto */}
+                         <ContextMenuContent>
+                             <ContextMenuItem onClick={() => openRenameDialog(file)}>
+                               <Pencil className="w-4 h-4 mr-2" /> Renomear
+                             </ContextMenuItem>
+                             <ContextMenuSeparator />
+                             <ContextMenuItem 
+                               className="text-destructive focus:text-destructive" 
+                               onClick={() => handleDelete(file.name)}
+                             >
+                               <Trash2 className="w-4 h-4 mr-2" /> Apagar
+                             </ContextMenuItem>
+                         </ContextMenuContent>
+                       </ContextMenu>
                      )
                    })}
                 </div>
@@ -229,11 +281,62 @@ export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = 
              <div className="flex-1 flex items-center text-sm text-muted-foreground">
                 {selectedFiles.length} arquivo(s) selecionado(s)
              </div>
-             <Button onClick={handleConfirmSelection} disabled={selectedFiles.length === 0}>
-               Confirmar Playlist
-             </Button>
+             
+             <div className="flex gap-2">
+                 {/* BOTÃO RENOMEAR (Visível quando 1 item selecionado) */}
+                 {selectedFiles.length === 1 && (
+                    <Button 
+                        variant="secondary" 
+                        onClick={() => {
+                            const url = selectedFiles[0];
+                            // Encontrar o ficheiro correspondente ao URL selecionado
+                            const file = files.find(f => getPublicUrl(f.name) === url);
+                            if (file) openRenameDialog(file);
+                        }}
+                    >
+                        <Pencil className="w-4 h-4 mr-2" /> Renomear
+                    </Button>
+                 )}
+
+                 <Button onClick={handleConfirmSelection} disabled={selectedFiles.length === 0}>
+                    Confirmar Playlist
+                 </Button>
+             </div>
           </DialogFooter>
         )}
+
+        {/* --- DIÁLOGO DE RENOMEAR --- */}
+        <Dialog open={!!fileToRename} onOpenChange={(open) => !open && setFileToRename(null)}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Renomear Arquivo</DialogTitle>
+                    <DialogDescription>
+                        Altere o nome do arquivo. A extensão será mantida automaticamente.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="name" className="text-right">
+                            Nome
+                        </Label>
+                        <Input
+                            id="name"
+                            value={newNameInput}
+                            onChange={(e) => setNewNameInput(e.target.value)}
+                            className="col-span-3"
+                            onKeyPress={(e) => e.key === 'Enter' && executeRename()}
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => setFileToRename(null)}>Cancelar</Button>
+                    <Button type="submit" onClick={executeRename} disabled={renaming}>
+                        {renaming ? <Loader2 className="w-4 h-4 animate-spin"/> : "Salvar"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
       </DialogContent>
     </Dialog>
   );

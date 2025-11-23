@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { useFieldArray, useFormContext } from "react-hook-form"; // Adicionado useFormContext
+import { useFieldArray, useFormContext } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Zap, Dices } from "lucide-react";
+import { Plus, Trash2, Zap, Dices, Scroll, Hand } from "lucide-react";
 import { getDefaultAbility } from "../character.schema";
 import { attributesList } from "../character.constants";
 import { AbilityRollDialog } from "@/components/AbilityRollDialog";
@@ -34,19 +34,22 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { SharedTraitList } from "@/components/SharedTraitList";
+import { useTableContext } from "@/features/table/TableContext";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
 type AbilityRollData = {
   abilityName: string;
   attributeName: string;
   attributeValue: number;
-  corruptionCost: number;
+  corruptionCost: string; 
 };
 
 export const AbilitiesTraitsTab = () => {
   const { form } = useCharacterSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const [openAbilityItems, setOpenAbilityItems] = useState<string[]>([]);
-  const { getValues } = useFormContext(); // Pegando o contexto
+  const { getValues } = useFormContext();
+  const { tableId } = useTableContext();
 
   const {
     fields: abilityFields,
@@ -70,7 +73,7 @@ export const AbilitiesTraitsTab = () => {
       abilityName: ability.name || "Habilidade",
       attributeName: selectedAttr?.label || "Nenhum",
       attributeValue: attributeValue,
-      corruptionCost: ability.corruptionCost || 0,
+      corruptionCost: String(ability.corruptionCost || "0"),
     });
   };
 
@@ -86,13 +89,31 @@ export const AbilitiesTraitsTab = () => {
           <CardTitle className="flex items-center gap-2 text-lg">
             <Zap /> Habilidades, Poderes & Rituais
           </CardTitle>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => appendAbility(getDefaultAbility())}
+          
+          <ItemSelectorDialog 
+              tableId={tableId} 
+              category="ability" 
+              onSelect={(template) => {
+                  if (template) {
+                      appendAbility({
+                          ...getDefaultAbility(),
+                          name: template.name,
+                          level: template.data.level || "",
+                          type: template.data.type || "",
+                          description: template.description || "",
+                          corruptionCost: template.data.corruptionCost || "0",
+                          associatedAttribute: template.data.associatedAttribute || "Nenhum",
+                          tradition: template.data.tradition || ""
+                      });
+                  } else {
+                      appendAbility(getDefaultAbility());
+                  }
+              }}
           >
-            <Plus className="w-4 h-4 mr-2" /> Adicionar
-          </Button>
+              <Button type="button" size="sm">
+                  <Plus className="w-4 h-4 mr-2" /> Adicionar
+              </Button>
+          </ItemSelectorDialog>
         </CardHeader>
         <CardContent>
           {abilityFields.length === 0 && (
@@ -109,6 +130,8 @@ export const AbilitiesTraitsTab = () => {
           >
             {abilityFields.map((field, index) => {
               const stableId = getValues(`abilities.${index}.id`) || field.id;
+              const abilityType = form.watch(`abilities.${index}.type`);
+              const hasAttribute = form.watch(`abilities.${index}.associatedAttribute`) !== "Nenhum";
               
               return (
                 <AccordionItem
@@ -146,7 +169,7 @@ export const AbilitiesTraitsTab = () => {
                           )?.label || "N/A"}
                         </Badge>
                         
-                        {form.watch(`abilities.${index}.corruptionCost`) > 0 && (
+                        {form.watch(`abilities.${index}.corruptionCost`) && form.watch(`abilities.${index}.corruptionCost`) !== "0" && (
                           <Badge variant="destructive" className="px-1.5 py-0.5">
                             Custo: {form.watch(`abilities.${index}.corruptionCost`)}
                           </Badge>
@@ -159,11 +182,11 @@ export const AbilitiesTraitsTab = () => {
                     <Button
                       type="button"
                       size="sm"
+                      variant={hasAttribute ? "default" : "secondary"}
                       onClick={() => handleRollClick(index)}
-                      disabled={form.watch(`abilities.${index}.associatedAttribute`) === "Nenhum"}
                     >
-                      <Dices className="w-4 h-4" />
-                      <span className="hidden sm:inline ml-2">Rolar</span>
+                      {hasAttribute ? <Dices className="w-4 h-4" /> : <Hand className="w-4 h-4" />}
+                      <span className="hidden sm:inline ml-2">{hasAttribute ? "Rolar" : "Usar"}</span>
                     </Button>
                     <Button
                       type="button"
@@ -231,7 +254,7 @@ export const AbilitiesTraitsTab = () => {
                         name={`abilities.${index}.associatedAttribute`}
                         render={({ field }) => (
                           <FormItem className="md:col-span-2">
-                            <FormLabel>Atributo Associado (para rolagem)</FormLabel>
+                            <FormLabel>Atributo Associado</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
@@ -245,6 +268,7 @@ export const AbilitiesTraitsTab = () => {
                           </FormItem>
                         )}
                       />
+                      
                       <FormField
                         control={form.control}
                         name={`abilities.${index}.corruptionCost`}
@@ -252,12 +276,28 @@ export const AbilitiesTraitsTab = () => {
                           <FormItem>
                             <FormLabel>Custo Corrupção</FormLabel>
                             <FormControl>
-                              <Input type="number" placeholder="0" {...field} onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)} />
+                              <Input placeholder="0 ou 1d4" {...field} />
                             </FormControl>
                           </FormItem>
                         )}
                       />
+
+                      {abilityType === "Ritual" && (
+                         <FormField
+                            control={form.control}
+                            name={`abilities.${index}.tradition`}
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center gap-1 text-purple-400"><Scroll className="w-3 h-3"/> Tradição</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="Feitiçaria, Teurgia..." {...field} />
+                                </FormControl>
+                            </FormItem>
+                            )}
+                        />
+                      )}
                     </div>
+
                     <FormField
                       control={form.control}
                       name={`abilities.${index}.description`}

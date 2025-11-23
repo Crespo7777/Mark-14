@@ -1,4 +1,6 @@
-import { useState } from "react";
+// src/components/DefenseRollDialog.tsx
+
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { rollAttributeTest, formatDefenseRoll } from "@/lib/dice-parser";
@@ -7,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
-import { BaseRollDialog } from "@/components/BaseRollDialog"; // <-- IMPORTADO
+import { BaseRollDialog } from "@/components/BaseRollDialog";
 
 interface DefenseRollDialogProps {
   open: boolean;
@@ -24,18 +26,26 @@ export const DefenseRollDialog = ({
   characterName,
   tableId,
 }: DefenseRollDialogProps) => {
-  const [modifier, setModifier] = useState(0);
+  // CORREÇÃO: Estado string
+  const [modifier, setModifier] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
+
+  useEffect(() => {
+      if (open) setModifier("");
+  }, [open]);
 
   const handleRoll = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const result = rollAttributeTest({ attributeValue: defenseValue, modifier, withAdvantage: false });
+    // CORREÇÃO: Conversão
+    const modValue = parseInt(modifier) || 0;
+
+    const result = rollAttributeTest({ attributeValue: defenseValue, modifier: modValue, withAdvantage: false });
 
     if (!isHidden || isMaster) {
       toast({ title: "Teste de Defesa", description: `Rolagem: ${result.totalRoll} (Alvo: ${result.target})` });
@@ -71,7 +81,7 @@ export const DefenseRollDialog = ({
     >
       <div className="space-y-2">
         <Label htmlFor="mod-def">Modificador (no alvo)</Label>
-        <Input id="mod-def" type="number" value={modifier} onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)} placeholder="Ex: -2" />
+        <Input id="mod-def" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="Ex: -2" />
       </div>
       {isMaster && (
         <>

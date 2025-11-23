@@ -1,7 +1,7 @@
 // src/components/SharedProjectileList.tsx
 
 import { useState } from "react";
-import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form"; // Adicionado useFormContext
+import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form";
 import {
   Accordion,
   AccordionContent,
@@ -21,6 +21,8 @@ import { Plus, Trash2, Crosshair, Minus } from "lucide-react";
 import { getDefaultProjectile } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
+import { useTableContext } from "@/features/table/TableContext"; // <-- Importado
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- Importado
 
 // --- SUB-COMPONENTE (Item Individual) ---
 const ProjectileItem = ({ 
@@ -40,7 +42,6 @@ const ProjectileItem = ({
 }) => {
   const itemName = useWatch({ control, name: `${name}.${index}.name` });
   const itemQtd = useWatch({ control, name: `${name}.${index}.quantity` });
-  const { toast } = useToast();
 
   return (
     <AccordionItem value={fieldId} className="p-3 rounded-md border bg-muted/20">
@@ -151,8 +152,8 @@ export const SharedProjectileList = ({ control, name, isReadOnly = false }: Shar
     name,
   });
   
-  // Hook para pegar o ID real do item
   const { getValues } = useFormContext();
+  const { tableId } = useTableContext(); // <-- Importado
 
   return (
     <Card>
@@ -160,14 +161,27 @@ export const SharedProjectileList = ({ control, name, isReadOnly = false }: Shar
         <CardTitle className="flex items-center gap-2 text-lg">
           <Crosshair /> Munição (Projéteis)
         </CardTitle>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => append(getDefaultProjectile())}
-          disabled={isReadOnly}
+        
+        {/* --- INTEGRADO COM DATABASE (usa categoria 'item' pois só precisa de nome) --- */}
+        <ItemSelectorDialog 
+            tableId={tableId} 
+            category="item" 
+            onSelect={(template) => {
+                if (template) {
+                    append({
+                        ...getDefaultProjectile(),
+                        name: template.name,
+                        // Quantidade padrão 0, jogador define depois
+                    });
+                } else {
+                    append(getDefaultProjectile());
+                }
+            }}
         >
-          <Plus className="w-4 h-4 mr-2" /> Adicionar
-        </Button>
+            <Button type="button" size="sm" disabled={isReadOnly}>
+                <Plus className="w-4 h-4 mr-2" /> Adicionar
+            </Button>
+        </ItemSelectorDialog>
       </CardHeader>
       <CardContent>
         {fields.length === 0 && (
@@ -183,13 +197,11 @@ export const SharedProjectileList = ({ control, name, isReadOnly = false }: Shar
           onValueChange={setOpenItems}
         >
           {fields.map((field, index) => {
-            // CORREÇÃO CRÍTICA: Usar o ID estável do banco de dados, não o do hook-form
             const stableId = getValues(`${name}.${index}.id`) || field.id;
-            
             return (
               <ProjectileItem
-                key={stableId} // Key estável para evitar remontagem
-                fieldId={stableId} // Value estável para manter o acordeão aberto
+                key={stableId}
+                fieldId={stableId}
                 index={index}
                 control={control}
                 name={name}

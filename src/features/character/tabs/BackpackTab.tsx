@@ -33,13 +33,20 @@ import { SharedProjectileList } from "@/components/SharedProjectileList";
 
 const MoneyManager = () => {
   const { form: { setValue, getValues } } = useCharacterSheet();
-  const [amount, setAmount] = useState(1);
+  const [amount, setAmount] = useState("1");
   const [currency, setCurrency] = useState<"taler" | "shekel" | "ortega">("ortega");
 
   const handleAdjustMoney = (operation: "add" | "spend") => {
+    const val = parseInt(amount) || 0;
+    if (val === 0) return;
+
     const currentMoney = getValues("money");
-    let totalOrtegas = (currentMoney.taler * 100) + (currentMoney.shekel * 10) + currentMoney.ortega;
-    let amountInOrtegas = currency === "taler" ? amount * 100 : currency === "shekel" ? amount * 10 : amount;
+    const taler = Number(currentMoney.taler) || 0;
+    const shekel = Number(currentMoney.shekel) || 0;
+    const ortega = Number(currentMoney.ortega) || 0;
+
+    let totalOrtegas = (taler * 100) + (shekel * 10) + ortega;
+    let amountInOrtegas = currency === "taler" ? val * 100 : currency === "shekel" ? val * 10 : val;
 
     if (operation === "spend") totalOrtegas -= amountInOrtegas;
     else totalOrtegas += amountInOrtegas;
@@ -54,7 +61,12 @@ const MoneyManager = () => {
   return (
     <div className="space-y-3 pt-2">
       <div className="flex gap-2">
-        <Input type="number" className="w-20 h-9" value={amount} onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)} />
+        <Input 
+            type="number" 
+            className="w-20 h-9" 
+            value={amount} 
+            onChange={(e) => setAmount(e.target.value)} 
+        />
         <Select value={currency} onValueChange={(v) => setCurrency(v as any)}>
           <SelectTrigger className="w-full h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -83,7 +95,7 @@ export const BackpackTab = () => {
   } = useCharacterCalculations();
 
   const [taler, shekel, ortega] = form.watch(["money.taler", "money.shekel", "money.ortega"]);
-  const totalOrtegas = taler * 100 + shekel * 10 + ortega;
+  const totalOrtegas = (Number(taler)||0) * 100 + (Number(shekel)||0) * 10 + (Number(ortega)||0);
   
   // Cálculo visual da barra de peso
   const weightPercentage = Math.min(100, (currentWeight / (maxEncumbrance || 1)) * 100);
@@ -102,13 +114,13 @@ export const BackpackTab = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-3 gap-2">
                 <FormField control={form.control} name="money.taler" render={({ field }) => (
-                    <FormItem className="space-y-1"><FormLabel className="text-xs text-blue-400 flex items-center"><Gem className="w-3 h-3 mr-1"/> Táler</FormLabel><FormControl><Input className="h-8" type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value)||0)}/></FormControl></FormItem>
+                    <FormItem className="space-y-1"><FormLabel className="text-xs text-blue-400 flex items-center"><Gem className="w-3 h-3 mr-1"/> Táler</FormLabel><FormControl><Input className="h-8" type="number" {...field} onChange={(e) => field.onChange(e.target.value)}/></FormControl></FormItem>
                 )}/>
                 <FormField control={form.control} name="money.shekel" render={({ field }) => (
-                    <FormItem className="space-y-1"><FormLabel className="text-xs text-gray-400 flex items-center"><Gem className="w-3 h-3 mr-1"/> Xelim</FormLabel><FormControl><Input className="h-8" type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value)||0)}/></FormControl></FormItem>
+                    <FormItem className="space-y-1"><FormLabel className="text-xs text-gray-400 flex items-center"><Gem className="w-3 h-3 mr-1"/> Xelim</FormLabel><FormControl><Input className="h-8" type="number" {...field} onChange={(e) => field.onChange(e.target.value)}/></FormControl></FormItem>
                 )}/>
                 <FormField control={form.control} name="money.ortega" render={({ field }) => (
-                    <FormItem className="space-y-1"><FormLabel className="text-xs text-yellow-600 flex items-center"><Gem className="w-3 h-3 mr-1"/> Ortega</FormLabel><FormControl><Input className="h-8" type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value)||0)}/></FormControl></FormItem>
+                    <FormItem className="space-y-1"><FormLabel className="text-xs text-yellow-600 flex items-center"><Gem className="w-3 h-3 mr-1"/> Ortega</FormLabel><FormControl><Input className="h-8" type="number" {...field} onChange={(e) => field.onChange(e.target.value)}/></FormControl></FormItem>
                 )}/>
             </div>
             <Separator />
@@ -125,10 +137,10 @@ export const BackpackTab = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="experience.total" render={({ field }) => (
-                    <FormItem><FormLabel>Total Ganho</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value)||0)}/></FormControl></FormItem>
+                    <FormItem><FormLabel>Total Ganho</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(e.target.value)}/></FormControl></FormItem>
                 )}/>
                 <FormField control={form.control} name="experience.spent" render={({ field }) => (
-                    <FormItem><FormLabel>Total Gasto</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(parseInt(e.target.value)||0)}/></FormControl></FormItem>
+                    <FormItem><FormLabel>Total Gasto</FormLabel><FormControl><Input type="number" {...field} onChange={(e) => field.onChange(e.target.value)}/></FormControl></FormItem>
                 )}/>
             </div>
           </CardContent>

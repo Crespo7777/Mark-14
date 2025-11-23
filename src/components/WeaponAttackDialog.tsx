@@ -1,4 +1,6 @@
-import { useState } from "react";
+// src/components/WeaponAttackDialog.tsx
+
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { rollAttributeTest, formatAttackRoll } from "@/lib/dice-parser";
@@ -9,7 +11,7 @@ import { Crosshair } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
 import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
-import { BaseRollDialog } from "@/components/BaseRollDialog"; // <-- IMPORTADO
+import { BaseRollDialog } from "@/components/BaseRollDialog";
 
 interface WeaponAttackDialogProps {
   open: boolean;
@@ -33,15 +35,19 @@ export const WeaponAttackDialog = ({
   projectileId,
 }: WeaponAttackDialogProps) => {
   const [withAdvantage, setWithAdvantage] = useState(false);
-  const [modifier, setModifier] = useState(0);
+  // CORREÇÃO: Estado string
+  const [modifier, setModifier] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
   const { form, programmaticSave, isSaving } = useCharacterSheet();
 
+  useEffect(() => {
+      if (open) setModifier("");
+  }, [open]);
+
   const handleRoll = async () => {
-    // Lógica de Munição
     if (projectileId && form) {
       const projectiles = form.getValues("projectiles");
       const pIndex = projectiles.findIndex((p) => p.id === projectileId);
@@ -62,7 +68,10 @@ export const WeaponAttackDialog = ({
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    const result = rollAttributeTest({ attributeValue, modifier, withAdvantage });
+    // CORREÇÃO: Conversão
+    const modValue = parseInt(modifier) || 0;
+
+    const result = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage });
 
     if (!isHidden || isMaster) {
       toast({
@@ -105,7 +114,7 @@ export const WeaponAttackDialog = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="mod-atk">Modificador</Label>
-        <Input id="mod-atk" type="number" value={modifier} onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)} placeholder="Ex: -2" />
+        <Input id="mod-atk" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="Ex: -2" />
       </div>
       {isMaster && (
         <>

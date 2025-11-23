@@ -1,7 +1,7 @@
 // src/components/SharedInventoryList.tsx
 
 import { useState } from "react";
-import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form"; // Adicionado useFormContext
+import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form"; 
 import {
   Accordion,
   AccordionContent,
@@ -21,8 +21,9 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Backpack } from "lucide-react";
 import { getDefaultInventoryItem } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTableContext } from "@/features/table/TableContext"; // <-- Importado
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- Importado
 
-// --- SUB-COMPONENTE PARA O ITEM DE INVENTÁRIO ---
 const InventoryItemDisplay = ({ 
   index, 
   fieldId, 
@@ -145,8 +146,6 @@ const InventoryItemDisplay = ({
   );
 };
 
-// --- COMPONENTE PRINCIPAL ---
-
 interface SharedInventoryListProps {
   control: Control<any>;
   name: string; 
@@ -167,6 +166,7 @@ export const SharedInventoryList = ({
   });
   
   const { getValues } = useFormContext();
+  const { tableId } = useTableContext(); // <-- Obter tableId
 
   return (
     <Card>
@@ -174,14 +174,28 @@ export const SharedInventoryList = ({
         <CardTitle className="flex items-center gap-2 text-lg">
           <Backpack /> {title}
         </CardTitle>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => append(getDefaultInventoryItem())}
-          disabled={isReadOnly}
+        
+        {/* Botão Integrado com Database */}
+        <ItemSelectorDialog 
+            tableId={tableId} 
+            category="item" 
+            onSelect={(template) => {
+                if (template) {
+                    append({
+                        ...getDefaultInventoryItem(),
+                        name: template.name,
+                        weight: template.weight,
+                        description: template.description || ""
+                    });
+                } else {
+                    append(getDefaultInventoryItem());
+                }
+            }}
         >
-          <Plus className="w-4 h-4 mr-2" /> Adicionar Item
-        </Button>
+            <Button type="button" size="sm" disabled={isReadOnly}>
+                <Plus className="w-4 h-4 mr-2" /> Adicionar Item
+            </Button>
+        </ItemSelectorDialog>
       </CardHeader>
       <CardContent>
         {fields.length === 0 && (

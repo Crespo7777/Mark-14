@@ -28,6 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Sparkles } from "lucide-react";
 import { getDefaultTrait } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTableContext } from "@/features/table/TableContext"; // <-- Importado
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- Importado
 
 const TraitItem = ({ 
   index, 
@@ -166,6 +168,7 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
   });
   
   const { getValues } = useFormContext();
+  const { tableId } = useTableContext(); // <-- Importado tableId
 
   return (
     <Card>
@@ -173,14 +176,29 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
         <CardTitle className="flex items-center gap-2 text-lg">
           <Sparkles /> Traços, Dádivas & Fardos
         </CardTitle>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => append(getDefaultTrait())}
-          disabled={isReadOnly}
+        
+        {/* --- INTEGRADO COM DATABASE (usa categoria 'ability' que tem campos compatíveis) --- */}
+        <ItemSelectorDialog 
+            tableId={tableId} 
+            category="ability" 
+            onSelect={(template) => {
+                if (template) {
+                    append({
+                        ...getDefaultTrait(),
+                        name: template.name,
+                        type: template.data.type || "Traço", // Se não tiver tipo, assume Traço
+                        description: template.description || ""
+                    });
+                } else {
+                    append(getDefaultTrait());
+                }
+            }}
         >
-          <Plus className="w-4 h-4 mr-2" /> Adicionar Traço
-        </Button>
+            <Button type="button" size="sm" disabled={isReadOnly}>
+                <Plus className="w-4 h-4 mr-2" /> Adicionar
+            </Button>
+        </ItemSelectorDialog>
+
       </CardHeader>
       <CardContent>
         {fields.length === 0 && (

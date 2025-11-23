@@ -22,13 +22,10 @@ import { AttributeRollDialog } from "@/components/AttributeRollDialog";
 import { attributesList } from "../character.constants";
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations"; 
 
-// --- 1. TIPO REVERTIDO ---
 type SelectedAttribute = {
   name: string;
   value: number;
-  // 'obstrutiva' REMOVIDO
 };
-// --- FIM DA REVERSÃO ---
 
 export const AttributesTab = () => {
   const { form, character } = useCharacterSheet();
@@ -36,12 +33,7 @@ export const AttributesTab = () => {
     null,
   );
 
-  // --- 2. 'totalObstrutiva' REMOVIDO ---
-  const { 
-    totalAttributePointsSpent, 
-    remainingAttributePoints 
-  } = useCharacterCalculations();
-  // --- FIM DA REVERSÃO ---
+  const { remainingAttributePoints } = useCharacterCalculations();
 
   const handleAttributeClick = (
     attr: SelectedAttribute,
@@ -90,27 +82,24 @@ export const AttributesTab = () => {
                     "space-y-2 rounded-lg p-2 transition-colors",
                     "cursor-pointer hover:bg-muted/50",
                   )}
-                  // --- 3. 'onClick' REVERTIDO ---
                   onClick={() =>
                     handleAttributeClick({
                       name: attr.label,
-                      value: field.value,
+                      value: Number(field.value) || 0,
                     })
                   }
-                  // --- FIM DA REVERSÃO ---
                 >
                   <FormItem>
                     <FormLabel className={cn("text-lg", "cursor-pointer")}>
                       {attr.label}
                     </FormLabel>
                     <FormControl>
+                      {/* CORREÇÃO: Input controlado diretamente, sem parseInt forçado */}
                       <Input
                         type="number"
                         className="text-2xl font-bold h-12 text-center"
                         {...field}
-                        onChange={(e) =>
-                          field.onChange(parseInt(e.target.value, 10) || 0)
-                        }
+                        onChange={(e) => field.onChange(e.target.value)}
                         onClick={(e) => e.stopPropagation()}
                       />
                     </FormControl>
@@ -132,7 +121,6 @@ export const AttributesTab = () => {
         attributeValue={selectedAttr?.value || 0}
         characterName={character.name}
         tableId={character.table_id}
-        // --- 4. 'obstructivePenalty' REMOVIDO ---
       />
     </>
   );

@@ -84,14 +84,14 @@ export const npcSheetSchema = z.object({
   // Combate
   combat: npcCombatSchema.default({}),
 
-  // --- CORRUPÇÃO (NOVO) ---
+  // --- CORRUPÇÃO ---
   corruption: z.object({
       temporary: z.number().default(0),
       permanent: z.number().default(0),
       stigma: z.string().default(""),
   }).default({}),
 
-  // Reutiliza os schemas
+  // Reutiliza os schemas (incluindo o abilitySchema atualizado)
   weapons: z.array(npcWeaponSchema).default([]), 
   abilities: z.array(abilitySchema).default([]),
   traits: z.array(traitSchema).default([]),

@@ -1,4 +1,6 @@
-import { useState } from "react";
+// src/components/WeaponDamageDialog.tsx
+
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { parseDiceRoll, formatDamageRoll } from "@/lib/dice-parser";
@@ -7,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
-import { BaseRollDialog } from "@/components/BaseRollDialog"; // <-- IMPORTADO
+import { BaseRollDialog } from "@/components/BaseRollDialog";
 
 interface WeaponDamageDialogProps {
   open: boolean;
@@ -27,11 +29,16 @@ export const WeaponDamageDialog = ({
   tableId,
 }: WeaponDamageDialogProps) => {
   const [withAdvantage, setWithAdvantage] = useState(false);
-  const [modifier, setModifier] = useState(0);
+  // CORREÇÃO: Estado string
+  const [modifier, setModifier] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   const [isHidden, setIsHidden] = useState(false);
+
+  useEffect(() => {
+      if (open) setModifier("");
+  }, [open]);
 
   const handleRoll = async () => {
     setLoading(true);
@@ -45,14 +52,18 @@ export const WeaponDamageDialog = ({
     }
 
     const advantageRoll = withAdvantage ? parseDiceRoll("1d4") : null;
-    const totalDamage = baseRoll.total + (advantageRoll ? advantageRoll.total : 0) + modifier;
+    
+    // CORREÇÃO: Conversão
+    const modValue = parseInt(modifier) || 0;
+    
+    const totalDamage = baseRoll.total + (advantageRoll ? advantageRoll.total : 0) + modValue;
 
     if (!isHidden || isMaster) {
       toast({ title: `Dano: ${weaponName}`, description: `Total: ${totalDamage}` });
     }
 
-    const chatMessage = formatDamageRoll(characterName, weaponName, baseRoll, advantageRoll, modifier, totalDamage);
-    const discordRollData = { rollType: "damage", weaponName, baseRoll, advantageRoll, modifier, totalDamage };
+    const chatMessage = formatDamageRoll(characterName, weaponName, baseRoll, advantageRoll, modValue, totalDamage);
+    const discordRollData = { rollType: "damage", weaponName, baseRoll, advantageRoll, modifier: modValue, totalDamage };
 
     if (isHidden && isMaster) {
       await supabase.from("chat_messages").insert([
@@ -84,7 +95,7 @@ export const WeaponDamageDialog = ({
       </div>
       <div className="space-y-2">
         <Label htmlFor="mod-dmg">Modificador</Label>
-        <Input id="mod-dmg" type="number" value={modifier} onChange={(e) => setModifier(parseInt(e.target.value, 10) || 0)} placeholder="Ex: +1" />
+        <Input id="mod-dmg" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="Ex: +1" />
       </div>
       {isMaster && (
         <>
