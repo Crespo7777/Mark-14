@@ -5,39 +5,51 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus, Package, Shield, Sword, Zap } from "lucide-react";
+// CORREÇÃO: 'Dna' com maiúscula
+import { Search, Plus, Package, Shield, Sword, Zap, FlaskConical, Gem, Sparkles, PawPrint, HandCoins, Dna } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ItemTemplate } from "@/types/app-types";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ItemSelectorDialogProps {
   tableId: string;
-  category: 'weapon' | 'armor' | 'item' | 'ability';
+  categories: string[]; 
   children: React.ReactNode;
-  onSelect: (template: ItemTemplate | null) => void; // null significa "Customizado"
+  onSelect: (template: ItemTemplate | null) => void;
+  title?: string;
 }
 
-export const ItemSelectorDialog = ({ tableId, category, children, onSelect }: ItemSelectorDialogProps) => {
+export const ItemSelectorDialog = ({ tableId, categories, children, onSelect, title }: ItemSelectorDialogProps) => {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ItemTemplate[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState(categories[0]);
 
   useEffect(() => {
     if (open) {
       setLoading(true);
-      supabase
+      const categoryToFetch = categories.length > 1 ? activeTab : categories[0];
+      
+      let query = supabase
         .from("item_templates")
         .select("*")
         .eq("table_id", tableId)
-        .eq("category", category)
-        .order("name")
-        .then(({ data }) => {
+        .order("name");
+        
+      if (categories.length > 1) {
+         query = query.eq("category", activeTab);
+      } else {
+         query = query.in("category", categories);
+      }
+
+      query.then(({ data }) => {
           if (data) setItems(data as any);
           setLoading(false);
         });
     }
-  }, [open, tableId, category]);
+  }, [open, tableId, activeTab, categories]);
 
   const filteredItems = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -46,34 +58,60 @@ export const ItemSelectorDialog = ({ tableId, category, children, onSelect }: It
     setOpen(false);
   };
 
-  const getIcon = () => {
-    switch(category) {
+  const getIcon = (cat: string) => {
+    switch(cat) {
         case 'weapon': return <Sword className="w-4 h-4"/>;
         case 'armor': return <Shield className="w-4 h-4"/>;
         case 'ability': return <Zap className="w-4 h-4"/>;
+        case 'trait': return <Dna className="w-4 h-4"/>; // CORREÇÃO AQUI
+        case 'consumable': return <FlaskConical className="w-4 h-4"/>;
+        case 'material': return <Gem className="w-4 h-4"/>;
+        case 'mystic': return <Sparkles className="w-4 h-4"/>;
+        case 'mount': return <PawPrint className="w-4 h-4"/>;
+        case 'service': return <HandCoins className="w-4 h-4"/>;
         default: return <Package className="w-4 h-4"/>;
     }
-  }
+  };
 
-  const getTitle = () => {
-      switch(category) {
-          case 'weapon': return "Selecionar Arma";
-          case 'armor': return "Selecionar Armadura";
-          case 'ability': return "Selecionar Habilidade";
-          default: return "Selecionar Item";
+  const getLabel = (cat: string) => {
+      switch(cat) {
+          case 'weapon': return "Armas";
+          case 'armor': return "Armaduras";
+          case 'ability': return "Habilidades";
+          case 'trait': return "Traços";
+          case 'consumable': return "Consumíveis";
+          case 'general': return "Geral";
+          case 'material': return "Materiais";
+          case 'mystic': return "Místicos";
+          case 'mount': return "Montarias";
+          case 'service': return "Serviços";
+          default: return "Itens";
       }
-  }
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[500px] max-h-[80vh] flex flex-col">
+      <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-             {getIcon()} {getTitle()}
+             {categories.length === 1 ? getIcon(categories[0]) : <Package className="w-4 h-4"/>} 
+             {title || "Selecionar Item"}
           </DialogTitle>
-          <DialogDescription>Escolha da base de dados ou crie um novo.</DialogDescription>
+          <DialogDescription>Escolha do compêndio ou crie um item customizado.</DialogDescription>
         </DialogHeader>
+
+        {categories.length > 1 && (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <TabsList className="flex flex-wrap h-auto bg-muted/50 p-1 justify-start">
+                    {categories.map(cat => (
+                        <TabsTrigger key={cat} value={cat} className="text-xs px-3 py-1.5">
+                            {getLabel(cat)}
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
+            </Tabs>
+        )}
 
         <div className="flex gap-2 my-2">
            <div className="relative flex-1">
@@ -87,55 +125,48 @@ export const ItemSelectorDialog = ({ tableId, category, children, onSelect }: It
            </div>
         </div>
 
-        <ScrollArea className="flex-1 pr-4 -mr-4">
+        <ScrollArea className="flex-1 pr-4 -mr-4 h-[300px]">
             <div className="space-y-2">
                 <Button 
                     variant="outline" 
-                    className="w-full justify-start border-dashed" 
+                    className="w-full justify-start border-dashed text-muted-foreground hover:text-foreground" 
                     onClick={() => handleSelect(null)}
                 >
                     <Plus className="w-4 h-4 mr-2" /> Criar Customizado (Vazio)
                 </Button>
                 
-                {loading && <p className="text-center text-sm text-muted-foreground py-4">Carregando...</p>}
+                {loading && <p className="text-center text-sm text-muted-foreground py-4">Carregando Compêndio...</p>}
                 
                 {!loading && filteredItems.map(item => (
                     <div 
                         key={item.id} 
-                        className="flex flex-col p-3 border rounded-md hover:bg-accent cursor-pointer transition-colors"
+                        className="flex flex-col p-3 border rounded-md hover:bg-accent cursor-pointer transition-colors bg-card"
                         onClick={() => handleSelect(item)}
                     >
                         <div className="flex justify-between items-center">
-                            <span className="font-bold">{item.name}</span>
-                            {category !== 'ability' && <Badge variant="secondary" className="text-xs">{item.weight} peso</Badge>}
+                            <span className="font-bold flex items-center gap-2">
+                                {item.name}
+                                {item.data.price && <span className="text-[10px] font-normal text-muted-foreground border px-1 rounded">{item.data.price}</span>}
+                            </span>
+                            {item.category !== 'ability' && item.category !== 'trait' && <Badge variant="secondary" className="text-xs">{item.weight} peso</Badge>}
                         </div>
                         {item.description && (
                             <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description}</p>
                         )}
                         
-                        {/* Detalhes extra baseados no tipo */}
-                        <div className="flex gap-2 mt-2 text-xs opacity-80">
-                            {category === 'weapon' && (
-                                <>
-                                    <span className="bg-background/50 px-1.5 py-0.5 rounded border">Dano: {item.data.damage}</span>
-                                    <span className="bg-background/50 px-1.5 py-0.5 rounded border">Atq: {item.data.attackAttribute}</span>
-                                </>
-                            )}
-                            {category === 'armor' && (
-                                <>
-                                    <span className="bg-background/50 px-1.5 py-0.5 rounded border">Prot: {item.data.protection}</span>
-                                    <span className="bg-background/50 px-1.5 py-0.5 rounded border">Obst: {item.data.obstructive}</span>
-                                </>
-                            )}
-                             {category === 'ability' && (
-                                <>
-                                    <span className="bg-background/50 px-1.5 py-0.5 rounded border">Nível: {item.data.level}</span>
-                                    <span className="bg-background/50 px-1.5 py-0.5 rounded border">Custo: {item.data.corruptionCost}</span>
-                                </>
-                            )}
+                        <div className="flex gap-2 mt-2 text-[10px] opacity-80 flex-wrap">
+                             {item.data.damage && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Dano: {item.data.damage}</span>}
+                             {item.data.protection && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Prot: {item.data.protection}</span>}
+                             {item.data.effect && <span className="bg-background/50 px-1.5 py-0.5 rounded border text-purple-500">Efeito: {item.data.effect}</span>}
+                             {item.data.corruption && <span className="bg-background/50 px-1.5 py-0.5 rounded border text-destructive">Corr: {item.data.corruption}</span>}
+                             {item.data.level && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Nível: {item.data.level}</span>}
                         </div>
                     </div>
                 ))}
+                
+                {!loading && filteredItems.length === 0 && (
+                    <p className="text-center text-xs text-muted-foreground py-8">Nenhum item encontrado.</p>
+                )}
             </div>
         </ScrollArea>
       </DialogContent>

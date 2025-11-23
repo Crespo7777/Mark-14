@@ -28,8 +28,8 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Sparkles } from "lucide-react";
 import { getDefaultTrait } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTableContext } from "@/features/table/TableContext"; // <-- Importado
-import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- Importado
+import { useTableContext } from "@/features/table/TableContext";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
 const TraitItem = ({ 
   index, 
@@ -47,21 +47,11 @@ const TraitItem = ({
   isReadOnly: boolean; 
 }) => {
   
-  const traitName = useWatch({
-    control,
-    name: `${name}.${index}.name`,
-  });
-  
-  const traitType = useWatch({
-    control,
-    name: `${name}.${index}.type`,
-  });
+  const traitName = useWatch({ control, name: `${name}.${index}.name` });
+  const traitType = useWatch({ control, name: `${name}.${index}.type` });
 
   return (
-    <AccordionItem
-      value={fieldId}
-      className="p-3 rounded-md border bg-muted/20"
-    >
+    <AccordionItem value={fieldId} className="p-3 rounded-md border bg-muted/20">
       <div className="flex justify-between items-center w-full p-0">
         <AccordionTrigger className="p-0 hover:no-underline flex-1">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
@@ -125,6 +115,7 @@ const TraitItem = ({
                       <SelectItem value="Traço">Traço</SelectItem>
                       <SelectItem value="Dádiva">Dádiva</SelectItem>
                       <SelectItem value="Fardo">Fardo</SelectItem>
+                      <SelectItem value="Monstruoso">Monstruoso</SelectItem>
                     </SelectContent>
                   </Select>
                 </FormItem>
@@ -168,7 +159,7 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
   });
   
   const { getValues } = useFormContext();
-  const { tableId } = useTableContext(); // <-- Importado tableId
+  const { tableId } = useTableContext();
 
   return (
     <Card>
@@ -177,19 +168,25 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           <Sparkles /> Traços, Dádivas & Fardos
         </CardTitle>
         
-        {/* --- INTEGRADO COM DATABASE (usa categoria 'ability' que tem campos compatíveis) --- */}
+        {/* --- INTEGRAÇÃO DATABASE PARA TRAÇOS --- */}
         <ItemSelectorDialog 
             tableId={tableId} 
-            category="ability" 
+            categories={['trait']} 
+            title="Adicionar Traço"
             onSelect={(template) => {
                 if (template) {
+                    // Formata descrição se houver custo extra no database
+                    let desc = template.description || "";
+                    if (template.data.cost) desc += `\n\n[Custo/Pontos]: ${template.data.cost}`;
+
                     append({
                         ...getDefaultTrait(),
                         name: template.name,
-                        type: template.data.type || "Traço", // Se não tiver tipo, assume Traço
-                        description: template.description || ""
+                        type: template.data.type || "Traço",
+                        description: desc.trim()
                     });
                 } else {
+                    // Criar Vazio
                     append(getDefaultTrait());
                 }
             }}
@@ -198,7 +195,6 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
                 <Plus className="w-4 h-4 mr-2" /> Adicionar
             </Button>
         </ItemSelectorDialog>
-
       </CardHeader>
       <CardContent>
         {fields.length === 0 && (
@@ -214,6 +210,7 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           onValueChange={setOpenItems}
         >
           {fields.map((field, index) => {
+            // ID ESTÁVEL para evitar fecho da aba ao salvar
             const stableId = getValues(`${name}.${index}.id`) || field.id;
             return (
               <TraitItem 
