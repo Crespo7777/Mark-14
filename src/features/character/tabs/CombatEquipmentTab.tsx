@@ -42,6 +42,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { useTableContext } from "@/features/table/TableContext";
+import { QualityInfoButton } from "@/components/QualityInfoButton"; // <-- IMPORTADO
 
 type AttackRollData = {
   weaponName: string;
@@ -109,17 +110,7 @@ export const CombatEquipmentTab = () => {
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
   
-  const [knownQualities, setKnownQualities] = useState<any[]>([]);
-
-  useEffect(() => {
-     if(tableId) {
-         supabase.from('item_templates')
-         .select('name, description')
-         .eq('table_id', tableId)
-         .eq('category', 'quality')
-         .then(({ data }) => { if(data) setKnownQualities(data); });
-     }
-  }, [tableId]);
+  // (O código de knownQualities foi removido pois o QualityInfoButton trata disso agora de forma mais limpa)
 
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({
     control: form.control,
@@ -131,31 +122,6 @@ export const CombatEquipmentTab = () => {
     name: "armors",
   });
 
-  const checkQualities = (inputText: string, fieldName: string) => {
-      if (!inputText.trim()) return;
-      
-      const terms = inputText.split(/[;,]+/).map(t => t.trim()).filter(Boolean);
-      
-      const currentDesc = getValues(fieldName) || "";
-      let newDescToAdd = "";
-
-      terms.forEach(term => {
-         const found = knownQualities.find(q => q.name.toLowerCase() === term.toLowerCase());
-         
-         if (found && found.description) {
-             if (!currentDesc.includes(`[${found.name}]`)) {
-                 newDescToAdd += `\n\n[${found.name}]: ${found.description}`;
-             }
-         }
-      });
-
-      if (newDescToAdd) {
-          const finalDesc = (currentDesc + newDescToAdd).trim();
-          setValue(fieldName, finalDesc, { shouldDirty: true });
-          toast({ title: "Regras Atualizadas", description: "Descrições das qualidades adicionadas." });
-      }
-  };
-  
   const handleDamage = (amount: number) => {
     const newValue = Math.max(0, currentToughness - amount);
     form.setValue("toughness.current", newValue, { shouldDirty: true });
@@ -346,7 +312,7 @@ export const CombatEquipmentTab = () => {
           
           <ItemSelectorDialog 
               tableId={tableId} 
-              categories={['weapon']} // CORREÇÃO: Array
+              categories={['weapon']} 
               onSelect={(template) => {
                   if (template) {
                       appendWeapon({
@@ -428,12 +394,15 @@ export const CombatEquipmentTab = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <FormField control={form.control} name={`weapons.${index}.attribute`} render={({ field }) => (<FormItem><FormLabel>Atributo de Dano</FormLabel><FormControl><Input placeholder="Vigoroso" {...field} /></FormControl></FormItem>)}/>
                       
-                      {/* AUTO-FILL QUALIDADES */}
+                      {/* CAMPO QUALIDADES COM BOTÃO DE INFO */}
                       <FormField control={form.control} name={`weapons.${index}.quality`} render={({ field }) => (
                           <FormItem>
-                             <FormLabel>Qualidades</FormLabel>
+                             <div className="flex items-center justify-between">
+                                <FormLabel>Qualidades</FormLabel>
+                                <QualityInfoButton qualitiesString={field.value} tableId={tableId} />
+                             </div>
                              <FormControl>
-                                 <Input placeholder="Precisa" {...field} onBlur={(e) => checkQualities(e.target.value, `weapons.${index}.quality_desc`)} />
+                                 <Input placeholder="Ex: Precisa, Longa" {...field} />
                              </FormControl>
                           </FormItem>
                         )}/>
@@ -458,7 +427,7 @@ export const CombatEquipmentTab = () => {
             
             <ItemSelectorDialog 
                 tableId={tableId} 
-                categories={['armor']} // CORREÇÃO: Array
+                categories={['armor']} 
                 onSelect={(template) => {
                     if (template) {
                         appendArmor({
@@ -524,12 +493,15 @@ export const CombatEquipmentTab = () => {
                       <FormField control={form.control} name={`armors.${index}.obstructive`} render={({ field }) => (<FormItem><FormLabel>Obstrutiva</FormLabel><FormControl><Input type="number" placeholder="-2" {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl></FormItem>)}/>
                     </div>
                     
-                    {/* AUTO-FILL QUALIDADES */}
+                    {/* CAMPO QUALIDADES COM BOTÃO DE INFO */}
                     <FormField control={form.control} name={`armors.${index}.quality`} render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Qualidades</FormLabel>
+                          <div className="flex items-center justify-between">
+                             <FormLabel>Qualidades</FormLabel>
+                             <QualityInfoButton qualitiesString={field.value} tableId={tableId} />
+                          </div>
                           <FormControl>
-                            <Input placeholder="Reforçada" {...field} onBlur={(e) => checkQualities(e.target.value, `armors.${index}.quality_desc`)} />
+                            <Input placeholder="Ex: Reforçada, Flexível" {...field} />
                           </FormControl>
                         </FormItem>
                       )}/>

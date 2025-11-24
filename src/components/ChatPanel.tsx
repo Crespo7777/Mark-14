@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser"; 
 import { cn } from "@/lib/utils";
 import { useTableContext, TableMember } from "@/features/table/TableContext";
+import DOMPurify from "dompurify"; // <-- IMPORTANTE
 import {
   Dialog,
   DialogContent,
@@ -44,7 +45,6 @@ interface ChatPanelProps {
   tableId: string;
 }
 
-// Função de Fetch (Busca inicial)
 const fetchMessages = async (tableId: string) => {
   const { data, error } = await supabase
     .from("chat_messages")
@@ -82,7 +82,6 @@ const parseMentions = (text: string, members: TableMember[]): string => {
 export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const queryClient = useQueryClient();
   
-  // Cache e Estado das Mensagens
   const { data: messages = [] } = useQuery({
     queryKey: ['chat_messages', tableId],
     queryFn: () => fetchMessages(tableId),
@@ -95,34 +94,28 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   const { isMaster, tableId: contextTableId, members } = useTableContext();
   const [isClearAlertOpen, setIsClearAlertOpen] = useState(false);
 
-  // --- CORREÇÃO PRINCIPAL: Realtime Dedicado ao Chat ---
   useEffect(() => {
-    // Cria um canal exclusivo para o chat desta mesa
     const channel = supabase
       .channel(`chat-room:${tableId}`)
       .on(
         "postgres_changes",
         {
-          event: "*", // Escuta INSERT, UPDATE e DELETE
+          event: "*",
           schema: "public",
           table: "chat_messages",
           filter: `table_id=eq.${tableId}`,
         },
         () => {
-          // Assim que algo muda, invalida o cache para forçar atualização imediata
           queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
         }
       )
       .subscribe();
 
-    // Limpeza ao desmontar
     return () => {
       supabase.removeChannel(channel);
     };
   }, [tableId, queryClient]);
-  // -----------------------------------------------------
 
-  // Scroll automático
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -184,7 +177,6 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       toast({ title: "Erro", description: "Não foi possível enviar a mensagem", variant: "destructive" });
     } else {
       setNewMessage("");
-      // Invalidação otimista (para garantir rapidez no próprio cliente)
       queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
 
       if (messageType === "roll" && discordRollData) {
@@ -264,8 +256,12 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
                 msg.message_type === "info_clear" && "bg-muted border border-border text-center text-muted-foreground italic text-xs py-2"
               )}
             >
+              {/* AQUI ESTÁ A CORREÇÃO DE SEGURANÇA */}
               {msg.message_type.startsWith("info") ? (
-                <div className="text-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.message }} />
+                <div 
+                   className="text-sm whitespace-pre-wrap" 
+                   dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.message) }} 
+                />
               ) : (
                 <>
                   <div className="flex justify-between items-start mb-1">
@@ -277,7 +273,10 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
                       {new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
-                  <div className="text-sm whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: msg.message }} />
+                  <div 
+                    className="text-sm whitespace-pre-wrap" 
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.message) }} 
+                  />
                 </>
               )}
             </div>

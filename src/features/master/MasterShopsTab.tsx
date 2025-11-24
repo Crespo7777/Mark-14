@@ -3,18 +3,19 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Shop, ShopItem, CharacterWithRelations } from "@/types/app-types";
+import { Shop, ShopItem, CharacterWithRelations, ItemTemplate } from "@/types/app-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch"; // Importar Switch
+import { Switch } from "@/components/ui/switch"; 
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff } from "lucide-react";
+import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database } from "lucide-react";
 import { formatPrice } from "@/lib/economy-utils";
 import { Separator } from "@/components/ui/separator";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- IMPORTADO
 
 // Adicionamos is_open à interface no fetch (via SQL select *)
 const fetchShops = async (tableId: string) => {
@@ -195,7 +196,6 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
   );
 };
 
-// O componente ShopItemsManager mantém-se igual, não precisa de alterações
 const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -239,6 +239,36 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       setCurrencyType("ortega");
       queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
     }
+  };
+
+  const handleImportFromDatabase = async (template: ItemTemplate | null) => {
+     if (!template) return;
+
+     // Parsing do preço do template (ex: "5 Tálers" -> número)
+     // Esta é uma lógica simples, se o formato for complexo, ajusta aqui
+     let price = 0;
+     const templatePriceStr = template.data?.price ? String(template.data.price).toLowerCase() : "";
+     const numMatch = templatePriceStr.match(/\d+/);
+     if (numMatch) {
+        const val = parseInt(numMatch[0]);
+        if (templatePriceStr.includes("táler") || templatePriceStr.includes("taler")) price = val * 100;
+        else if (templatePriceStr.includes("xelim") || templatePriceStr.includes("shekel")) price = val * 10;
+        else price = val;
+     }
+
+     const { error } = await supabase.from("shop_items").insert({
+        shop_id: shop.id,
+        name: template.name,
+        description: template.description,
+        weight: template.weight,
+        price: price
+     });
+
+     if (error) toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
+     else {
+         toast({ title: "Item Importado!", description: `${template.name} adicionado à loja.` });
+         queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
+     }
   };
 
   const handleDeleteItem = async (id: string) => {
@@ -319,8 +349,20 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="col-span-5">
-                    <Button onClick={handleAddItem} className="w-full"><Plus className="w-4 h-4 mr-2" /> Adicionar à Loja</Button>
+                <div className="col-span-5 flex gap-1">
+                    <Button onClick={handleAddItem} className="flex-1"><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
+                    
+                    {/* BOTÃO IMPORTAR DATABASE */}
+                    <ItemSelectorDialog 
+                        tableId={tableId} 
+                        categories={['weapon', 'armor', 'consumable', 'general', 'material', 'mystic', 'service', 'mount']} 
+                        onSelect={handleImportFromDatabase}
+                        title="Importar"
+                    >
+                         <Button variant="outline" size="icon" title="Importar do Database">
+                            <Database className="w-4 h-4" />
+                         </Button>
+                    </ItemSelectorDialog>
                 </div>
             </div>
         </div>
