@@ -1,6 +1,6 @@
 // src/features/character/tabs/CombatEquipmentTab.tsx
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useFieldArray, useFormContext } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -88,7 +87,7 @@ const DamageHealControl = ({
 
 export const CombatEquipmentTab = () => {
   const { form, character } = useCharacterSheet();
-  const { getValues } = useFormContext();
+  const { getValues, setValue } = useFormContext();
   const { tableId } = useTableContext();
   
   const {
@@ -109,6 +108,18 @@ export const CombatEquipmentTab = () => {
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
+  
+  const [knownQualities, setKnownQualities] = useState<any[]>([]);
+
+  useEffect(() => {
+     if(tableId) {
+         supabase.from('item_templates')
+         .select('name, description')
+         .eq('table_id', tableId)
+         .eq('category', 'quality')
+         .then(({ data }) => { if(data) setKnownQualities(data); });
+     }
+  }, [tableId]);
 
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({
     control: form.control,
@@ -119,6 +130,31 @@ export const CombatEquipmentTab = () => {
     control: form.control,
     name: "armors",
   });
+
+  const checkQualities = (inputText: string, fieldName: string) => {
+      if (!inputText.trim()) return;
+      
+      const terms = inputText.split(/[;,]+/).map(t => t.trim()).filter(Boolean);
+      
+      const currentDesc = getValues(fieldName) || "";
+      let newDescToAdd = "";
+
+      terms.forEach(term => {
+         const found = knownQualities.find(q => q.name.toLowerCase() === term.toLowerCase());
+         
+         if (found && found.description) {
+             if (!currentDesc.includes(`[${found.name}]`)) {
+                 newDescToAdd += `\n\n[${found.name}]: ${found.description}`;
+             }
+         }
+      });
+
+      if (newDescToAdd) {
+          const finalDesc = (currentDesc + newDescToAdd).trim();
+          setValue(fieldName, finalDesc, { shouldDirty: true });
+          toast({ title: "Regras Atualizadas", description: "Descrições das qualidades adicionadas." });
+      }
+  };
   
   const handleDamage = (amount: number) => {
     const newValue = Math.max(0, currentToughness - amount);
@@ -201,7 +237,6 @@ export const CombatEquipmentTab = () => {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* VITALIDADE */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -219,7 +254,6 @@ export const CombatEquipmentTab = () => {
                     <span className="text-sm text-muted-foreground">Máx: {toughnessMax}</span>
                   </div>
                   <FormControl>
-                    {/* CORREÇÃO: Input direto, sem parseInt */}
                     <Input
                       type="number"
                       className="text-2xl font-bold h-12"
@@ -264,7 +298,6 @@ export const CombatEquipmentTab = () => {
           </CardContent>
         </Card>
 
-        {/* CORRUPÇÃO */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -313,7 +346,7 @@ export const CombatEquipmentTab = () => {
           
           <ItemSelectorDialog 
               tableId={tableId} 
-              category="weapon" 
+              categories={['weapon']} // CORREÇÃO: Array
               onSelect={(template) => {
                   if (template) {
                       appendWeapon({
@@ -356,7 +389,6 @@ export const CombatEquipmentTab = () => {
                 value={stableId}
                 className="p-3 rounded-md border bg-muted/20"
               >
-                {/* Cabeçalho do Item */}
                 <div className="flex justify-between items-center w-full gap-2 p-0">
                   <AccordionTrigger className="p-0 hover:no-underline flex-1">
                     <div className="flex-1 flex items-center gap-2 sm:gap-4 flex-wrap text-left">
@@ -370,107 +402,43 @@ export const CombatEquipmentTab = () => {
                         <Badge variant="outline" className="px-1.5 py-0.5">
                           Atq: {attributesList.find((a) => a.key === form.watch(`weapons.${index}.attackAttribute`))?.label || "N/A"}
                         </Badge>
-                        {form.watch(`weapons.${index}.projectileId`) && (
-                          <Badge variant="destructive" className="px-1.5 py-0.5">
-                            Gasta: {projectiles.find((p) => p.id === form.watch(`weapons.${index}.projectileId`))?.name || "N/A"}
-                          </Badge>
-                        )}
                       </div>
                     </div>
                   </AccordionTrigger>
 
                   <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Button type="button" size="sm" variant="outline" onClick={() => handleAttackClick(index)}>
-                      <Dices className="w-4 h-4" />
-                      <span className="hidden sm:inline ml-2">Atacar</span>
-                    </Button>
-                    <Button type="button" size="sm" variant="destructive" onClick={() => handleDamageClick(index)}>
-                      <Dices className="w-4 h-4" />
-                      <span className="hidden sm:inline ml-2">Dano</span>
-                    </Button>
-                    <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeWeapon(index)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => handleAttackClick(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Atacar</span></Button>
+                    <Button type="button" size="sm" variant="destructive" onClick={() => handleDamageClick(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Dano</span></Button>
+                    <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeWeapon(index)}><Trash2 className="w-4 h-4" /></Button>
                   </div>
                 </div>
 
                 <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                   <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name={`weapons.${index}.name`}
-                      render={({ field }) => (
-                        <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Espada Longa" {...field} /></FormControl></FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name={`weapons.${index}.name`} render={({ field }) => (<FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Espada Longa" {...field} /></FormControl></FormItem>)}/>
                     <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`weapons.${index}.attackAttribute`}
-                        render={({ field }) => (
+                      <FormField control={form.control} name={`weapons.${index}.attackAttribute`} render={({ field }) => (
+                          <FormItem><FormLabel>Atributo de Ataque</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl><SelectContent>{attributesList.map((attr) => (<SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>))}</SelectContent></Select></FormItem>
+                        )}/>
+                      <FormField control={form.control} name={`weapons.${index}.damage`} render={({ field }) => (<FormItem><FormLabel>Dano</FormLabel><FormControl><Input placeholder="1d8" {...field} /></FormControl></FormItem>)}/>
+                    </div>
+                    <FormField control={form.control} name={`weapons.${index}.projectileId`} render={({ field }) => (
+                        <FormItem><FormLabel>Gasta Projétil (Opcional)</FormLabel><Select onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} value={field.value || "none"}><FormControl><SelectTrigger><SelectValue placeholder="Selecione um projétil..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Nenhum</SelectItem>{projectiles.length > 0 && <Separator />}{projectiles.map((proj) => (<SelectItem key={proj.id} value={proj.id}>{proj.name} (Qtd: {proj.quantity})</SelectItem>))}</SelectContent></Select></FormItem>
+                      )}/>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name={`weapons.${index}.attribute`} render={({ field }) => (<FormItem><FormLabel>Atributo de Dano</FormLabel><FormControl><Input placeholder="Vigoroso" {...field} /></FormControl></FormItem>)}/>
+                      
+                      {/* AUTO-FILL QUALIDADES */}
+                      <FormField control={form.control} name={`weapons.${index}.quality`} render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Atributo de Ataque</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                              <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
-                              <SelectContent>
-                                {attributesList.map((attr) => (
-                                  <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                             <FormLabel>Qualidades</FormLabel>
+                             <FormControl>
+                                 <Input placeholder="Precisa" {...field} onBlur={(e) => checkQualities(e.target.value, `weapons.${index}.quality_desc`)} />
+                             </FormControl>
                           </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`weapons.${index}.damage`}
-                        render={({ field }) => (
-                          <FormItem><FormLabel>Dano</FormLabel><FormControl><Input placeholder="1d8" {...field} /></FormControl></FormItem>
-                        )}
-                      />
+                        )}/>
                     </div>
-                    <FormField
-                      control={form.control}
-                      name={`weapons.${index}.projectileId`}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Gasta Projétil (Opcional)</FormLabel>
-                          <Select onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} value={field.value || "none"}>
-                            <FormControl><SelectTrigger><SelectValue placeholder="Selecione um projétil..." /></SelectTrigger></FormControl>
-                            <SelectContent>
-                              <SelectItem value="none">Nenhum</SelectItem>
-                              {projectiles.length > 0 && <Separator />}
-                              {projectiles.map((proj) => (
-                                <SelectItem key={proj.id} value={proj.id}>{proj.name} (Qtd: {proj.quantity})</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </FormItem>
-                      )}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`weapons.${index}.attribute`}
-                        render={({ field }) => (
-                          <FormItem><FormLabel>Atributo de Dano</FormLabel><FormControl><Input placeholder="Vigoroso" {...field} /></FormControl></FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`weapons.${index}.quality`}
-                        render={({ field }) => (
-                          <FormItem><FormLabel>Qualidades</FormLabel><FormControl><Input placeholder="Precisa" {...field} /></FormControl></FormItem>
-                        )}
-                      />
-                    </div>
-                    <FormField
-                      control={form.control}
-                      name={`weapons.${index}.quality_desc`}
-                      render={({ field }) => (
-                        <FormItem><FormLabel>Descrição das Qualidades (Notas)</FormLabel><FormControl><Textarea placeholder="Precisa: +1d4 no dano..." {...field} className="min-h-[60px] text-sm" /></FormControl></FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name={`weapons.${index}.quality_desc`} render={({ field }) => (<FormItem><FormLabel>Descrição das Qualidades (Notas)</FormLabel><FormControl><Textarea placeholder="Regras especiais..." {...field} className="min-h-[60px] text-sm" /></FormControl></FormItem>)}/>
                   </div>
                 </AccordionContent>
               </AccordionItem>
@@ -490,7 +458,7 @@ export const CombatEquipmentTab = () => {
             
             <ItemSelectorDialog 
                 tableId={tableId} 
-                category="armor" 
+                categories={['armor']} // CORREÇÃO: Array
                 onSelect={(template) => {
                     if (template) {
                         appendArmor({
@@ -543,69 +511,31 @@ export const CombatEquipmentTab = () => {
                     </div>
                   </AccordionTrigger>
                   <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    <Button type="button" size="sm" variant="outline" onClick={() => handleProtectionRoll(index)}>
-                      <Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Rolar</span>
-                    </Button>
-                    <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeArmor(index)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <Button type="button" size="sm" variant="outline" onClick={() => handleProtectionRoll(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Rolar</span></Button>
+                    <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeArmor(index)}><Trash2 className="w-4 h-4" /></Button>
                   </div>
                 </div>
 
                 <AccordionContent className="pt-4 mt-3 border-t border-border/50">
                   <div className="space-y-4">
-                    <FormField
-                      control={form.control}
-                      name={`armors.${index}.name`}
-                      render={({ field }) => (
-                        <FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Cota de Malha" {...field} /></FormControl></FormItem>
-                      )}
-                    />
+                    <FormField control={form.control} name={`armors.${index}.name`} render={({ field }) => (<FormItem><FormLabel>Nome</FormLabel><FormControl><Input placeholder="Cota de Malha" {...field} /></FormControl></FormItem>)}/>
                     <div className="grid grid-cols-2 gap-4">
-                      <FormField
-                        control={form.control}
-                        name={`armors.${index}.protection`}
-                        render={({ field }) => (
-                          <FormItem><FormLabel>Proteção</FormLabel><FormControl><Input type="text" placeholder="1d4" {...field} /></FormControl></FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={form.control}
-                        name={`armors.${index}.obstructive`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Obstrutiva</FormLabel>
-                            <FormControl>
-                                {/* CORREÇÃO: Input direto */}
-                                <Input type="number" placeholder="-2" {...field} onChange={(e) => field.onChange(e.target.value)} />
-                            </FormControl>
-                          </FormItem>
-                        )}
-                      />
+                      <FormField control={form.control} name={`armors.${index}.protection`} render={({ field }) => (<FormItem><FormLabel>Proteção</FormLabel><FormControl><Input type="text" placeholder="1d4" {...field} /></FormControl></FormItem>)}/>
+                      <FormField control={form.control} name={`armors.${index}.obstructive`} render={({ field }) => (<FormItem><FormLabel>Obstrutiva</FormLabel><FormControl><Input type="number" placeholder="-2" {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl></FormItem>)}/>
                     </div>
-                    <FormField
-                      control={form.control}
-                      name={`armors.${index}.quality`}
-                      render={({ field }) => (
-                        <FormItem><FormLabel>Qualidades</FormLabel><FormControl><Input placeholder="Reforçada" {...field} /></FormControl></FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`armors.${index}.quality_desc`}
-                      render={({ field }) => (
-                        <FormItem><FormLabel>Descrição das Qualidades (Notas)</FormLabel><FormControl><Textarea placeholder="Reforçada: +1 na Proteção..." {...field} className="min-h-[60px] text-sm" /></FormControl></FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name={`armors.${index}.equipped`}
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2">
-                          <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Equipada</FormLabel>
+                    
+                    {/* AUTO-FILL QUALIDADES */}
+                    <FormField control={form.control} name={`armors.${index}.quality`} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Qualidades</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Reforçada" {...field} onBlur={(e) => checkQualities(e.target.value, `armors.${index}.quality_desc`)} />
+                          </FormControl>
                         </FormItem>
-                      )}
-                    />
+                      )}/>
+
+                    <FormField control={form.control} name={`armors.${index}.quality_desc`} render={({ field }) => (<FormItem><FormLabel>Descrição das Qualidades (Notas)</FormLabel><FormControl><Textarea placeholder="Regras especiais..." {...field} className="min-h-[60px] text-sm" /></FormControl></FormItem>)}/>
+                    <FormField control={form.control} name={`armors.${index}.equipped`} render={({ field }) => (<FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="m-0">Equipada</FormLabel></FormItem>)}/>
                   </div>
                 </AccordionContent>
               </AccordionItem>

@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
-import { useFieldArray, useFormContext } from "react-hook-form"; // useFormContext
-// ... (outros imports)
+import { useFieldArray, useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -40,7 +39,6 @@ import { cn } from "@/lib/utils";
 import { roundUpDiv } from "@/features/character/character.schema";
 import { Separator } from "@/components/ui/separator";
 
-// ... (Tipos e DamageHealControl mantidos)
 type AttackRollData = {
   abilityName: string;
   attributeName: string;
@@ -54,22 +52,23 @@ const DamageHealControl = ({
   label: string;
   onApply: (amount: number) => void;
 }) => {
-  const [amount, setAmount] = useState(0);
+  // Fix: Estado String
+  const [amount, setAmount] = useState("");
   return (
     <div className="flex items-center gap-2">
       <Input
         type="number"
         className="w-16 h-9 text-center"
         value={amount}
-        onChange={(e) => setAmount(parseInt(e.target.value, 10) || 0)}
+        onChange={(e) => setAmount(e.target.value)}
       />
       <Button
         type="button"
         size="sm"
         variant="outline"
         onClick={() => {
-          onApply(amount);
-          setAmount(0);
+          onApply(parseInt(amount) || 0);
+          setAmount("");
         }}
       >
         {label}
@@ -81,7 +80,7 @@ const DamageHealControl = ({
 export const NpcCombatEquipmentTab = () => {
   const { form, isReadOnly } = useNpcSheet();
   const { toast } = useToast();
-  const { getValues } = useFormContext(); // Contexto
+  const { getValues, setValue } = useFormContext();
 
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
@@ -91,26 +90,25 @@ export const NpcCombatEquipmentTab = () => {
     return val === 0 || isNaN(val) ? "" : String(val);
   });
 
-  const currentToughness = form.watch("combat.toughness_current");
-  const maxToughness = form.watch("combat.toughness_max");
+  const currentToughness = Number(form.watch("combat.toughness_current")) || 0;
+  const maxToughness = Number(form.watch("combat.toughness_max")) || 10;
   const watchedDefense = form.watch("combat.defense");
-  const vigorous = form.watch("attributes.vigorous.value");
-  const painThresholdBonus = form.watch("combat.pain_threshold_bonus");
+  const vigorous = Number(form.watch("attributes.vigorous.value")) || 0;
+  const painThresholdBonus = Number(form.watch("combat.pain_threshold_bonus")) || 0;
 
-  // ... (useEffect mantido)
   useEffect(() => {
     if (!isReadOnly) {
-      const newMaxToughness = Math.max(10, vigorous || 0);
+      const newMaxToughness = Math.max(10, vigorous);
       form.setValue("combat.toughness_max", newMaxToughness);
 
-      const basePainThreshold = roundUpDiv(vigorous || 0, 2);
-      const bonus = painThresholdBonus || 0;
+      const basePainThreshold = roundUpDiv(vigorous, 2);
+      const bonus = painThresholdBonus;
       form.setValue("combat.pain_threshold", basePainThreshold + bonus);
     }
   }, [vigorous, painThresholdBonus, form, isReadOnly]);
 
   useEffect(() => {
-    const numVal = isNaN(watchedDefense) ? 0 : watchedDefense;
+    const numVal = isNaN(Number(watchedDefense)) ? 0 : Number(watchedDefense);
     const displayNum = parseInt(displayDefense, 10) || 0;
     if (numVal !== displayNum) {
       setDisplayDefense(numVal === 0 ? "" : String(numVal));
@@ -127,11 +125,10 @@ export const NpcCombatEquipmentTab = () => {
     name: "armors",
   });
 
-  // ... (Handlers mantidos)
   const handleDamage = (rawDamage: number) => {
-    const armorRD = form.getValues("combat.armor_rd") || 0;
-    const painThreshold = form.getValues("combat.pain_threshold") || 0;
-    const current = form.getValues("combat.toughness_current") || 0;
+    const armorRD = Number(form.getValues("combat.armor_rd")) || 0;
+    const painThreshold = Number(form.getValues("combat.pain_threshold")) || 0;
+    const current = Number(form.getValues("combat.toughness_current")) || 0;
 
     const actualDamage = Math.max(0, rawDamage - armorRD);
     const newToughness = Math.max(0, current - actualDamage);
@@ -153,8 +150,8 @@ export const NpcCombatEquipmentTab = () => {
   };
 
   const handleHeal = (healAmount: number) => {
-    const current = form.getValues("combat.toughness_current") || 0;
-    const max = form.getValues("combat.toughness_max") || 10;
+    const current = Number(form.getValues("combat.toughness_current")) || 0;
+    const max = Number(form.getValues("combat.toughness_max")) || 10;
     const newToughness = Math.min(max, current + healAmount);
     form.setValue("combat.toughness_current", newToughness, { shouldDirty: true });
     toast({ title: "Cura Aplicada!", description: `+${healAmount} Vitalidade.` });
@@ -166,7 +163,7 @@ export const NpcCombatEquipmentTab = () => {
     const selectedAttr = attributesList.find((attr) => attr.key === weapon.attackAttribute);
     
     const attributeValue = selectedAttr
-      ? allAttributes[selectedAttr.key as keyof typeof allAttributes].value
+      ? Number(allAttributes[selectedAttr.key as keyof typeof allAttributes].value) || 0
       : 0;
 
     if (attributeValue === 0 || !selectedAttr) {
@@ -183,9 +180,7 @@ export const NpcCombatEquipmentTab = () => {
 
   return (
     <div className="space-y-6">
-      {/* ... (Status mantido) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Vitalidade */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -201,7 +196,8 @@ export const NpcCombatEquipmentTab = () => {
                     <FormItem>
                         <FormLabel>Atual</FormLabel>
                         <FormControl>
-                        <Input type="number" className="text-2xl font-bold h-12" {...field} onChange={(e) => field.onChange(parseInt(e.target.value, 10) || 0)} readOnly={isReadOnly} />
+                        {/* Fix: onChange direto */}
+                        <Input type="number" className="text-2xl font-bold h-12" {...field} onChange={(e) => field.onChange(e.target.value)} readOnly={isReadOnly} />
                         </FormControl>
                     </FormItem>
                     )}
@@ -226,10 +222,10 @@ export const NpcCombatEquipmentTab = () => {
             
             <div className="grid grid-cols-3 gap-4 pt-2">
                  <FormField control={form.control} name="combat.armor_rd" render={({ field }) => (
-                    <FormItem><FormLabel className="text-xs">Armadura (RD)</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} readOnly={isReadOnly}/></FormControl></FormItem>
+                    <FormItem><FormLabel className="text-xs">Armadura (RD)</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(e.target.value)} readOnly={isReadOnly}/></FormControl></FormItem>
                  )}/>
                  <FormField control={form.control} name="combat.pain_threshold_bonus" render={({ field }) => (
-                    <FormItem><FormLabel className="text-xs">Bônus Dor</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} readOnly={isReadOnly}/></FormControl></FormItem>
+                    <FormItem><FormLabel className="text-xs">Bônus Dor</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(e.target.value)} readOnly={isReadOnly}/></FormControl></FormItem>
                  )}/>
                  <FormField control={form.control} name="combat.pain_threshold" render={({ field }) => (
                     <FormItem><FormLabel className="text-xs">Limiar Total</FormLabel><FormControl><Input type="number" className="bg-muted/50" {...field} readOnly/></FormControl></FormItem>
@@ -238,13 +234,11 @@ export const NpcCombatEquipmentTab = () => {
           </CardContent>
         </Card>
 
-        {/* Defesa & Corrupção */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><Shield className="text-blue-500" /> Defesa & Corrupção</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* DEFESA */}
             <FormField
               control={form.control}
               name="combat.defense"
@@ -256,7 +250,7 @@ export const NpcCombatEquipmentTab = () => {
                       type="text"
                       className="text-3xl font-bold h-16 text-center"
                       placeholder="0"
-                      value={field.value === undefined || isNaN(field.value) ? "" : field.value}
+                      value={field.value === undefined || isNaN(Number(field.value)) ? "" : field.value}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val === "" || val === "-") { setDisplayDefense(val); field.onChange(0); }
@@ -272,7 +266,6 @@ export const NpcCombatEquipmentTab = () => {
             
             <Separator />
             
-            {/* CORRUPÇÃO */}
             <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -281,7 +274,8 @@ export const NpcCombatEquipmentTab = () => {
                     <FormItem>
                       <FormLabel>Corr. Temp</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} readOnly={isReadOnly} />
+                        {/* Fix: onChange direto */}
+                        <Input type="number" {...field} onChange={e => field.onChange(e.target.value)} readOnly={isReadOnly} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -293,7 +287,8 @@ export const NpcCombatEquipmentTab = () => {
                     <FormItem>
                       <FormLabel>Corr. Perm</FormLabel>
                       <FormControl>
-                        <Input type="number" {...field} onChange={e => field.onChange(parseInt(e.target.value)||0)} readOnly={isReadOnly} />
+                        {/* Fix: onChange direto */}
+                        <Input type="number" {...field} onChange={e => field.onChange(e.target.value)} readOnly={isReadOnly} />
                       </FormControl>
                     </FormItem>
                   )}
@@ -303,7 +298,6 @@ export const NpcCombatEquipmentTab = () => {
         </Card>
       </div>
 
-      {/* --- ARMAS & ARMADURAS --- */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
            <CardTitle className="flex items-center gap-2 text-lg"><Sword /> Armas</CardTitle>
@@ -313,9 +307,7 @@ export const NpcCombatEquipmentTab = () => {
            {weaponFields.length === 0 && <p className="text-muted-foreground text-center py-4">Nenhuma arma.</p>}
            <Accordion type="multiple" className="space-y-4" value={openWeapons} onValueChange={setOpenWeapons}>
               {weaponFields.map((field, index) => {
-                 // CORREÇÃO: ID estável
                  const stableId = getValues(`weapons.${index}.id`) || field.id;
-
                  return (
                  <AccordionItem key={stableId} value={stableId} className="p-3 rounded-md border bg-muted/20">
                     <div className="flex justify-between items-center w-full gap-2 p-0">
@@ -370,9 +362,7 @@ export const NpcCombatEquipmentTab = () => {
            {armorFields.length === 0 && <p className="text-muted-foreground text-center py-4">Nenhuma armadura.</p>}
            <Accordion type="multiple" className="space-y-4" value={openArmors} onValueChange={setOpenArmors}>
               {armorFields.map((field, index) => {
-                 // CORREÇÃO: ID estável
                  const stableId = getValues(`armors.${index}.id`) || field.id;
-
                  return (
                  <AccordionItem key={stableId} value={stableId} className="p-3 rounded-md border bg-muted/20">
                     <div className="flex justify-between items-center w-full gap-2 p-0">

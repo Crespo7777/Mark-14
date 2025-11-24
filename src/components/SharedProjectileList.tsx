@@ -17,14 +17,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Crosshair, Minus } from "lucide-react";
+import { Plus, Trash2, Crosshair } from "lucide-react";
 import { getDefaultProjectile } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
-import { useTableContext } from "@/features/table/TableContext"; // <-- Importado
-import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- Importado
+import { useTableContext } from "@/features/table/TableContext";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
-// --- SUB-COMPONENTE (Item Individual) ---
 const ProjectileItem = ({ 
   index, 
   fieldId, 
@@ -92,41 +90,14 @@ const ProjectileItem = ({
               <FormItem>
                 <FormLabel>Quantidade</FormLabel>
                 <FormControl>
-                  <div className="flex items-center gap-2">
-                    <Button 
-                        type="button" 
-                        size="icon" 
-                        variant="outline" 
-                        className="h-10 w-10 shrink-0"
-                        onClick={() => {
-                            const val = parseInt(field.value) || 0;
-                            field.onChange(Math.max(0, val - 1));
-                        }}
-                        disabled={isReadOnly}
-                    >
-                        <Minus className="w-4 h-4" />
-                    </Button>
+                   {/* CORREÇÃO: Input direto sem parseInt */}
                     <Input
                       type="number"
                       className="text-center font-bold"
                       {...field}
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      onChange={(e) => field.onChange(e.target.value)}
                       readOnly={isReadOnly}
                     />
-                    <Button 
-                        type="button" 
-                        size="icon" 
-                        variant="outline" 
-                        className="h-10 w-10 shrink-0"
-                        onClick={() => {
-                            const val = parseInt(field.value) || 0;
-                            field.onChange(val + 1);
-                        }}
-                        disabled={isReadOnly}
-                    >
-                        <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
                 </FormControl>
               </FormItem>
             )}
@@ -136,8 +107,6 @@ const ProjectileItem = ({
     </AccordionItem>
   );
 };
-
-// --- COMPONENTE PRINCIPAL ---
 
 interface SharedProjectileListProps {
   control: Control<any>;
@@ -153,7 +122,7 @@ export const SharedProjectileList = ({ control, name, isReadOnly = false }: Shar
   });
   
   const { getValues } = useFormContext();
-  const { tableId } = useTableContext(); // <-- Importado
+  const { tableId } = useTableContext();
 
   return (
     <Card>
@@ -162,16 +131,15 @@ export const SharedProjectileList = ({ control, name, isReadOnly = false }: Shar
           <Crosshair /> Munição (Projéteis)
         </CardTitle>
         
-        {/* --- INTEGRADO COM DATABASE (usa categoria 'item' pois só precisa de nome) --- */}
         <ItemSelectorDialog 
             tableId={tableId} 
-            category="item" 
+            categories={['item', 'general', 'consumable']} // Permite itens gerais como munição
+            title="Adicionar Munição"
             onSelect={(template) => {
                 if (template) {
                     append({
                         ...getDefaultProjectile(),
                         name: template.name,
-                        // Quantidade padrão 0, jogador define depois
                     });
                 } else {
                     append(getDefaultProjectile());

@@ -65,7 +65,6 @@ export const AbilitiesTraitsTab = () => {
     const allAttributes = form.getValues("attributes");
     const selectedAttr = attributesList.find((attr) => attr.key === ability.associatedAttribute);
 
-    // Se não tiver atributo, valor é 0 e nome é "Nenhum"
     const attributeValue = selectedAttr
       ? allAttributes[selectedAttr.key as keyof typeof allAttributes] || 0
       : 0;
@@ -83,33 +82,25 @@ export const AbilitiesTraitsTab = () => {
   return (
     <div className="space-y-6">
       
-      {/* TRAÇOS (Vêm primeiro) */}
       <SharedTraitList control={form.control} name="traits" />
 
-      {/* HABILIDADES */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Zap /> Habilidades, Poderes & Rituais
           </CardTitle>
           
-          {/* Botão "Adicionar" com INTEGRAÇÃO DATABASE */}
           <ItemSelectorDialog 
               tableId={tableId} 
-              categories={['ability']} // Apenas Habilidades/Poderes/Rituais
+              categories={['ability']} 
               title="Adicionar Habilidade"
               onSelect={(template) => {
                   if (template) {
-                      // --- FORMATAÇÃO INTELIGENTE DE TEXTO ---
                       let desc = template.description || "";
-                      
-                      // Adiciona os efeitos por nível se existirem no database
                       if (template.data.novice) desc += `\n\n[NOVATO]: ${template.data.novice}`;
                       if (template.data.adept)  desc += `\n\n[ADEPTO]: ${template.data.adept}`;
                       if (template.data.master) desc += `\n\n[MESTRE]: ${template.data.master}`;
-                      
-                      // Detalhes extra para Rituais
-                      if (template.data.time) desc += `\nTempo de Execução: ${template.data.time}`;
+                      if (template.data.time) desc += `\nTempo: ${template.data.time}`;
                       if (template.data.components) desc += `\nComponentes: ${template.data.components}`;
 
                       appendAbility({
@@ -123,7 +114,6 @@ export const AbilitiesTraitsTab = () => {
                           tradition: template.data.tradition || ""
                       });
                   } else {
-                      // Criar vazio (Customizado)
                       appendAbility(getDefaultAbility());
                   }
               }}
@@ -147,7 +137,6 @@ export const AbilitiesTraitsTab = () => {
             onValueChange={setOpenAbilityItems}
           >
             {abilityFields.map((field, index) => {
-              // ID ESTÁVEL para evitar fechar a aba ao salvar
               const stableId = getValues(`abilities.${index}.id`) || field.id;
               const abilityType = form.watch(`abilities.${index}.type`);
               const hasAttribute = form.watch(`abilities.${index}.associatedAttribute`) !== "Nenhum";
@@ -168,37 +157,16 @@ export const AbilitiesTraitsTab = () => {
                         <Badge variant="secondary" className="px-1.5 py-0.5">
                           {form.watch(`abilities.${index}.level`)}
                         </Badge>
-
-                        {form.watch(`abilities.${index}.name`)?.toLowerCase().includes("amoque") && (
-                          <div className="flex items-center gap-2 bg-red-900/30 px-2 py-1 rounded-full border border-red-500/50 ml-2" onClick={(e) => e.stopPropagation()}>
-                             <Switch
-                                checked={form.watch(`abilities.${index}.isActive`)}
-                                onCheckedChange={(checked) => {
-                                  form.setValue(`abilities.${index}.isActive`, checked, { shouldDirty: true });
-                                }}
-                                className="scale-75 data-[state=checked]:bg-red-600"
-                             />
-                             <span className="text-xs font-bold text-red-200">ATIVO</span>
-                          </div>
-                        )}
-
                         <Badge variant="outline" className="px-1.5 py-0.5">
                           {attributesList.find(
                             (a) => a.key === form.watch(`abilities.${index}.associatedAttribute`)
                           )?.label || "N/A"}
                         </Badge>
-                        
-                        {form.watch(`abilities.${index}.corruptionCost`) && form.watch(`abilities.${index}.corruptionCost`) !== "0" && (
-                          <Badge variant="destructive" className="px-1.5 py-0.5">
-                            Custo: {form.watch(`abilities.${index}.corruptionCost`)}
-                          </Badge>
-                        )}
                       </div>
                     </div>
                   </AccordionTrigger>
 
                   <div className="flex gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                    {/* Botão de Ação Inteligente (Rolar ou Usar) */}
                     <Button
                       type="button"
                       size="sm"
@@ -296,7 +264,6 @@ export const AbilitiesTraitsTab = () => {
                           <FormItem>
                             <FormLabel>Custo Corrupção</FormLabel>
                             <FormControl>
-                              {/* Input de texto flexível ("1d4" ou "0") */}
                               <Input placeholder="0 ou 1d4" {...field} />
                             </FormControl>
                           </FormItem>

@@ -6,13 +6,14 @@ import {
   traitSchema,
   inventoryItemSchema,
   simpleUUID,
+  numeric, // <-- IMPORTADO
 } from "@/features/character/character.schema";
 
 // ---
 // Schema para um item de atributo do NPC
 // ---
 const attributeItemSchema = z.object({
-  value: z.number().default(0),
+  value: numeric.default(0), // <-- NUMERIC
   note: z.string().default(""), 
 });
 
@@ -34,12 +35,12 @@ const npcAttributesSchema = z.object({
 // SCHEMA DE COMBATE
 // ---
 const npcCombatSchema = z.object({
-  toughness_current: z.number().default(0),
-  toughness_max: z.number().default(0),
-  defense: z.number().default(0), 
-  armor_rd: z.number().default(0),
-  pain_threshold: z.number().default(0),
-  pain_threshold_bonus: z.number().default(0),
+  toughness_current: numeric.default(0), // <-- NUMERIC
+  toughness_max: numeric.default(0),     // <-- NUMERIC
+  defense: numeric.default(0),           // <-- NUMERIC
+  armor_rd: numeric.default(0),          // <-- NUMERIC
+  pain_threshold: numeric.default(0),    // <-- NUMERIC
+  pain_threshold_bonus: numeric.default(0), // <-- NUMERIC
 });
 
 // ---
@@ -86,12 +87,12 @@ export const npcSheetSchema = z.object({
 
   // --- CORRUPÇÃO ---
   corruption: z.object({
-      temporary: z.number().default(0),
-      permanent: z.number().default(0),
+      temporary: numeric.default(0), // <-- NUMERIC
+      permanent: numeric.default(0), // <-- NUMERIC
       stigma: z.string().default(""),
   }).default({}),
 
-  // Reutiliza os schemas (incluindo o abilitySchema atualizado)
+  // Reutiliza os schemas
   weapons: z.array(npcWeaponSchema).default([]), 
   abilities: z.array(abilitySchema).default([]),
   traits: z.array(traitSchema).default([]),

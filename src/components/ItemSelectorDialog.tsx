@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-// CORREÇÃO: 'Dna' com maiúscula
 import { Search, Plus, Package, Shield, Sword, Zap, FlaskConical, Gem, Sparkles, PawPrint, HandCoins, Dna } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ItemTemplate } from "@/types/app-types";
@@ -14,34 +13,43 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ItemSelectorDialogProps {
   tableId: string;
-  categories: string[]; 
+  categories?: string[]; // Agora opcional
+  category?: string;     // Suporte para legado (singular)
   children: React.ReactNode;
   onSelect: (template: ItemTemplate | null) => void;
   title?: string;
 }
 
-export const ItemSelectorDialog = ({ tableId, categories, children, onSelect, title }: ItemSelectorDialogProps) => {
+export const ItemSelectorDialog = ({ tableId, categories, category, children, onSelect, title }: ItemSelectorDialogProps) => {
+  // LÓGICA DE SEGURANÇA: Usa 'categories' se existir, senão usa 'category' num array, senão array vazio.
+  const targetCategories = categories || (category ? [category] : []);
+  
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ItemTemplate[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState(categories[0]);
+  // Evita erro se o array estiver vazio
+  const [activeTab, setActiveTab] = useState(targetCategories[0] || "");
 
   useEffect(() => {
-    if (open) {
+    if (open && targetCategories.length > 0) {
       setLoading(true);
-      const categoryToFetch = categories.length > 1 ? activeTab : categories[0];
+      const categoryToFetch = targetCategories.length > 1 ? activeTab : targetCategories[0];
       
+      // Se o activeTab estiver vazio (caso inicial), define-o
+      if (!activeTab) setActiveTab(categoryToFetch);
+
       let query = supabase
         .from("item_templates")
         .select("*")
         .eq("table_id", tableId)
         .order("name");
         
-      if (categories.length > 1) {
+      if (targetCategories.length > 1 && activeTab) {
          query = query.eq("category", activeTab);
       } else {
-         query = query.in("category", categories);
+         // Se só tem uma categoria ou activeTab ainda não setou, busca por todas as permitidas
+         query = query.in("category", targetCategories);
       }
 
       query.then(({ data }) => {
@@ -49,7 +57,7 @@ export const ItemSelectorDialog = ({ tableId, categories, children, onSelect, ti
           setLoading(false);
         });
     }
-  }, [open, tableId, activeTab, categories]);
+  }, [open, tableId, activeTab, targetCategories.join(",")]); // Dependência em string para evitar loops com arrays
 
   const filteredItems = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -63,7 +71,7 @@ export const ItemSelectorDialog = ({ tableId, categories, children, onSelect, ti
         case 'weapon': return <Sword className="w-4 h-4"/>;
         case 'armor': return <Shield className="w-4 h-4"/>;
         case 'ability': return <Zap className="w-4 h-4"/>;
-        case 'trait': return <Dna className="w-4 h-4"/>; // CORREÇÃO AQUI
+        case 'trait': return <Dna className="w-4 h-4"/>;
         case 'consumable': return <FlaskConical className="w-4 h-4"/>;
         case 'material': return <Gem className="w-4 h-4"/>;
         case 'mystic': return <Sparkles className="w-4 h-4"/>;
@@ -95,16 +103,16 @@ export const ItemSelectorDialog = ({ tableId, categories, children, onSelect, ti
       <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-             {categories.length === 1 ? getIcon(categories[0]) : <Package className="w-4 h-4"/>} 
+             {targetCategories.length === 1 ? getIcon(targetCategories[0]) : <Package className="w-4 h-4"/>} 
              {title || "Selecionar Item"}
           </DialogTitle>
           <DialogDescription>Escolha do compêndio ou crie um item customizado.</DialogDescription>
         </DialogHeader>
 
-        {categories.length > 1 && (
+        {targetCategories.length > 1 && (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="flex flex-wrap h-auto bg-muted/50 p-1 justify-start">
-                    {categories.map(cat => (
+                    {targetCategories.map(cat => (
                         <TabsTrigger key={cat} value={cat} className="text-xs px-3 py-1.5">
                             {getLabel(cat)}
                         </TabsTrigger>

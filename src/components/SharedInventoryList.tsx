@@ -21,8 +21,8 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Backpack } from "lucide-react";
 import { getDefaultInventoryItem } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTableContext } from "@/features/table/TableContext"; // <-- Importado
-import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- Importado
+import { useTableContext } from "@/features/table/TableContext";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
 const InventoryItemDisplay = ({ 
   index, 
@@ -53,8 +53,8 @@ const InventoryItemDisplay = ({
                {itemName || "Novo Item"}
             </h4>
             <div className="flex gap-1.5">
-               <Badge variant="secondary" className="px-1.5 py-0.5">Qtd: {itemQtd || 0}</Badge>
-               <Badge variant="outline" className="px-1.5 py-0.5">Peso: {itemWeight || 0}</Badge>
+               <Badge variant="secondary" className="px-1.5 py-0.5">Qtd: {itemQtd}</Badge>
+               <Badge variant="outline" className="px-1.5 py-0.5">Peso: {itemWeight}</Badge>
             </div>
           </div>
         </AccordionTrigger>
@@ -95,10 +95,11 @@ const InventoryItemDisplay = ({
                 <FormItem>
                   <FormLabel>Quantidade</FormLabel>
                   <FormControl>
+                    {/* CORREÇÃO: Input direto sem parseInt */}
                     <Input
                       type="number"
                       {...field}
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      onChange={(e) => field.onChange(e.target.value)}
                       readOnly={isReadOnly}
                     />
                   </FormControl>
@@ -112,10 +113,11 @@ const InventoryItemDisplay = ({
                 <FormItem>
                   <FormLabel>Peso (Obstrutivo)</FormLabel>
                   <FormControl>
+                    {/* CORREÇÃO: Input direto sem parseInt */}
                     <Input
                       type="number"
                       {...field}
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
+                      onChange={(e) => field.onChange(e.target.value)}
                       readOnly={isReadOnly}
                     />
                   </FormControl>
@@ -166,7 +168,7 @@ export const SharedInventoryList = ({
   });
   
   const { getValues } = useFormContext();
-  const { tableId } = useTableContext(); // <-- Obter tableId
+  const { tableId } = useTableContext();
 
   return (
     <Card>
@@ -175,17 +177,21 @@ export const SharedInventoryList = ({
           <Backpack /> {title}
         </CardTitle>
         
-        {/* Botão Integrado com Database */}
         <ItemSelectorDialog 
             tableId={tableId} 
-            category="item" 
+            categories={['item', 'general', 'consumable', 'material', 'mystic', 'mount', 'service']} 
+            title="Adicionar Item"
             onSelect={(template) => {
                 if (template) {
+                    let desc = template.description || "";
+                    if(template.data.effect) desc += `\nEfeito: ${template.data.effect}`;
+                    if(template.data.price) desc += `\nPreço: ${template.data.price}`;
+
                     append({
                         ...getDefaultInventoryItem(),
                         name: template.name,
                         weight: template.weight,
-                        description: template.description || ""
+                        description: desc.trim()
                     });
                 } else {
                     append(getDefaultInventoryItem());

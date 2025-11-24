@@ -28,7 +28,7 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Sparkles } from "lucide-react";
 import { getDefaultTrait } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTableContext } from "@/features/table/TableContext";
+import { useTableContext } from "@/features/table/TableContext"; 
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
 const TraitItem = ({ 
@@ -47,11 +47,21 @@ const TraitItem = ({
   isReadOnly: boolean; 
 }) => {
   
-  const traitName = useWatch({ control, name: `${name}.${index}.name` });
-  const traitType = useWatch({ control, name: `${name}.${index}.type` });
+  const traitName = useWatch({
+    control,
+    name: `${name}.${index}.name`,
+  });
+  
+  const traitType = useWatch({
+    control,
+    name: `${name}.${index}.type`,
+  });
 
   return (
-    <AccordionItem value={fieldId} className="p-3 rounded-md border bg-muted/20">
+    <AccordionItem
+      value={fieldId}
+      className="p-3 rounded-md border bg-muted/20"
+    >
       <div className="flex justify-between items-center w-full p-0">
         <AccordionTrigger className="p-0 hover:no-underline flex-1">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
@@ -168,14 +178,12 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           <Sparkles /> Traços, Dádivas & Fardos
         </CardTitle>
         
-        {/* --- INTEGRAÇÃO DATABASE PARA TRAÇOS --- */}
         <ItemSelectorDialog 
             tableId={tableId} 
             categories={['trait']} 
             title="Adicionar Traço"
             onSelect={(template) => {
                 if (template) {
-                    // Formata descrição se houver custo extra no database
                     let desc = template.description || "";
                     if (template.data.cost) desc += `\n\n[Custo/Pontos]: ${template.data.cost}`;
 
@@ -186,7 +194,6 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
                         description: desc.trim()
                     });
                 } else {
-                    // Criar Vazio
                     append(getDefaultTrait());
                 }
             }}
@@ -210,7 +217,6 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           onValueChange={setOpenItems}
         >
           {fields.map((field, index) => {
-            // ID ESTÁVEL para evitar fecho da aba ao salvar
             const stableId = getValues(`${name}.${index}.id`) || field.id;
             return (
               <TraitItem 

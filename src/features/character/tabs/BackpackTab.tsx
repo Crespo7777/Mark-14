@@ -25,18 +25,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Coins, Gem, TrendingUp, Weight, Plus } from "lucide-react";
+import { Coins, Gem, TrendingUp, Weight } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { SharedInventoryList } from "@/components/SharedInventoryList";
 import { SharedProjectileList } from "@/components/SharedProjectileList";
-import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-import { useTableContext } from "@/features/table/TableContext";
-import { getDefaultInventoryItem } from "@/features/character/character.schema";
 
-// MoneyManager (Mantido igual)
 const MoneyManager = () => {
   const { form: { setValue, getValues } } = useCharacterSheet();
+  // CORREÇÃO: Estado string
   const [amount, setAmount] = useState("1");
   const [currency, setCurrency] = useState<"taler" | "shekel" | "ortega">("ortega");
 
@@ -90,7 +87,6 @@ const MoneyManager = () => {
 
 export const BackpackTab = () => {
   const { form } = useCharacterSheet();
-  const { tableId } = useTableContext();
   const {
     currentWeight,
     encumbranceThreshold,
@@ -105,34 +101,11 @@ export const BackpackTab = () => {
   const weightPercentage = Math.min(100, (currentWeight / (maxEncumbrance || 1)) * 100);
   const weightBarClass = currentWeight >= maxEncumbrance ? "bg-destructive" : (currentWeight > encumbranceThreshold ? "bg-amber-500" : "bg-primary");
 
-  // Lógica para adicionar item à lista
-  const handleAddItem = (template: any) => {
-     const inventory = form.getValues("inventory") || [];
-     let newItem;
-     
-     if (template) {
-         // Formata a descrição com detalhes extras se existirem
-         let desc = template.description || "";
-         if (template.data.effect) desc += `\nEfeito: ${template.data.effect}`;
-         if (template.data.price) desc += `\nPreço: ${template.data.price}`;
-
-         newItem = {
-             ...getDefaultInventoryItem(),
-             name: template.name,
-             weight: template.weight,
-             description: desc.trim()
-         };
-     } else {
-         newItem = getDefaultInventoryItem();
-     }
-     
-     form.setValue("inventory", [...inventory, newItem], { shouldDirty: true });
-  };
-
   return (
     <div className="space-y-6">
+      
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card Dinheiro (Mantido) */}
+        {/* Card Dinheiro */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><Coins className="w-4 h-4"/> Dinheiro</CardTitle>
@@ -197,27 +170,7 @@ export const BackpackTab = () => {
 
       <div className="space-y-6">
         <SharedProjectileList control={form.control} name="projectiles" />
-        
-        {/* Componente de Inventário (Controlado diretamente aqui para inserir o botão especial) */}
-        <SharedInventoryList 
-            control={form.control} 
-            name="inventory" 
-            title="Mochila & Equipamento" 
-        />
-        
-        {/* Botão Flutuante ou Integrado para Adicionar Item */}
-        <div className="flex justify-center">
-             <ItemSelectorDialog 
-                 tableId={tableId} 
-                 categories={['consumable', 'general', 'material', 'mystic', 'mount', 'service']} 
-                 title="Adicionar à Mochila"
-                 onSelect={handleAddItem}
-             >
-                 <Button className="w-full md:w-auto" variant="secondary">
-                    <Plus className="w-4 h-4 mr-2"/> Adicionar Item da Lista Completa
-                 </Button>
-             </ItemSelectorDialog>
-        </div>
+        <SharedInventoryList control={form.control} name="inventory" title="Mochila & Equipamento" />
       </div>
     </div>
   );

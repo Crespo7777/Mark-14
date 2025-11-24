@@ -21,7 +21,6 @@ type SelectedAttribute = {
 };
 
 export const NpcAttributesTab = () => {
-  // --- 1. OBTER 'isReadOnly' ---
   const { form, npc, isReadOnly } = useNpcSheet();
   const [selectedAttr, setSelectedAttr] = useState<SelectedAttribute | null>(
     null,
@@ -45,17 +44,10 @@ export const NpcAttributesTab = () => {
             const attributeName = `attributes.${
               attr.key as keyof typeof form.getValues.attributes
             }.value`;
-            const currentValue = form.watch(attributeName);
+            // Garante número para o cálculo do modificador
+            const currentValue = Number(form.watch(attributeName));
             
-            // ######################################################
-            // ### INÍCIO DA CORREÇÃO ###
-            // ######################################################
-            // A lógica foi invertida conforme pedido: 10 - Valor
             const modifier = 10 - (currentValue || 0);
-            // ######################################################
-            // ### FIM DA CORREÇÃO ###
-            // ######################################################
-            
             const modString = modifier > 0 ? `+${modifier}` : `${modifier}`;
 
             return (
@@ -63,13 +55,12 @@ export const NpcAttributesTab = () => {
                 key={attr.key}
                 className={cn(
                   "space-y-1 rounded-lg p-2 transition-colors",
-                  // --- 2. MANTER O 'onClick' PARA JOGADORES PODEREM ROLAR ---
                   "cursor-pointer hover:bg-muted/50",
                 )}
                 onClick={() =>
                   handleAttributeClick(
                     attr.label,
-                    form.getValues(attributeName),
+                    Number(form.getValues(attributeName)) || 0,
                   )
                 }
               >
@@ -82,15 +73,14 @@ export const NpcAttributesTab = () => {
                         {attr.label}
                       </FormLabel>
                       <FormControl>
+                        {/* CORREÇÃO: Input direto sem parseInt */}
                         <Input
                           type="number"
                           className="text-2xl font-bold h-12 text-center"
                           {...field}
-                          onChange={(e) =>
-                            field.onChange(parseInt(e.target.value, 10) || 0)
-                          }
+                          onChange={(e) => field.onChange(e.target.value)}
                           onClick={(e) => e.stopPropagation()}
-                          readOnly={isReadOnly} // <-- 3. ADICIONADO
+                          readOnly={isReadOnly}
                         />
                       </FormControl>
                       <FormMessage />
@@ -121,7 +111,6 @@ export const NpcAttributesTab = () => {
         </CardContent>
       </Card>
 
-      {/* O Diálogo de Rolagem funciona para todos (Mestre e Jogador) */}
       <AttributeRollDialog
         open={!!selectedAttr}
         onOpenChange={(open) => {

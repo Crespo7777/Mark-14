@@ -17,16 +17,15 @@ export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
 };
 
-// --- HELPER: Schema Numérico Flexível ---
-// Aceita string ou número, converte para número no final.
-// Permite que o formulário tenha estados temporários como "" ou "-"
-const numeric = z.union([z.string(), z.number()]).transform((val) => {
-  if (val === "") return 0;
+// --- SOLUÇÃO DO "0" PERSISTENTE ---
+// Exportamos para usar também nos NPCs
+export const numeric = z.union([z.string(), z.number()]).transform((val) => {
+  if (val === "" || val === "-") return 0; 
   const n = Number(val);
   return isNaN(n) ? 0 : n;
 });
 
-// --- SCHEMAS BÁSICOS (Sub-partes da Ficha) ---
+// --- SCHEMAS BÁSICOS ---
 
 // 1. ATRIBUTOS
 export const attributesSchema = z.object({
