@@ -1,9 +1,8 @@
 // src/features/player/PlayerCharactersTab.tsx
 
-import { useState, lazy, Suspense } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-// ... (mantenha os outros imports iguais)
 import {
   Card,
   CardContent,
@@ -50,10 +49,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CreatePlayerCharacterDialog } from "@/components/CreatePlayerCharacterDialog";
 import { EntityListManager } from "@/components/EntityListManager";
 import { CharacterWithRelations, FolderType } from "@/types/app-types";
-
-const CharacterSheetSheet = lazy(() =>
-  import("@/components/CharacterSheetSheet").then(module => ({ default: module.CharacterSheetSheet }))
-);
+import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 
 const SheetLoadingFallback = () => (
   <Card className="border-border/50 flex flex-col h-[200px]">
@@ -66,7 +62,8 @@ const fetchPlayerCharacters = async (tableId: string) => {
   const { data, error } = await supabase
     .from("characters")
     .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-    .eq("table_id", tableId);
+    .eq("table_id", tableId)
+    .order("name", { ascending: true });
   if (error) throw error;
   return data as CharacterWithRelations[];
 };
@@ -85,12 +82,14 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
   const [duplicating, setDuplicating] = useState(false);
+  
+  // NOVO ESTADO
+  const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
 
   const { data: allCharacters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId],
     queryFn: () => fetchPlayerCharacters(tableId),
     enabled: !!userId,
-    // CORREÇÃO: Evita que a lista pisque/resete ao salvar uma ficha
     placeholderData: (previousData) => previousData, 
   });
 
@@ -100,7 +99,6 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
     enabled: !!userId,
   });
 
-  // Filtra apenas o que é do jogador
   const myCharacters = allCharacters.filter(c => c.player_id === userId);
 
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
@@ -177,51 +175,50 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   });
 
   const renderCharacterCard = (char: CharacterWithRelations) => (
-    <Suspense key={char.id} fallback={<SheetLoadingFallback />}>
-      <CharacterSheetSheet characterId={char.id}>
-        <Card className={`border-border/50 flex flex-col justify-between h-full hover:shadow-glow transition-shadow cursor-pointer ${char.is_archived ? "opacity-60 bg-muted/20" : ""}`}>
-          <CardHeader>
-             <CardTitle className="flex justify-between items-start">
-                {char.name}
-                {char.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
-             </CardTitle>
-             <CardDescription>Sua Ficha</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1"><p className="text-sm text-muted-foreground">Clique para editar</p></CardContent>
-          <CardFooter className="flex justify-end items-center pt-0 pb-4 px-4" onClick={e => e.stopPropagation()}>
-             <div className="flex gap-1">
-                <Button variant="outline" size="sm" disabled={duplicating} onClick={() => handleDuplicateCharacter(char)}>
-                  <Copy className="w-4 h-4 mr-2" /> Duplicar
-                </Button>
+    <Card 
+      key={char.id} 
+      className={`border-border/50 flex flex-col justify-between h-full hover:shadow-glow transition-shadow cursor-pointer ${char.is_archived ? "opacity-60 bg-muted/20" : ""}`}
+      onClick={() => setSelectedCharId(char.id)}
+    >
+      <CardHeader>
+          <CardTitle className="flex justify-between items-start">
+            {char.name}
+            {char.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
+          </CardTitle>
+          <CardDescription>Sua Ficha</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1"><p className="text-sm text-muted-foreground">Clique para editar</p></CardContent>
+      <CardFooter className="flex justify-end items-center pt-0 pb-4 px-4" onClick={e => e.stopPropagation()}>
+          <div className="flex gap-1">
+            <Button variant="outline" size="sm" disabled={duplicating} onClick={() => handleDuplicateCharacter(char)}>
+              <Copy className="w-4 h-4 mr-2" /> Duplicar
+            </Button>
 
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                      <DropdownMenuItem onClick={() => handleArchiveItem(char.id, !!char.is_archived)}>
-                         {char.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
-                         {char.is_archived ? "Restaurar" : "Arquivar"}
-                      </DropdownMenuItem>
-                      <DropdownMenuSub>
-                        <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent>
-                            <DropdownMenuRadioGroup value={char.folder_id || "none"} onValueChange={val => handleMoveItem(char.id, val === "none" ? null : val)}>
-                                <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
-                                {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
-                            </DropdownMenuRadioGroup>
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onClick={() => setCharacterToDelete(char)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
-                    </DropdownMenuContent>
-                 </DropdownMenu>
-             </div>
-          </CardFooter>
-        </Card>
-      </CharacterSheetSheet>
-    </Suspense>
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+                  <DropdownMenuItem onClick={() => handleArchiveItem(char.id, !!char.is_archived)}>
+                      {char.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
+                      {char.is_archived ? "Restaurar" : "Arquivar"}
+                  </DropdownMenuItem>
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                        <DropdownMenuRadioGroup value={char.folder_id || "none"} onValueChange={val => handleMoveItem(char.id, val === "none" ? null : val)}>
+                            <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
+                            {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive" onClick={() => setCharacterToDelete(char)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+          </div>
+      </CardFooter>
+    </Card>
   );
 
-  // Se não tiver dados E estiver carregando, mostra fallback. Se tiver dados (mesmo antigos), mostra a lista.
   if (isLoadingChars && allCharacters.length === 0) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
 
   return (
@@ -243,6 +240,13 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
                    </CreatePlayerCharacterDialog>
                </>
             }
+        />
+        
+        {/* FICHA FORA DO LOOP */}
+        <CharacterSheetSheet 
+          characterId={selectedCharId} 
+          open={!!selectedCharId} 
+          onOpenChange={(open) => !open && setSelectedCharId(null)} 
         />
 
         <AlertDialog open={!!characterToDelete} onOpenChange={(open) => !open && setCharacterToDelete(null)}>

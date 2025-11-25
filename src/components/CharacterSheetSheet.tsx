@@ -1,3 +1,5 @@
+// src/components/CharacterSheetSheet.tsx
+
 import { useState } from "react";
 import {
   Sheet,
@@ -11,11 +13,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import { CharacterSheet } from "@/features/character/CharacterSheet"; // Importa a Ficha de Personagem
+import { CharacterSheet } from "@/features/character/CharacterSheet";
 
 interface CharacterSheetSheetProps {
-  children: React.ReactNode;
-  characterId: string;
+  children?: React.ReactNode; // Opcional agora
+  characterId: string | null;
+  open?: boolean; // Controlo externo
+  onOpenChange?: (open: boolean) => void; // Controlo externo
 }
 
 const fetchCharacter = async (characterId: string) => {
@@ -29,8 +33,19 @@ const fetchCharacter = async (characterId: string) => {
   return data;
 };
 
-export const CharacterSheetSheet = ({ children, characterId }: CharacterSheetSheetProps) => {
-  const [open, setOpen] = useState(false);
+export const CharacterSheetSheet = ({ 
+  children, 
+  characterId, 
+  open: externalOpen, 
+  onOpenChange: externalOnOpenChange 
+}: CharacterSheetSheetProps) => {
+  // Estado interno para quando usado como Wrapper (legado)
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  // Decide se usa o estado externo (passado pelo Pai) ou interno
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen : internalOpen;
+  const setOpen = isControlled ? (externalOnOpenChange || (() => {})) : setInternalOpen;
 
   const {
     data: character,
@@ -38,15 +53,16 @@ export const CharacterSheetSheet = ({ children, characterId }: CharacterSheetShe
     error,
   } = useQuery({
     queryKey: ["character", characterId],
-    queryFn: () => fetchCharacter(characterId),
-    enabled: open,
-    // CORREÇÃO IMPORTANTE: Mantém os dados antigos enquanto recarrega os novos
-    placeholderData: (previousData) => previousData, 
+    queryFn: () => fetchCharacter(characterId!),
+    enabled: open && !!characterId,
+    placeholderData: (previousData) => previousData,
   });
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{children}</SheetTrigger>
+      {/* Só renderiza o Trigger se houver children */}
+      {children && <SheetTrigger asChild>{children}</SheetTrigger>}
+      
       <SheetContent className="w-full sm:max-w-3xl p-0">
         <SheetTitle className="sr-only">
           {character?.name || "Ficha de Personagem"}
@@ -55,7 +71,6 @@ export const CharacterSheetSheet = ({ children, characterId }: CharacterSheetShe
           Edite ou visualize a ficha do personagem.
         </SheetDescription>
 
-        {/* Só mostra loading se REALMENTE não tiver dados (nem antigos, nem novos) */}
         {isLoading && !character && (
           <div className="p-6 space-y-4">
             <Skeleton className="h-16 w-1/2" />

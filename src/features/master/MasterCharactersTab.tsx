@@ -1,6 +1,6 @@
 // src/features/master/MasterCharactersTab.tsx
 
-import { useState, lazy, Suspense } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -11,7 +11,7 @@ import {
   CardTitle,
   CardFooter,
 } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button"; // <--- IMPORT CORRIGIDO
 import {
   MoreVertical,
   Copy,
@@ -52,10 +52,7 @@ import { useTableContext } from "@/features/table/TableContext";
 import { CreateCharacterDialog } from "@/components/CreateCharacterDialog";
 import { EntityListManager } from "@/components/EntityListManager";
 import { CharacterWithRelations, FolderType } from "@/types/app-types";
-
-const CharacterSheetSheet = lazy(() =>
-  import("@/components/CharacterSheetSheet").then(module => ({ default: module.CharacterSheetSheet }))
-);
+import { CharacterSheetSheet } from "@/components/CharacterSheetSheet"; // Importação direta
 
 const SheetLoadingFallback = () => (
   <Card className="border-border/50 flex flex-col h-[200px]">
@@ -64,12 +61,12 @@ const SheetLoadingFallback = () => (
   </Card>
 );
 
-// Queries
 const fetchCharacters = async (tableId: string) => {
   const { data, error } = await supabase
     .from("characters")
     .select("*, shared_with_players, player:profiles!characters_player_id_fkey(display_name)")
-    .eq("table_id", tableId);
+    .eq("table_id", tableId)
+    .order("name", { ascending: true });
   if (error) throw error;
   return data as CharacterWithRelations[];
 };
@@ -89,11 +86,13 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
   const [duplicating, setDuplicating] = useState(false);
+  
+  // ESTADO DA FICHA ABERTA (Controlado Externamente)
+  const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
 
   const { data: characters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId],
     queryFn: () => fetchCharacters(tableId),
-    // CORREÇÃO: Mantém a lista estável durante atualizações para evitar que a ficha feche
     placeholderData: (previousData) => previousData,
   });
 
@@ -104,8 +103,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
 
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
 
-  // --- Ações (Delete, Duplicate, Archive, Move, Share) ---
-  
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
@@ -157,58 +154,56 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
     invalidateCharacters();
   };
 
-  // Filtragem
   const filteredChars = characters.filter(char => {
     const matchesSearch = char.name.toLowerCase().includes(charSearch.toLowerCase());
     const matchesArchive = showArchivedChars ? char.is_archived : !char.is_archived;
     return matchesSearch && matchesArchive;
   });
 
-  // Renderizador de Cartão
+  // RENDERIZADOR APENAS DO CARTÃO (Sem envolver em Sheet)
   const renderCharacterCard = (char: CharacterWithRelations) => (
-    <Suspense key={char.id} fallback={<SheetLoadingFallback />}>
-      <CharacterSheetSheet characterId={char.id}>
-        <Card className={`border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col ${char.is_archived ? "opacity-60 bg-muted/20" : ""}`}>
-          <CardHeader>
-            <CardTitle className="flex justify-between items-start text-lg">
-                {char.name}
-                {char.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
-            </CardTitle>
-            <CardDescription>Jogador: {char.player?.display_name}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1"><p className="text-sm text-muted-foreground">Clique para editar</p></CardContent>
-          <CardFooter className="flex justify-between items-center pt-0 pb-4 px-4" onClick={e => e.stopPropagation()}>
-             <ShareDialog itemTitle={char.name} currentSharedWith={char.shared_with_players || []} disabled={duplicating} onSave={(ids) => handleUpdateSharing(char.id, ids)}>
-                <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>
-             </ShareDialog>
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                  <DropdownMenuItem onClick={() => handleDuplicateCharacter(char)}><Copy className="w-4 h-4 mr-2" /> Duplicar</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleArchiveItem(char.id, !!char.is_archived)}>
-                     {char.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
-                     {char.is_archived ? "Restaurar" : "Arquivar"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                        <DropdownMenuRadioGroup value={char.folder_id || "none"} onValueChange={val => handleMoveItem(char.id, val === "none" ? null : val)}>
-                            <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
-                            {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
-                        </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onClick={() => setCharacterToDelete(char)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
-                </DropdownMenuContent>
-             </DropdownMenu>
-          </CardFooter>
-        </Card>
-      </CharacterSheetSheet>
-    </Suspense>
+    <Card 
+      key={char.id}
+      className={`border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col ${char.is_archived ? "opacity-60 bg-muted/20" : ""}`}
+      onClick={() => setSelectedCharId(char.id)} // <--- ABRE A FICHA AQUI
+    >
+      <CardHeader>
+        <CardTitle className="flex justify-between items-start text-lg">
+            {char.name}
+            {char.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
+        </CardTitle>
+        <CardDescription>Jogador: {char.player?.display_name}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex-1"><p className="text-sm text-muted-foreground">Clique para editar</p></CardContent>
+      <CardFooter className="flex justify-between items-center pt-0 pb-4 px-4" onClick={e => e.stopPropagation()}>
+          <ShareDialog itemTitle={char.name} currentSharedWith={char.shared_with_players || []} disabled={duplicating} onSave={(ids) => handleUpdateSharing(char.id, ids)}>
+            <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>
+          </ShareDialog>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
+              <DropdownMenuItem onClick={() => handleDuplicateCharacter(char)}><Copy className="w-4 h-4 mr-2" /> Duplicar</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleArchiveItem(char.id, !!char.is_archived)}>
+                  {char.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
+                  {char.is_archived ? "Restaurar" : "Arquivar"}
+              </DropdownMenuItem>
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                    <DropdownMenuRadioGroup value={char.folder_id || "none"} onValueChange={val => handleMoveItem(char.id, val === "none" ? null : val)}>
+                        <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
+                        {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
+                    </DropdownMenuRadioGroup>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-destructive" onClick={() => setCharacterToDelete(char)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+      </CardFooter>
+    </Card>
   );
 
-  // Se não houver dados (nem anteriores, nem novos) e estiver a carregar, mostra fallback.
   if (isLoadingChars && characters.length === 0) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
 
   return (
@@ -232,10 +227,19 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
         }
       />
 
+      {/* A FICHA VIVE AQUI FORA AGORA */}
+      <CharacterSheetSheet 
+        characterId={selectedCharId} 
+        open={!!selectedCharId} 
+        onOpenChange={(open) => !open && setSelectedCharId(null)} 
+      />
+
       <AlertDialog open={!!characterToDelete} onOpenChange={(open) => !open && setCharacterToDelete(null)}>
           <AlertDialogContent>
               <AlertDialogHeader><AlertDialogTitle>Excluir esta Ficha?</AlertDialogTitle><AlertDialogDescription>Ação irreversível.</AlertDialogDescription></AlertDialogHeader>
-              <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction></AlertDialogFooter>
+              <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction>
+              </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
     </>

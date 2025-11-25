@@ -65,7 +65,11 @@ const SheetLoadingFallback = () => (
 );
 
 const fetchNpcs = async (tableId: string) => {
-  const { data, error } = await supabase.from("npcs").select("*, shared_with_players").eq("table_id", tableId);
+  const { data, error } = await supabase
+    .from("npcs")
+    .select("*, shared_with_players")
+    .eq("table_id", tableId)
+    .order("name", { ascending: true }); // <--- GARANTIR ORDEM AQUI TAMBÉM
   if (error) throw error;
   return data as NpcWithRelations[];
 };
