@@ -26,7 +26,7 @@ import { PlayerShopsTab } from "@/features/shops/PlayerShopsTab";
 import { SceneBoard } from "@/features/map/SceneBoard";
 import { ChatPanel } from "@/components/ChatPanel";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
-import { VttGridBackground } from "@/components/VttGridBackground"; // NOVO COMPONENTE
+import { VttGridBackground } from "@/components/VttGridBackground";
 
 // UI
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,7 @@ import { Card } from "@/components/ui/card";
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"; // <-- CORREÇÃO: Importação adicionada
 
 interface PlayerViewProps {
   tableId: string;
