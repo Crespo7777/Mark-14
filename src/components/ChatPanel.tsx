@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser"; 
 import { cn } from "@/lib/utils";
 import { useTableContext, TableMember } from "@/features/table/TableContext";
-import DOMPurify from "dompurify"; // <-- IMPORTANTE
+import DOMPurify from "dompurify";
 import {
   Dialog,
   DialogContent,
@@ -224,57 +224,55 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-card">
-      <div className="p-4 border-b border-border">
-        <div className="flex justify-between items-center">
-          <h2 className="font-semibold">Chat da Mesa</h2>
-          {isMaster && (
-            <Button
-              variant="destructive"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setIsClearAlertOpen(true)}
-              disabled={loading}
-            >
-              <Trash2 className="w-4 h-4" />
-              <span className="sr-only">Limpar Chat</span>
-            </Button>
-          )}
-        </div>
-      </div>
-
+    <div className="flex flex-col h-full bg-transparent">
+      
+      {/* Área de Rolagem das Mensagens */}
       <ScrollArea className="flex-1 p-4">
+        {/* Botão de Limpar (apenas Mestre) - Agora dentro da área de scroll no topo, discreto */}
+        {isMaster && messages.length > 0 && (
+            <div className="flex justify-end mb-2">
+                 <Button
+                  variant="ghost"
+                  size="xs"
+                  className="text-xs text-muted-foreground hover:text-destructive h-6 px-2"
+                  onClick={() => setIsClearAlertOpen(true)}
+                  disabled={loading}
+                >
+                  <Trash2 className="w-3 h-3 mr-1" /> Limpar Histórico
+                </Button>
+            </div>
+        )}
+
         <div className="space-y-4">
           {messages.map((msg) => (
             <div
               key={msg.id}
               className={cn(
-                "p-3 rounded-lg",
-                msg.message_type === "roll" ? "bg-accent/20 border border-accent/30" : "bg-muted/50",
+                "p-3 rounded-lg text-sm",
+                msg.message_type === "roll" ? "bg-accent/10 border border-accent/20" : "bg-muted/40 border border-white/5",
                 msg.message_type === "error" && "bg-destructive/20 border border-destructive/30 text-destructive-foreground",
-                msg.message_type === "info" && "bg-blue-900/30 border border-blue-500/30 text-center text-blue-300 italic",
-                msg.message_type === "info_clear" && "bg-muted border border-border text-center text-muted-foreground italic text-xs py-2"
+                msg.message_type === "info" && "bg-blue-900/20 border border-blue-500/20 text-center text-blue-200 italic",
+                msg.message_type === "info_clear" && "bg-transparent text-center text-muted-foreground italic text-xs py-2 border-y border-white/5"
               )}
             >
-              {/* AQUI ESTÁ A CORREÇÃO DE SEGURANÇA */}
               {msg.message_type.startsWith("info") ? (
                 <div 
-                   className="text-sm whitespace-pre-wrap" 
+                   className="whitespace-pre-wrap" 
                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.message) }} 
                 />
               ) : (
                 <>
                   <div className="flex justify-between items-start mb-1">
-                    <span className="font-semibold text-sm flex items-center gap-2 text-foreground">
-                      {msg.message_type === "roll" && <Dices className="w-4 h-4 text-accent" />}
+                    <span className="font-bold text-primary/90 flex items-center gap-2">
+                      {msg.message_type === "roll" && <Dices className="w-3 h-3 text-accent" />}
                       {msg.user?.display_name || "Desconhecido"}
                     </span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[10px] text-muted-foreground opacity-70">
                       {new Date(msg.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                     </span>
                   </div>
                   <div 
-                    className="text-sm whitespace-pre-wrap" 
+                    className="whitespace-pre-wrap break-words text-foreground/90 leading-relaxed" 
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(msg.message) }} 
                   />
                 </>
@@ -285,32 +283,32 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
         </div>
       </ScrollArea>
       
-      <div className="p-4 border-t border-border">
+      {/* Área de Input */}
+      <div className="p-3 border-t border-white/10 bg-muted/10">
         <div className="flex gap-2">
           <Input
-            placeholder="Digite /r 1d20+5 para rolar..."
+            placeholder="/r 1d20+5..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={handleKeyPress}
             disabled={loading}
+            className="bg-background/50 border-white/10 focus:ring-accent/50 h-9 text-sm"
           />
+          
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon"><HelpCircle className="w-4 h-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground hover:text-white"><HelpCircle className="w-4 h-4" /></Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Comandos do Chat</DialogTitle>
-                <DialogDescription>Comandos disponíveis para rolagens de dados.</DialogDescription>
+                <DialogTitle>Comandos</DialogTitle>
+                <DialogDescription>Use /r ou /roll para rolar dados.</DialogDescription>
               </DialogHeader>
-              <div className="space-y-2">
-                <p className="font-mono p-2 bg-muted rounded-md text-sm">/r XdY+Z</p>
-                <p>Rola X dados de Y lados, somando Z. (Ex: <code>/r 2d8+5</code>)</p>
-              </div>
+              <div className="p-2 bg-muted rounded text-sm font-mono">/r 1d20+5</div>
             </DialogContent>
           </Dialog>
 
-          <Button onClick={handleSend} disabled={loading} size="icon">
+          <Button onClick={handleSend} disabled={loading} size="icon" className="h-9 w-9 bg-primary hover:bg-primary/90">
             <Send className="w-4 h-4" />
           </Button>
         </div>
@@ -319,13 +317,13 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
       <AlertDialog open={isClearAlertOpen} onOpenChange={setIsClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Limpar o Chat?</AlertDialogTitle>
-            <AlertDialogDescription>Esta ação removerá permanentemente todas as mensagens.</AlertDialogDescription>
+            <AlertDialogTitle>Limpar tudo?</AlertDialogTitle>
+            <AlertDialogDescription>Todas as mensagens serão apagadas para todos.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction className={cn(buttonVariants({ variant: "destructive" }))} onClick={handleClearChat} disabled={loading}>
-              {loading ? "Limpando..." : "Limpar Chat"}
+              Limpar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

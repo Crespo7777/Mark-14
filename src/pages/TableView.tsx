@@ -1,15 +1,14 @@
+// src/pages/TableView.tsx
+
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, MessageSquare } from "lucide-react";
-import { ChatPanel } from "@/components/ChatPanel";
 import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
 import { ImmersiveOverlay } from "@/components/ImmersiveOverlay";
 import { TableProvider, TableMember } from "@/features/table/TableContext";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Loader2 } from "lucide-react";
 
 const TableView = () => {
   const { tableId } = useParams();
@@ -89,8 +88,11 @@ const TableView = () => {
 
   if (loading || !table || !userId || members.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Carregando mesa...</p>
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <div className="flex flex-col items-center gap-4">
+             <Loader2 className="h-8 w-8 animate-spin text-primary" />
+             <p className="text-muted-foreground">A preparar a mesa...</p>
+        </div>
       </div>
     );
   }
@@ -105,62 +107,19 @@ const TableView = () => {
   };
 
   return (
-    <Sheet>
       <TableProvider value={tableContextValue}>
-        <div className="min-h-screen bg-background relative">
-          
-          <ImmersiveOverlay tableId={tableId!} isMaster={isMaster} />
+        {/* Overlay de Música/Vídeo Global (Invisível até ser ativado) */}
+        <ImmersiveOverlay tableId={tableId!} isMaster={isMaster} />
 
-          <div className="w-96 h-screen fixed right-0 top-0 border-l border-border bg-card hidden md:flex z-20">
-            <ChatPanel tableId={tableId!} />
-          </div>
-
-          <div className="md:mr-96 relative z-10">
-            <div className="border-b border-border bg-card/50 backdrop-blur top-0 z-10 sticky">
-              <div className="max-w-6xl mx-auto px-4 py-4">
-                <div className="flex items-center gap-4">
-                  <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-                    <ArrowLeft className="w-5 h-5" />
-                  </Button>
-                  <div>
-                    <h1 className="text-2xl font-bold">{table?.name}</h1>
-                    <p className="text-sm text-muted-foreground">
-                      {isMaster ? "Você é o Mestre" : "Jogador"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 md:p-6">
-              <div className="max-w-6xl mx-auto">
-                {isMaster ? (
-                  <MasterView tableId={tableId!} masterId={table.master_id} />
-                ) : (
-                  <PlayerView tableId={tableId!} />
-                )}
-              </div>
-            </div>
-          </div>
-
-          <SheetTrigger asChild>
-            <Button
-              variant="default"
-              size="icon"
-              className="fixed bottom-4 right-4 h-14 w-14 rounded-full shadow-lg md:hidden z-50"
-            >
-              <MessageSquare className="w-6 h-6" />
-              <span className="sr-only">Abrir Chat</span>
-            </Button>
-          </SheetTrigger>
-
-          <SheetContent side="right" className="p-0 w-full max-w-sm sm:max-w-sm h-full">
-            <ChatPanel tableId={tableId!} />
-          </SheetContent>
-          
+        {/* Contentor Principal - Sem barras fixas, o MasterView/PlayerView gere tudo */}
+        <div className="min-h-screen bg-background">
+            {isMaster ? (
+              <MasterView tableId={tableId!} masterId={table.master_id} />
+            ) : (
+              <PlayerView tableId={tableId!} />
+            )}
         </div>
       </TableProvider>
-    </Sheet>
   );
 };
 
