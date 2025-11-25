@@ -15,9 +15,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database } from "lucide-react";
 import { formatPrice } from "@/lib/economy-utils";
 import { Separator } from "@/components/ui/separator";
-import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // <-- IMPORTADO
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
-// Adicionamos is_open à interface no fetch (via SQL select *)
+// Interface estendida para incluir 'data' no ShopItem (já que o tipo base pode não ter ainda)
+interface ExtendedShopItem extends ShopItem {
+  data?: any;
+}
+
 const fetchShops = async (tableId: string) => {
   const { data, error } = await supabase.from("shops").select("*").eq("table_id", tableId).order("created_at");
   if (error) throw error;
@@ -27,7 +31,7 @@ const fetchShops = async (tableId: string) => {
 const fetchShopItems = async (shopId: string) => {
   const { data, error } = await supabase.from("shop_items").select("*").eq("shop_id", shopId).order("name");
   if (error) throw error;
-  return data as ShopItem[];
+  return data as ExtendedShopItem[];
 };
 
 const fetchCharacters = async (tableId: string) => {
@@ -47,7 +51,6 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
     queryFn: () => fetchShops(tableId),
   });
 
-  // Sincronizar estado global da aba
   useEffect(() => {
     supabase.from("tables").select("shops_open").eq("id", tableId).single()
       .then(({ data }) => { if(data) setGlobalShopsOpen(!!data.shops_open) });
@@ -57,7 +60,7 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
     setGlobalShopsOpen(checked);
     const { error } = await supabase.from("tables").update({ shops_open: checked }).eq("id", tableId);
     if (error) {
-        setGlobalShopsOpen(!checked); // Revert on error
+        setGlobalShopsOpen(!checked); 
         toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
         toast({ 
@@ -72,7 +75,7 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
     const { error } = await supabase.from("shops").insert({ 
         table_id: tableId, 
         name: newShopName,
-        is_open: false // Começa fechada por padrão
+        is_open: false 
     });
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
     else {
@@ -91,8 +94,6 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
   const handleToggleShopVisibility = async (shop: Shop & { is_open: boolean }, e: React.MouseEvent) => {
     e.stopPropagation();
     const newState = !shop.is_open;
-    
-    // Optimistic update local
     if (selectedShop?.id === shop.id) setSelectedShop({...shop, is_open: newState});
 
     const { error } = await supabase.from("shops").update({ is_open: newState }).eq("id", shop.id);
@@ -106,8 +107,6 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
 
   return (
     <div className="space-y-6">
-      
-      {/* Controlo Global */}
       <Card className="bg-muted/20 border-primary/20">
         <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
@@ -125,11 +124,7 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
                 <Label htmlFor="global-shop-toggle" className="text-xs font-normal text-muted-foreground">
                     {globalShopsOpen ? "Aberto" : "Fechado"}
                 </Label>
-                <Switch 
-                    id="global-shop-toggle"
-                    checked={globalShopsOpen} 
-                    onCheckedChange={handleToggleGlobalShop} 
-                />
+                <Switch id="global-shop-toggle" checked={globalShopsOpen} onCheckedChange={handleToggleGlobalShop} />
             </div>
         </CardContent>
       </Card>
@@ -137,12 +132,7 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
       <div className="flex gap-2 items-end bg-muted/30 p-4 rounded-lg border">
         <div className="grid w-full gap-1.5">
           <Label htmlFor="shop-name">Nova Loja / Local</Label>
-          <Input 
-            id="shop-name" 
-            placeholder="Ex: Ferreiro do Porto..." 
-            value={newShopName}
-            onChange={e => setNewShopName(e.target.value)}
-          />
+          <Input id="shop-name" placeholder="Ex: Ferreiro do Porto..." value={newShopName} onChange={e => setNewShopName(e.target.value)} />
         </div>
         <Button onClick={handleCreateShop}><Plus className="w-4 h-4 mr-2" /> Criar</Button>
       </div>
@@ -164,13 +154,8 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
                     {shop.is_open ? <Eye className="w-3 h-3 text-green-500 shrink-0" /> : <EyeOff className="w-3 h-3 text-muted-foreground shrink-0" />}
                     <span className={`font-medium truncate ${!shop.is_open && "text-muted-foreground"}`}>{shop.name}</span>
                 </div>
-                
                 <div className="flex gap-1">
-                    <Button 
-                        variant="ghost" size="icon" className="h-6 w-6"
-                        title={shop.is_open ? "Ocultar" : "Mostrar"}
-                        onClick={(e) => handleToggleShopVisibility(shop, e)}
-                    >
+                    <Button variant="ghost" size="icon" className="h-6 w-6" title={shop.is_open ? "Ocultar" : "Mostrar"} onClick={(e) => handleToggleShopVisibility(shop, e)}>
                         {shop.is_open ? <Unlock className="w-3 h-3 text-primary"/> : <Lock className="w-3 h-3 text-muted-foreground"/>}
                     </Button>
                     <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDeleteShop(shop.id); }}>
@@ -202,7 +187,7 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   
   const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, description: "" });
   const [currencyType, setCurrencyType] = useState<"ortega" | "shekel" | "taler">("ortega");
-  const [itemToSend, setItemToSend] = useState<ShopItem | null>(null);
+  const [itemToSend, setItemToSend] = useState<ExtendedShopItem | null>(null);
 
   const { data: items = [] } = useQuery({
     queryKey: ['shop_items', shop.id],
@@ -230,7 +215,8 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       name: newItem.name,
       price: finalPrice, 
       weight: newItem.weight,
-      description: newItem.description
+      description: newItem.description,
+      data: {} // Item manual, sem dados complexos por enquanto
     });
 
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -244,8 +230,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   const handleImportFromDatabase = async (template: ItemTemplate | null) => {
      if (!template) return;
 
-     // Parsing do preço do template (ex: "5 Tálers" -> número)
-     // Esta é uma lógica simples, se o formato for complexo, ajusta aqui
      let price = 0;
      const templatePriceStr = template.data?.price ? String(template.data.price).toLowerCase() : "";
      const numMatch = templatePriceStr.match(/\d+/);
@@ -256,17 +240,22 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         else price = val;
      }
 
+     // --- CORREÇÃO: IMPORTAÇÃO DO CAMPO 'DATA' COMPLETO ---
      const { error } = await supabase.from("shop_items").insert({
         shop_id: shop.id,
         name: template.name,
         description: template.description,
         weight: template.weight,
-        price: price
+        price: price,
+        data: { 
+            ...template.data, // Copia stats (dano, proteção, etc)
+            category: template.category // Garante que a categoria vai junto
+        }
      });
 
      if (error) toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
      else {
-         toast({ title: "Item Importado!", description: `${template.name} adicionado à loja.` });
+         toast({ title: "Item Importado!", description: `${template.name} adicionado à loja com estatísticas.` });
          queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
      }
   };
@@ -278,7 +267,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
 
   const handleSendLoot = async (charId: string) => {
     if (!itemToSend) return;
-
     const char = characters.find(c => c.id === charId);
     if (!char) return;
 
@@ -287,7 +275,8 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       name: itemToSend.name,
       quantity: 1,
       weight: itemToSend.weight,
-      description: itemToSend.description || "Presente do Mestre"
+      description: itemToSend.description || "Presente do Mestre",
+      data: itemToSend.data || {} // Passa os dados do item para o jogador
     };
 
     const currentInventory = (char.data as any).inventory || [];
@@ -296,9 +285,8 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
 
     const { error } = await supabase.from("characters").update({ data: newData }).eq("id", charId);
 
-    if (error) {
-      toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
-    } else {
+    if (error) toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
+    else {
       toast({ title: "Item Enviado!", description: `${itemToSend.name} enviado para ${char.name}.` });
       await supabase.from("chat_messages").insert({
         table_id: tableId,
@@ -352,7 +340,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                 <div className="col-span-5 flex gap-1">
                     <Button onClick={handleAddItem} className="flex-1"><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
                     
-                    {/* BOTÃO IMPORTAR DATABASE */}
                     <ItemSelectorDialog 
                         tableId={tableId} 
                         categories={['weapon', 'armor', 'consumable', 'general', 'material', 'mystic', 'service', 'mount']} 
@@ -374,7 +361,11 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
            {items.map(item => (
              <div key={item.id} className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/10 text-sm">
                 <div className="flex-1">
-                   <div className="font-bold">{item.name}</div>
+                   <div className="font-bold flex items-center gap-2">
+                        {item.name}
+                        {item.data?.damage && <span className="text-[10px] bg-background border px-1 rounded text-muted-foreground">Dano: {item.data.damage}</span>}
+                        {item.data?.protection && <span className="text-[10px] bg-background border px-1 rounded text-muted-foreground">Prot: {item.data.protection}</span>}
+                   </div>
                    <div className="text-xs text-muted-foreground">{item.description}</div>
                 </div>
                 <div className="flex items-center gap-4 text-right">

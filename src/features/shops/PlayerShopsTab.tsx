@@ -12,6 +12,11 @@ import { convertFromOrtegas, convertToOrtegas, formatPrice } from "@/lib/economy
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+// Interface estendida
+interface ExtendedShopItem extends ShopItem {
+  data?: any;
+}
+
 const fetchShops = async (tableId: string) => {
   const { data } = await supabase.from("shops").select("*").eq("table_id", tableId);
   return data as Shop[];
@@ -19,7 +24,7 @@ const fetchShops = async (tableId: string) => {
 
 const fetchShopItems = async (shopId: string) => {
   const { data } = await supabase.from("shop_items").select("*").eq("shop_id", shopId);
-  return data as ShopItem[];
+  return data as ExtendedShopItem[];
 };
 
 const fetchMyCharacter = async (userId: string, tableId: string) => {
@@ -31,9 +36,6 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedShopId, setSelectedShopId] = useState<string | null>(null);
-  
-  // Removemos o estado 'isBuying' bloqueante para dar sensação de fluidez, 
-  // ou usamos apenas para desativar o botão momentaneamente sem loading spinner.
   const [buyingId, setBuyingId] = useState<string | null>(null);
 
   const { data: shops = [] } = useQuery({ queryKey: ['shops', tableId], queryFn: () => fetchShops(tableId) });
@@ -47,7 +49,7 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
   const currentMoney = character ? (character.data as any).money : { taler:0, shekel:0, ortega:0 };
   const totalPlayerOrtegas = convertToOrtegas(currentMoney);
 
-  const handleBuy = async (item: ShopItem) => {
+  const handleBuy = async (item: ExtendedShopItem) => {
     if (!character) return;
     
     const price = parseInt(item.price as any) || 0;
@@ -65,8 +67,6 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
     setBuyingId(item.id);
 
     // --- LÓGICA OTIMISTA ---
-    
-    // 1. Calcular os novos dados
     const newTotalOrtegas = playerMoney - price;
     const newMoney = convertFromOrtegas(newTotalOrtegas);
 
@@ -75,7 +75,8 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
       name: item.name,
       quantity: 1,
       weight: item.weight,
-      description: item.description
+      description: item.description,
+      data: item.data || {} // IMPORTANTE: Passar os dados (stats) para o inventário!
     };
     
     const currentInventory = (character.data as any).inventory || [];
@@ -87,42 +88,29 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
       inventory: newInventory 
     };
 
-    // 2. Atualizar a CACHE instantaneamente (O truque de velocidade!)
     const queryKey = ['my_character_money', tableId, userId];
-    
-    // Cancelar quaisquer refetches em andamento para não sobrescrever o nosso update otimista
     await queryClient.cancelQueries({ queryKey });
-
-    // Guardar o estado anterior em caso de erro
     const previousCharacter = queryClient.getQueryData(queryKey);
 
-    // Atualizar a UI imediatamente
     queryClient.setQueryData(queryKey, (old: any) => {
        if (!old) return old;
-       return {
-         ...old,
-         data: newData
-       };
+       return { ...old, data: newData };
     });
 
     toast({ title: "Item comprado!", description: `-${formatPrice(price)}. ${item.name} adicionado.` });
 
-    // 3. Enviar para o Servidor (em background)
     const { error } = await supabase.from("characters").update({ data: newData }).eq("id", character.id);
 
     if (error) {
-      // Se falhar, reverte para o estado anterior
-      toast({ title: "Erro na compra", description: "A compra falhou. O dinheiro foi devolvido.", variant: "destructive" });
+      toast({ title: "Erro na compra", description: "A compra falhou.", variant: "destructive" });
       queryClient.setQueryData(queryKey, previousCharacter);
     } else {
-      // Se der certo, manda a mensagem no chat (sem esperar resposta)
       supabase.from("chat_messages").insert({
         table_id: tableId,
         user_id: userId,
         message: `💰 **${character.name}** comprou **${item.name}** por ${formatPrice(price)}.`,
         message_type: "info"
       }).then(() => {
-         // Invalida apenas para garantir consistência final, mas o utilizador já viu a mudança
          queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
       });
     }
@@ -178,9 +166,17 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
                             <div>
                                 <div className="flex justify-between items-start">
                                     <span className="font-bold">{item.name}</span>
-                                    <Badge variant="outline" className="font-mono">{item.weight} <Weight className="w-3 h-3 ml-1"/></Badge>
+                                    <Badge variant="outline" className="font-mono text-[10px] h-5">{item.weight} <Weight className="w-3 h-3 ml-1"/></Badge>
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
+                                
+                                {/* EXIBIÇÃO DOS STATS NO CARD DO JOGADOR */}
+                                <div className="flex gap-1.5 mt-1 flex-wrap">
+                                     {item.data?.damage && <span className="text-[10px] border px-1.5 py-0.5 rounded bg-background/50 text-muted-foreground">Dano: {item.data.damage}</span>}
+                                     {item.data?.protection && <span className="text-[10px] border px-1.5 py-0.5 rounded bg-background/50 text-muted-foreground">Prot: {item.data.protection}</span>}
+                                     {item.data?.quality && <span className="text-[10px] border px-1.5 py-0.5 rounded bg-background/50 text-muted-foreground">{item.data.quality}</span>}
+                                </div>
+
+                                <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{item.description}</p>
                             </div>
                             <div className="mt-4 flex justify-between items-center">
                                 <span className={`font-bold text-lg ${canAfford ? "text-accent" : "text-destructive"}`}>
