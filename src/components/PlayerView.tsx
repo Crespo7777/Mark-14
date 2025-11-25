@@ -10,12 +10,12 @@ import {
   LogOut, 
   Menu, 
   X, 
-  Users,
-  ShoppingBag,
-  BookOpen,
-  Map as MapIcon,
-  Maximize,
-  Minimize
+  Users, 
+  ShoppingBag, 
+  BookOpen, 
+  Map as MapIcon, 
+  Maximize, 
+  Minimize 
 } from "lucide-react";
 
 // Componentes
@@ -36,7 +36,7 @@ import { Card } from "@/components/ui/card";
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"; // <-- CORREÇÃO: Importação adicionada
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface PlayerViewProps {
   tableId: string;
@@ -79,8 +79,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_states', filter: `table_id=eq.${tableId}` }, 
         (payload: any) => {
              setActiveSceneId(payload.new.current_scene_id);
-             // Opcional: Se o mestre ativar uma cena, força a entrada no modo imersivo?
-             // setMode('immersive'); // Descomente se quiser forçar
         })
         .subscribe();
         
@@ -137,8 +135,9 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
   }
 
   // --- RENDERIZAÇÃO: MODO IMERSIVO (VTT) ---
+  // CORREÇÃO AQUI: Removido "flex flex-col" para evitar overflow lateral do chat
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-700 z-50">
+    <div className="fixed inset-0 bg-black overflow-hidden animate-in fade-in zoom-in-95 duration-700 z-50">
         
         {/* CAMADA 1: FUNDO E MAPA */}
         <VttGridBackground className="absolute inset-0 z-0">
