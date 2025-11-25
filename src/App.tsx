@@ -13,21 +13,29 @@ import Dashboard from "./pages/Dashboard";
 import TableView from "./pages/TableView";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+// --- CORREÇÃO DE CONFIGURAÇÃO ---
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Evita recarregar dados só porque o utilizador clicou fora e voltou à janela
+      refetchOnWindowFocus: false, 
+      // Mantém os dados em cache por mais tempo antes de considerar "velhos"
+      staleTime: 1000 * 60 * 2, // 2 minutos
+      // Se falhar, tenta menos vezes para não bloquear a UI
+      retry: 1,
+    },
+  },
+});
 
-// Componente interno para usar o hook useNavigate (que só funciona dentro do BrowserRouter)
 const AppRoutes = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Escuta mudanças no estado de autenticação
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
-        // Limpa a cache do React Query quando o utilizador sai
         queryClient.clear();
         navigate("/auth");
       } else if (event === 'TOKEN_REFRESH_DELETED' || event === 'USER_DELETED') {
-         // Se o token for inválido ou user deletado, força o logout limpo
          await supabase.auth.signOut();
          navigate("/auth");
       }

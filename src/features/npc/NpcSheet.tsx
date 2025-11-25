@@ -1,6 +1,6 @@
 // src/features/npc/NpcSheet.tsx
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -55,6 +55,10 @@ const NpcSheetInner = ({
   const { form, isReadOnly, isDirty, isSaving, saveSheet, programmaticSave } = useNpcSheet();
   const { toast } = useToast();
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
+  
+  // --- CORREÇÃO 2: Estado Controlado da Aba ---
+  const [activeTab, setActiveTab] = useState("details");
+
   const [name, race, occupation] = form.watch(["name", "race", "occupation"]);
 
   useEffect(() => {
@@ -118,9 +122,9 @@ const NpcSheetInner = ({
 
         <Form {...form}>
           <form onSubmit={(e) => e.preventDefault()} className="flex-1 overflow-y-auto">
-            <Tabs defaultValue="details" className="w-full">
+            {/* --- CORREÇÃO 2: Tabs com value/onValueChange --- */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="m-4 ml-4 flex flex-wrap h-auto">
-                {/* --- ORDEM DO MENU CORRIGIDA --- */}
                 <TabsTrigger value="details">Detalhes</TabsTrigger>
                 <TabsTrigger value="attributes">Atributos</TabsTrigger>
                 <TabsTrigger value="combat_equip">Combate & Equip.</TabsTrigger>
@@ -166,24 +170,41 @@ const NpcSheetInner = ({
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const queryClient = useQueryClient();
 
-  const defaults = getDefaultNpcSheetData(initialNpc.name);
-  const mergedData = {
-    ...defaults,
-    ...(initialNpc.data as any),
-    attributes: { ...defaults.attributes, ...((initialNpc.data as any)?.attributes || {}) },
-    combat: { ...defaults.combat, ...((initialNpc.data as any)?.combat || {}) },
-    armors: (initialNpc.data as any)?.armors || defaults.armors,
-    inventory: (initialNpc.data as any)?.inventory || defaults.inventory,
-  };
-  mergedData.name = (initialNpc.data as any)?.name || initialNpc.name || defaults.name;
-  mergedData.race = (initialNpc.data as any)?.race || defaults.race;
-  mergedData.occupation = (initialNpc.data as any)?.occupation || defaults.occupation;
+  // --- CORREÇÃO 3: Estabilização dos Dados com useMemo ---
+  const validatedData = useMemo(() => {
+      const defaults = getDefaultNpcSheetData(initialNpc.name);
+      const rawData = initialNpc.data as any;
 
-  const parsedData = npcSheetSchema.safeParse(mergedData);
-  if (!parsedData.success) {
-    console.warn("Aviso ao parsear dados NPC.", parsedData.error.errors);
-  }
-  const validatedData = parsedData.success ? parsedData.data : mergedData;
+      const mergedData = {
+        ...defaults,
+        ...rawData,
+        // Garante que objetos aninhados existam
+        attributes: { ...defaults.attributes, ...(rawData?.attributes || {}) },
+        combat: { ...defaults.combat, ...(rawData?.combat || {}) },
+        armors: rawData?.armors || [],
+        inventory: rawData?.inventory || [],
+        weapons: rawData?.weapons || [],
+        abilities: rawData?.abilities || [],
+        traits: rawData?.traits || [],
+      };
+      
+      // Atualiza campos raiz se existirem
+      if(rawData?.name) mergedData.name = rawData.name;
+      else mergedData.name = initialNpc.name;
+      
+      if(rawData?.race) mergedData.race = rawData.race;
+      if(rawData?.occupation) mergedData.occupation = rawData.occupation;
+
+      // Validação silenciosa
+      const parsedData = npcSheetSchema.safeParse(mergedData);
+      if (!parsedData.success) {
+        console.warn("Aviso ao parsear dados NPC.", parsedData.error.errors);
+        return mergedData;
+      }
+      return parsedData.data;
+  }, [initialNpc]); // Só recalcula se initialNpc mudar (vindo do React Query)
+  
+  // Atualiza a referência local para consistência
   initialNpc.data = validatedData;
   
   const handleSave = async (data: NpcSheetData) => {

@@ -44,8 +44,6 @@ export const CharacterSheetProvider = ({
   const { toast } = useToast();
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
-  // --- 1. Refs para evitar 'stale state' no callback do watch ---
-  // O Ref guarda o valor ATUAL do 'isSaving'
   const isSavingRef = useRef(isSaving);
   useEffect(() => {
     isSavingRef.current = isSaving;
@@ -58,12 +56,17 @@ export const CharacterSheetProvider = ({
 
   const { isDirty } = form.formState;
 
-  // --- 2. Callbacks de salvamento (sem dependência de 'isSaving') ---
+  // --- CORREÇÃO: Reset Inteligente ---
   const handleSaveSuccess = useCallback((data: CharacterSheetData) => {
-    form.reset(data); // "Limpa" o formulário (isDirty = false)
-    toast({ title: "Ficha Salva!" });
+    // keepValues: true -> Não apaga o que o utilizador escreveu
+    form.reset(data, { 
+      keepValues: true, 
+      keepDirty: false,
+      keepErrors: true,
+      keepTouched: true
+    }); 
     setIsSaving(false);
-  }, [form, toast]);
+  }, [form]); 
 
   const handleSaveInvalid = useCallback((errors: any) => {
     console.error("Erros de validação:", errors);
@@ -85,9 +88,7 @@ export const CharacterSheetProvider = ({
     setIsSaving(false);
   }, [toast]);
 
-  // Save Programático (Auto-save ou diálogos)
   const programmaticSave = useCallback(async () => {
-    // Não verifica 'isSaving' aqui, o 'caller' (timer) é que verifica
     setIsSaving(true);
     try {
       const currentData = form.getValues();
@@ -98,32 +99,28 @@ export const CharacterSheetProvider = ({
     }
   }, [form, onSave, handleSaveSuccess, handleSaveError]);
   
-  // Ref para a função (para o timer ter sempre a função mais recente)
   const programmaticSaveRef = useRef(programmaticSave);
   useEffect(() => {
     programmaticSaveRef.current = programmaticSave;
   }, [programmaticSave]);
 
-  // Save Manual (Botão "Salvar")
   const saveSheet = useCallback(
     () => form.handleSubmit(async (data) => {
-      // Usa o Ref para a verificação
       if (isSavingRef.current) return; 
       setIsSaving(true);
       try {
         await onSave(data);
         handleSaveSuccess(data);
+        toast({ title: "Ficha Salva!" });
       } catch (error) {
         handleSaveError(error);
       }
     }, handleSaveInvalid)(),
-    [form, onSave, handleSaveSuccess, handleSaveError, handleSaveInvalid]
+    [form, onSave, handleSaveSuccess, handleSaveError, handleSaveInvalid, toast]
   );
   
-  // --- 3. Efeito de Auto-Save (Corrigido) ---
   useEffect(() => {
     const subscription = form.watch((value, { name, type }) => {
-      // Apenas acionar se for uma mudança de utilizador (ex: 'onChange')
       if (!type) return;
 
       if (debounceTimer.current) {
@@ -131,12 +128,11 @@ export const CharacterSheetProvider = ({
       }
 
       debounceTimer.current = setTimeout(() => {
-        // Usa os Refs para aceder aos valores ATUAIS
         if (form.formState.isDirty && !isSavingRef.current) {
           console.log("Auto-saving character sheet...");
-          programmaticSaveRef.current(); // Chama a função pelo ref
+          programmaticSaveRef.current(); 
         }
-      }, 2000); // 2 segundos
+      }, 3000);
     });
 
     return () => {
@@ -145,9 +141,7 @@ export const CharacterSheetProvider = ({
         clearTimeout(debounceTimer.current);
       }
     };
-  // --- 4. Dependência estável (só corre 1 vez) ---
   }, [form]); 
-
 
   return (
     <CharacterSheetContext.Provider
@@ -157,7 +151,7 @@ export const CharacterSheetProvider = ({
         isDirty,
         isSaving,
         saveSheet,
-        programmaticSave, // Mantemos este aqui para o 'WeaponAttackDialog', etc.
+        programmaticSave,
       }}
     >
       {children}
@@ -168,9 +162,7 @@ export const CharacterSheetProvider = ({
 export const useCharacterSheet = () => {
   const context = useContext(CharacterSheetContext);
   if (!context) {
-    throw new Error(
-      "useCharacterSheet deve ser usado dentro de um CharacterSheetProvider",
-    );
+    throw new Error("useCharacterSheet deve ser usado dentro de um CharacterSheetProvider");
   }
   return context;
 };

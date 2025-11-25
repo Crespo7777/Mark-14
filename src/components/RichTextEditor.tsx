@@ -3,6 +3,7 @@
 import { useEditor, EditorContent, Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
+import { useEffect } from "react";
 import {
   Bold,
   Italic,
@@ -14,16 +15,10 @@ import {
   Heading2,
   Heading3,
   Quote,
-  // Smile (ícone) foi removido
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 import { Separator } from "@/components/ui/separator";
 
-// --- TODAS AS IMPORTAÇÕES DE ÍCONE FORAM REMOVIDAS ---
-
-// --- COMPONENTE IconPicker FOI REMOVIDO ---
-
-// --- Barra de Ferramentas (Simplificada) ---
 const Toolbar = ({ editor }: { editor: Editor | null }) => {
   if (!editor) {
     return null;
@@ -109,13 +104,10 @@ const Toolbar = ({ editor }: { editor: Editor | null }) => {
       >
         <Code className="w-4 h-4" />
       </Toggle>
-
-      {/* --- O SELETOR DE ÍCONE FOI REMOVIDO DAQUI --- */}
     </div>
   );
 };
 
-// --- O Editor Principal (Atualizado) ---
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -132,7 +124,6 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
       Placeholder.configure({
         placeholder: placeholder || "Comece a escrever...",
       }),
-      // --- A EXTENSÃO DE ÍCONE FOI REMOVIDA DAQUI ---
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -146,10 +137,22 @@ export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorP
     },
   });
 
-  // Corrigir o problema de o conteúdo não atualizar quando o 'value' muda por fora
-  if (editor && editor.getHTML() !== value && value.trim() === '') {
-    editor.commands.setContent(value, false);
-  }
+  // --- CORREÇÃO DE ESTABILIDADE ---
+  useEffect(() => {
+    if (editor && value) {
+       const currentContent = editor.getHTML();
+       // Se o valor externo mudou e é diferente do atual no editor
+       if (currentContent !== value) {
+          // Ignora se a diferença for apenas tags vazias
+          if (value === '<p></p>' && currentContent === '') return;
+          
+          // Só atualiza se o editor NÃO estiver focado (evita pulos enquanto digita)
+          if (!editor.isFocused) {
+             editor.commands.setContent(value);
+          }
+       }
+    }
+  }, [value, editor]);
 
   return (
     <div className="flex flex-col">

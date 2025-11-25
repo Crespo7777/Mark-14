@@ -64,11 +64,21 @@ export const NpcSheetProvider = ({
 
   const { isDirty } = form.formState;
 
+  // --- CORREÇÃO CRÍTICA: Reset Inteligente ---
   const handleSaveSuccess = useCallback((data: NpcSheetData) => {
-    form.reset(data); 
-    toast({ title: "Ficha de NPC Salva!" });
+    // keepValues: true -> Mantém o que o utilizador escreveu no input
+    // keepDirty: false -> Marca como "limpo" (salvo) para o RHF
+    form.reset(data, { 
+      keepValues: true, 
+      keepDirty: false,
+      keepErrors: true,
+      keepTouched: true 
+    }); 
+    
+    // Toast removido para não spamar no auto-save (opcional)
+    // toast({ title: "Ficha de NPC Salva!" });
     setIsSaving(false);
-  }, [form, toast]);
+  }, [form]); // Sem dependência de 'toast' para evitar re-criação
 
   const handleSaveInvalid = useCallback((errors: any) => {
     console.error("Erros de validação (NPC):", errors);
@@ -95,6 +105,7 @@ export const NpcSheetProvider = ({
     if (isReadOnly) return; // Jogadores não salvam NPCs
     setIsSaving(true);
     try {
+      // Obtém os dados ATUAIS do formulário (incluindo o que acabou de ser digitado)
       const currentData = form.getValues();
       await onSave(currentData);
       handleSaveSuccess(currentData);
@@ -116,11 +127,12 @@ export const NpcSheetProvider = ({
       try {
         await onSave(data);
         handleSaveSuccess(data);
+        toast({ title: "Ficha Salva!" }); // Toast apenas no manual
       } catch (error) {
         handleSaveError(error);
       }
     }, handleSaveInvalid)(),
-    [isReadOnly, form, onSave, handleSaveSuccess, handleSaveError, handleSaveInvalid]
+    [isReadOnly, form, onSave, handleSaveSuccess, handleSaveError, handleSaveInvalid, toast]
   );
 
   // Auto-Save
@@ -128,6 +140,7 @@ export const NpcSheetProvider = ({
     if (isReadOnly) return;
 
     const subscription = form.watch((value, { name, type }) => {
+      // Apenas acionar se for uma mudança de utilizador (ex: 'onChange')
       if (!type) return; 
       
       if (debounceTimer.current) {
@@ -139,7 +152,7 @@ export const NpcSheetProvider = ({
           console.log("Auto-saving NPC sheet...");
           programmaticSaveRef.current(); 
         }
-      }, 2000); 
+      }, 3000); // 3 segundos para ser menos agressivo
     });
 
     return () => {

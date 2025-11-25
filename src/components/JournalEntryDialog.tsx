@@ -17,7 +17,6 @@ import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// --- 1. IMPORTAR O NOVO EDITOR (Lazy) ---
 const RichTextEditor = lazy(() =>
   import("./RichTextEditor").then(module => ({ default: module.RichTextEditor }))
 );
@@ -28,10 +27,8 @@ interface JournalEntryDialogProps {
   onEntrySaved: () => void;
   entry?: any;
   isPlayerNote?: boolean;
-  // --- 2. NOVAS PROPS PARA LIGAÇÃO ---
   characterId?: string;
   npcId?: string;
-  // --- FIM DAS NOVAS PROPS ---
 }
 
 export const JournalEntryDialog = ({
@@ -52,22 +49,25 @@ export const JournalEntryDialog = ({
   const { toast } = useToast();
   const isEditing = !!entry;
 
-  // Define se o switch "Compartilhar" deve aparecer
   const canShare = !isPlayerNote && !characterId && !npcId;
 
+  // --- CORREÇÃO: Reset Controlado ---
   useEffect(() => {
     if (open) {
-      if (isEditing) {
-        setTitle(entry.title);
+      if (isEditing && entry) {
+        setTitle(entry.title || "");
         setContent(entry.content || "");
-        setIsShared(entry.is_shared);
+        setIsShared(entry.is_shared || false);
       } else {
-        setTitle("");
-        setContent("");
-        setIsShared(false);
+        // Se for criar novo, limpa apenas se não estivermos já a editar (segurança)
+        if (!isEditing) {
+            setTitle("");
+            setContent("");
+            setIsShared(false);
+        }
       }
     }
-  }, [entry, isEditing, open]);
+  }, [open, entry?.id]); // Dependência específica para evitar loops
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -91,7 +91,7 @@ export const JournalEntryDialog = ({
         .update({
           title: title.trim(),
           content: contentToSave,
-          is_shared: canShare ? isShared : entry.is_shared, // Só atualiza se 'canShare'
+          is_shared: canShare ? isShared : entry.is_shared,
         })
         .eq("id", entry.id);
 
@@ -103,7 +103,6 @@ export const JournalEntryDialog = ({
         setOpen(false);
       }
     } else {
-      // --- 3. LÓGICA DE CRIAÇÃO ATUALIZADA ---
       const entryData: any = {
         table_id: tableId,
         title: title.trim(),
@@ -121,10 +120,8 @@ export const JournalEntryDialog = ({
       } else if (npcId) {
         entryData.npc_id = npcId;
       } else {
-        // É uma nota do Mestre, verificar se é partilhada
         entryData.is_shared = isShared;
       }
-      // --- FIM DA LÓGICA DE CRIAÇÃO ---
 
       const { error } = await supabase
         .from("journal_entries")
@@ -177,7 +174,6 @@ export const JournalEntryDialog = ({
           </div>
           <div className="space-y-2">
             <Label>Conteúdo</Label>
-            {/* --- 4. EDITOR COM CARREGAMENTO LAZY --- */}
             <Suspense fallback={editorFallback}>
               <RichTextEditor
                 value={content}
@@ -185,15 +181,12 @@ export const JournalEntryDialog = ({
                 placeholder="Descreva aqui os eventos, regras da casa..."
               />
             </Suspense>
-            {/* --- FIM DA ATUALIZAÇÃO --- */}
           </div>
         </div>
         
         <div className="pt-4 mt-2 border-t border-border/50">
           <div className="flex justify-between items-center">
-            
             <div className="flex gap-4 items-center">
-              {/* --- 5. LÓGICA DO SWITCH ATUALIZADA --- */}
               {canShare && (
                 <div className="flex items-center space-x-2">
                   <Switch id="is-shared" checked={isShared} onCheckedChange={setIsShared} />
