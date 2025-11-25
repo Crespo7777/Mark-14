@@ -93,6 +93,8 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const { data: characters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId],
     queryFn: () => fetchCharacters(tableId),
+    // CORREÇÃO: Mantém a lista estável durante atualizações para evitar que a ficha feche
+    placeholderData: (previousData) => previousData,
   });
 
   const { data: folders = [] } = useQuery({
@@ -103,7 +105,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
 
   // --- Ações (Delete, Duplicate, Archive, Move, Share) ---
-  // (Mantive a lógica original, apenas compactei para caber aqui, a lógica é idêntica)
   
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
@@ -207,7 +208,8 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
     </Suspense>
   );
 
-  if (isLoadingChars) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
+  // Se não houver dados (nem anteriores, nem novos) e estiver a carregar, mostra fallback.
+  if (isLoadingChars && characters.length === 0) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
 
   return (
     <>

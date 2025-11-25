@@ -3,6 +3,7 @@
 import { useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+// ... (mantenha os outros imports iguais)
 import {
   Card,
   CardContent,
@@ -89,6 +90,8 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
     queryKey: ['characters', tableId],
     queryFn: () => fetchPlayerCharacters(tableId),
     enabled: !!userId,
+    // CORREÇÃO: Evita que a lista pisque/resete ao salvar uma ficha
+    placeholderData: (previousData) => previousData, 
   });
 
   const { data: folders = [] } = useQuery({
@@ -137,7 +140,6 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const handleDuplicateCharacter = async (charToDuplicate: CharacterWithRelations) => {
     setDuplicating(true);
     const newName = `Cópia de ${charToDuplicate.name}`;
-    // Fetch limpo para garantir dados frescos
     const { data: fullCharData } = await supabase.from("characters").select("data").eq("id", charToDuplicate.id).single();
 
     if (!fullCharData) {
@@ -219,7 +221,8 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
     </Suspense>
   );
 
-  if (isLoadingChars) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
+  // Se não tiver dados E estiver carregando, mostra fallback. Se tiver dados (mesmo antigos), mostra a lista.
+  if (isLoadingChars && allCharacters.length === 0) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
 
   return (
     <>
