@@ -17,8 +17,6 @@ export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
 };
 
-// --- SOLUÇÃO DO "0" PERSISTENTE ---
-// Exportamos para usar também nos NPCs
 export const numeric = z.union([z.string(), z.number()]).transform((val) => {
   if (val === "" || val === "-") return 0; 
   const n = Number(val);
@@ -109,13 +107,15 @@ export const traitSchema = z.object({
   description: z.string().default(""),
 });
 
-// 10. INVENTÁRIO
+// 10. INVENTÁRIO (ATUALIZADO COM 'data')
 export const inventoryItemSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default(""),
   quantity: numeric.default(1),
   weight: numeric.default(0), 
   description: z.string().default(""),
+  // Novo campo para guardar dados extras (dano, categoria, etc.)
+  data: z.record(z.any()).optional().default({}), 
 });
 
 // 11. PROJÉTEIS

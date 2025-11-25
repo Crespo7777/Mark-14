@@ -22,8 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Shield, Sword, Heart, Dices } from "lucide-react";
-import { getDefaultWeapon, getDefaultArmor } from "../character.schema";
+import { Plus, Trash2, Shield, Sword, Heart, Dices, ArrowDownToLine } from "lucide-react";
+import { getDefaultWeapon, getDefaultArmor, getDefaultInventoryItem } from "../character.schema";
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
 import { attributesList } from "../character.constants";
 import { Separator } from "@/components/ui/separator";
@@ -42,7 +42,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { useTableContext } from "@/features/table/TableContext";
-import { QualityInfoButton } from "@/components/QualityInfoButton"; // <-- IMPORTADO
+import { QualityInfoButton } from "@/components/QualityInfoButton";
 
 type AttackRollData = {
   weaponName: string;
@@ -110,8 +110,6 @@ export const CombatEquipmentTab = () => {
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
   
-  // (O código de knownQualities foi removido pois o QualityInfoButton trata disso agora de forma mais limpa)
-
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({
     control: form.control,
     name: "weapons",
@@ -131,6 +129,59 @@ export const CombatEquipmentTab = () => {
     const newValue = Math.min(toughnessMax, currentToughness + amount);
     form.setValue("toughness.current", newValue, { shouldDirty: true });
   };
+
+  // --- FUNÇÕES DE DESEQUIPAR ---
+
+  const handleUnequipWeapon = (index: number) => {
+      const weapon = form.getValues(`weapons.${index}`);
+      
+      // Adicionar de volta ao inventário
+      const currentInv = form.getValues("inventory") || [];
+      const newItem = {
+          ...getDefaultInventoryItem(),
+          name: weapon.name,
+          description: weapon.quality_desc, // Preserva as notas da qualidade como descrição
+          quantity: 1,
+          weight: 1, // Assume peso padrão 1 (o jogador pode ajustar)
+          data: {
+              category: 'weapon',
+              damage: weapon.damage,
+              attackAttribute: weapon.attackAttribute,
+              quality: weapon.quality,
+              price: 0 // Valor padrão ou recuperar se possível
+          }
+      };
+      
+      form.setValue("inventory", [...currentInv, newItem], { shouldDirty: true });
+      removeWeapon(index);
+      toast({ title: "Desequipado", description: `${weapon.name} voltou para a mochila.` });
+  };
+
+  const handleUnequipArmor = (index: number) => {
+      const armor = form.getValues(`armors.${index}`);
+      
+      const currentInv = form.getValues("inventory") || [];
+      const newItem = {
+          ...getDefaultInventoryItem(),
+          name: armor.name,
+          description: armor.quality_desc,
+          quantity: 1,
+          weight: Number(armor.obstructive) || 1, // Usa a obstrutiva como peso aproximado
+          data: {
+              category: 'armor',
+              protection: armor.protection,
+              obstructive: armor.obstructive,
+              quality: armor.quality,
+              price: 0
+          }
+      };
+
+      form.setValue("inventory", [...currentInv, newItem], { shouldDirty: true });
+      removeArmor(index);
+      toast({ title: "Desequipado", description: `${armor.name} voltou para a mochila.` });
+  };
+
+  // --- FUNÇÕES DE ROLAGEM ---
 
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
@@ -203,6 +254,7 @@ export const CombatEquipmentTab = () => {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* CARTÃO DE VITALIDADE */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -264,6 +316,7 @@ export const CombatEquipmentTab = () => {
           </CardContent>
         </Card>
 
+        {/* CARTÃO DE CORRUPÇÃO */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -373,6 +426,11 @@ export const CombatEquipmentTab = () => {
                   </AccordionTrigger>
 
                   <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {/* Botão Desequipar */}
+                    <Button type="button" size="icon" variant="ghost" title="Desequipar" onClick={() => handleUnequipWeapon(index)}>
+                        <ArrowDownToLine className="w-4 h-4" />
+                    </Button>
+
                     <Button type="button" size="sm" variant="outline" onClick={() => handleAttackClick(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Atacar</span></Button>
                     <Button type="button" size="sm" variant="destructive" onClick={() => handleDamageClick(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Dano</span></Button>
                     <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeWeapon(index)}><Trash2 className="w-4 h-4" /></Button>
@@ -480,6 +538,11 @@ export const CombatEquipmentTab = () => {
                     </div>
                   </AccordionTrigger>
                   <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {/* Botão Desequipar */}
+                    <Button type="button" size="icon" variant="ghost" title="Desequipar" onClick={() => handleUnequipArmor(index)}>
+                        <ArrowDownToLine className="w-4 h-4" />
+                    </Button>
+
                     <Button type="button" size="sm" variant="outline" onClick={() => handleProtectionRoll(index)}><Dices className="w-4 h-4" /><span className="hidden sm:inline ml-2">Rolar</span></Button>
                     <Button type="button" size="icon" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => removeArmor(index)}><Trash2 className="w-4 h-4" /></Button>
                   </div>

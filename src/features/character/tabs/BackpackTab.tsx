@@ -30,10 +30,23 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { SharedInventoryList } from "@/components/SharedInventoryList";
 import { SharedProjectileList } from "@/components/SharedProjectileList";
+import { useToast } from "@/hooks/use-toast";
+import { 
+  getDefaultWeapon, 
+  getDefaultArmor, 
+  InventoryItem 
+} from "../character.schema";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
 
 const MoneyManager = () => {
   const { form: { setValue, getValues } } = useCharacterSheet();
-  // CORREÇÃO: Estado string
   const [amount, setAmount] = useState("1");
   const [currency, setCurrency] = useState<"taler" | "shekel" | "ortega">("ortega");
 
@@ -62,12 +75,7 @@ const MoneyManager = () => {
   return (
     <div className="space-y-3 pt-2">
       <div className="flex gap-2">
-        <Input 
-            type="number" 
-            className="w-20 h-9" 
-            value={amount} 
-            onChange={(e) => setAmount(e.target.value)} 
-        />
+        <Input type="number" className="w-20 h-9" value={amount} onChange={(e) => setAmount(e.target.value)} />
         <Select value={currency} onValueChange={(v) => setCurrency(v as any)}>
           <SelectTrigger className="w-full h-9"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -94,12 +102,92 @@ export const BackpackTab = () => {
     encumbrancePenalty,
     currentExperience,
   } = useCharacterCalculations();
+  const { toast } = useToast();
+
+  const [equipDialogOpen, setEquipDialogOpen] = useState(false);
+  const [itemToEquipIndex, setItemToEquipIndex] = useState<number | null>(null);
 
   const [taler, shekel, ortega] = form.watch(["money.taler", "money.shekel", "money.ortega"]);
   const totalOrtegas = (Number(taler)||0) * 100 + (Number(shekel)||0) * 10 + (Number(ortega)||0);
   
   const weightPercentage = Math.min(100, (currentWeight / (maxEncumbrance || 1)) * 100);
   const weightBarClass = currentWeight >= maxEncumbrance ? "bg-destructive" : (currentWeight > encumbranceThreshold ? "bg-amber-500" : "bg-primary");
+
+  const handleEquipClick = (index: number) => {
+      const item = form.getValues(`inventory.${index}`);
+      const category = item.data?.category;
+
+      // Se soubermos o que é, equipamos direto
+      if (category === 'weapon') {
+          performEquip(index, 'weapon');
+      } else if (category === 'armor') {
+          performEquip(index, 'armor');
+      } else {
+          // Se não soubermos, perguntamos ao utilizador
+          setItemToEquipIndex(index);
+          setEquipDialogOpen(true);
+      }
+  };
+
+  const performEquip = (index: number, type: 'weapon' | 'armor') => {
+      const item = form.getValues(`inventory.${index}`);
+      const currentWeapons = form.getValues("weapons") || [];
+      
+      // Limite de armas
+      if (type === 'weapon' && currentWeapons.length >= 2) {
+          toast({ 
+              title: "Limite Atingido", 
+              description: "Você já tem 2 armas equipadas. Desequipe uma primeiro.", 
+              variant: "destructive" 
+          });
+          setEquipDialogOpen(false);
+          return;
+      }
+
+      // Reduzir quantidade ou remover da mochila
+      const currentQty = Number(item.quantity);
+      if (currentQty > 1) {
+          form.setValue(`inventory.${index}.quantity`, currentQty - 1, { shouldDirty: true });
+      } else {
+          // Remove o item da lista
+          const currentInv = form.getValues("inventory");
+          const newInv = currentInv.filter((_, i) => i !== index);
+          form.setValue("inventory", newInv, { shouldDirty: true });
+      }
+
+      // Adicionar à lista correta
+      if (type === 'weapon') {
+          const newWeapon = {
+              ...getDefaultWeapon(),
+              name: item.name,
+              // Tenta recuperar dados, senão usa defaults
+              damage: item.data?.damage || "",
+              attribute: item.data?.attribute || "",
+              attackAttribute: item.data?.attackAttribute || "",
+              quality: item.data?.quality || "",
+              quality_desc: item.description || "", // A descrição original vai para as notas da qualidade
+          };
+          const newWeapons = [...currentWeapons, newWeapon];
+          form.setValue("weapons", newWeapons, { shouldDirty: true });
+          toast({ title: "Arma Equipada!", description: `${item.name} movida para Combate.` });
+      } else {
+          const currentArmors = form.getValues("armors") || [];
+          const newArmor = {
+              ...getDefaultArmor(),
+              name: item.name,
+              protection: item.data?.protection || "",
+              obstructive: Number(item.weight) || 0, // Armadura usa peso como estorvo muitas vezes
+              quality: item.data?.quality || "",
+              quality_desc: item.description || "",
+              equipped: true
+          };
+          const newArmors = [...currentArmors, newArmor];
+          form.setValue("armors", newArmors, { shouldDirty: true });
+          toast({ title: "Armadura Equipada!", description: `${item.name} movida para Combate.` });
+      }
+      
+      setEquipDialogOpen(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -170,8 +258,30 @@ export const BackpackTab = () => {
 
       <div className="space-y-6">
         <SharedProjectileList control={form.control} name="projectiles" />
-        <SharedInventoryList control={form.control} name="inventory" title="Mochila & Equipamento" />
+        
+        {/* Passamos a função de equipar aqui */}
+        <SharedInventoryList 
+            control={form.control} 
+            name="inventory" 
+            title="Mochila & Equipamento" 
+            onEquipItem={handleEquipClick}
+        />
       </div>
+
+      {/* DIALOGO PARA ESCOLHER O TIPO DE EQUIPAMENTO (Se não tiver categoria definida) */}
+      <Dialog open={equipDialogOpen} onOpenChange={setEquipDialogOpen}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Equipar Item</DialogTitle>
+                  <DialogDescription>Como deseja equipar este item?</DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex gap-2 justify-end">
+                  <Button variant="secondary" onClick={() => performEquip(itemToEquipIndex!, 'armor')}>Como Armadura</Button>
+                  <Button onClick={() => performEquip(itemToEquipIndex!, 'weapon')}>Como Arma</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
     </div>
   );
 };

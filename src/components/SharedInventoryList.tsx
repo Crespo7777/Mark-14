@@ -18,11 +18,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Backpack } from "lucide-react";
+import { Plus, Trash2, Backpack, ShieldCheck } from "lucide-react";
 import { getDefaultInventoryItem } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTableContext } from "@/features/table/TableContext";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 const InventoryItemDisplay = ({ 
   index, 
@@ -30,7 +31,8 @@ const InventoryItemDisplay = ({
   control, 
   name, 
   remove, 
-  isReadOnly 
+  isReadOnly,
+  onEquip
 }: { 
   index: number; 
   fieldId: string; 
@@ -38,6 +40,7 @@ const InventoryItemDisplay = ({
   name: string; 
   remove: (index: number) => void; 
   isReadOnly: boolean; 
+  onEquip?: (index: number) => void;
 }) => {
   
   const itemName = useWatch({ control, name: `${name}.${index}.name` });
@@ -59,7 +62,25 @@ const InventoryItemDisplay = ({
           </div>
         </AccordionTrigger>
 
-        <div className="flex pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1 pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {onEquip && (
+             <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/20"
+                    onClick={() => onEquip(index)}
+                    disabled={isReadOnly}
+                  >
+                    <ShieldCheck className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Equipar (Mover para Combate)</TooltipContent>
+             </Tooltip>
+          )}
+          
           <Button
             type="button"
             size="icon"
@@ -95,7 +116,6 @@ const InventoryItemDisplay = ({
                 <FormItem>
                   <FormLabel>Quantidade</FormLabel>
                   <FormControl>
-                    {/* CORREÇÃO: Input direto sem parseInt */}
                     <Input
                       type="number"
                       {...field}
@@ -111,9 +131,8 @@ const InventoryItemDisplay = ({
               name={`${name}.${index}.weight`}
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Peso (Obstrutivo)</FormLabel>
+                  <FormLabel>Peso</FormLabel>
                   <FormControl>
-                    {/* CORREÇÃO: Input direto sem parseInt */}
                     <Input
                       type="number"
                       {...field}
@@ -153,6 +172,7 @@ interface SharedInventoryListProps {
   name: string; 
   isReadOnly?: boolean;
   title?: string;
+  onEquipItem?: (index: number) => void; // Prop nova
 }
 
 export const SharedInventoryList = ({
@@ -160,6 +180,7 @@ export const SharedInventoryList = ({
   name,
   isReadOnly = false,
   title = "Inventário (Mochila)",
+  onEquipItem,
 }: SharedInventoryListProps) => {
   const [openItems, setOpenItems] = useState<string[]>([]);
   const { fields, append, remove } = useFieldArray({
@@ -179,7 +200,7 @@ export const SharedInventoryList = ({
         
         <ItemSelectorDialog 
             tableId={tableId} 
-            categories={['item', 'general', 'consumable', 'material', 'mystic', 'mount', 'service']} 
+            categories={['item', 'general', 'consumable', 'material', 'mystic', 'mount', 'service', 'weapon', 'armor']} 
             title="Adicionar Item"
             onSelect={(template) => {
                 if (template) {
@@ -191,7 +212,12 @@ export const SharedInventoryList = ({
                         ...getDefaultInventoryItem(),
                         name: template.name,
                         weight: template.weight,
-                        description: desc.trim()
+                        description: desc.trim(),
+                        // Guardamos os dados originais para poder equipar mais tarde!
+                        data: { 
+                            ...template.data, 
+                            category: template.category // Importante para saber se é arma ou armadura
+                        }
                     });
                 } else {
                     append(getDefaultInventoryItem());
@@ -227,6 +253,7 @@ export const SharedInventoryList = ({
                 name={name}
                 remove={remove}
                 isReadOnly={isReadOnly}
+                onEquip={onEquipItem}
               />
             );
           })}
