@@ -40,6 +40,31 @@ interface MasterViewProps {
   masterId: string;
 }
 
+const MasterDashboardTabs = ({ tableId }: { tableId: string }) => (
+    <Tabs defaultValue="characters" className="w-full h-full flex flex-col">
+        <div className="px-4 pt-2 border-b border-border/40 bg-muted/20">
+            <TabsList className="grid w-full grid-cols-7 h-auto p-1 gap-1 bg-transparent">
+                <TabsTrigger value="characters" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><UserSquare className="w-4 h-4"/> PCs</TabsTrigger>
+                <TabsTrigger value="npcs" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> NPCs</TabsTrigger>
+                <TabsTrigger value="journal" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><BookOpen className="w-4 h-4"/> Diário</TabsTrigger>
+                <TabsTrigger value="shops" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Store className="w-4 h-4"/> Lojas</TabsTrigger>
+                <TabsTrigger value="database" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Database className="w-4 h-4"/> DB</TabsTrigger>
+                <TabsTrigger value="media" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Clapperboard className="w-4 h-4"/> Studio</TabsTrigger>
+                <TabsTrigger value="players" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> Jog.</TabsTrigger>
+            </TabsList>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 bg-background/50">
+            <TabsContent value="characters" className="mt-0 h-full"><MasterCharactersTab tableId={tableId} /></TabsContent>
+            <TabsContent value="npcs" className="mt-0 h-full"><MasterNpcsTab tableId={tableId} /></TabsContent>
+            <TabsContent value="journal" className="mt-0 h-full"><MasterJournalTab tableId={tableId} /></TabsContent>
+            <TabsContent value="shops" className="mt-0 h-full"><MasterShopsTab tableId={tableId} /></TabsContent>
+            <TabsContent value="database" className="mt-0 h-full"><MasterDatabaseTab tableId={tableId} /></TabsContent>
+            <TabsContent value="media" className="mt-0 h-full"><MasterMediaTab tableId={tableId} /></TabsContent>
+            <TabsContent value="players" className="mt-0 h-full"><MasterPlayersTab tableId={tableId} /></TabsContent>
+        </div>
+    </Tabs>
+);
+
 export const MasterView = ({ tableId }: MasterViewProps) => {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -80,32 +105,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
       if (!error) toast({ title: "Token Adicionado", description: "Verifique o centro do mapa." });
   };
 
-  // --- MODO DASHBOARD (Menu Principal) ---
-  const TabContent = () => (
-    <Tabs defaultValue="characters" className="w-full h-full flex flex-col">
-        <div className="px-4 pt-2 border-b border-border/40 bg-muted/20">
-            <TabsList className="grid w-full grid-cols-7 h-auto p-1 gap-1 bg-transparent">
-                <TabsTrigger value="characters" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><UserSquare className="w-4 h-4"/> PCs</TabsTrigger>
-                <TabsTrigger value="npcs" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> NPCs</TabsTrigger>
-                <TabsTrigger value="journal" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><BookOpen className="w-4 h-4"/> Diário</TabsTrigger>
-                <TabsTrigger value="shops" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Store className="w-4 h-4"/> Lojas</TabsTrigger>
-                <TabsTrigger value="database" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Database className="w-4 h-4"/> DB</TabsTrigger>
-                <TabsTrigger value="media" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Clapperboard className="w-4 h-4"/> Studio</TabsTrigger>
-                <TabsTrigger value="players" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> Jog.</TabsTrigger>
-            </TabsList>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 bg-background/50">
-            <TabsContent value="characters" className="mt-0 h-full"><MasterCharactersTab tableId={tableId} /></TabsContent>
-            <TabsContent value="npcs" className="mt-0 h-full"><MasterNpcsTab tableId={tableId} /></TabsContent>
-            <TabsContent value="journal" className="mt-0 h-full"><MasterJournalTab tableId={tableId} /></TabsContent>
-            <TabsContent value="shops" className="mt-0 h-full"><MasterShopsTab tableId={tableId} /></TabsContent>
-            <TabsContent value="database" className="mt-0 h-full"><MasterDatabaseTab tableId={tableId} /></TabsContent>
-            <TabsContent value="media" className="mt-0 h-full"><MasterMediaTab tableId={tableId} /></TabsContent>
-            <TabsContent value="players" className="mt-0 h-full"><MasterPlayersTab tableId={tableId} /></TabsContent>
-        </div>
-    </Tabs>
-  );
-
   if (mode === 'dashboard') {
     return (
       <div className="space-y-6 p-6 pb-20 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
@@ -126,25 +125,20 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
           </div>
         </div>
         <div className="bg-card border rounded-xl shadow-sm min-h-[600px] overflow-hidden">
-             <TabContent />
+             <MasterDashboardTabs tableId={tableId} />
         </div>
       </div>
     );
   }
 
-  // --- MODO IMERSIVO (VTT) ---
   return (
     <div className="fixed inset-0 bg-black overflow-hidden font-sans text-foreground">
-        
-        {/* === CAMADA 0: MAPA === */}
         <div className="absolute inset-0 z-0">
              <VttGridBackground>
                  <SceneBoard sceneId={activeSceneId} isMaster={true} />
              </VttGridBackground>
         </div>
 
-        {/* === CAMADA 1: HUD SUPERIOR (Botões Painel/Cena) === */}
-        {/* Z-Index 40: Abaixo dos painéis laterais (z-90), Acima do mapa (z-0) */}
         <div className="fixed top-4 left-4 z-40 flex gap-2 pointer-events-auto">
             <Button 
                 variant="secondary" 
@@ -162,12 +156,7 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
             )}
         </div>
 
-        {/* === CAMADA 2: PAINÉIS LATERAIS (Deslizantes) === */}
-        {/* Z-Index 50 para o container (que tem pointer-events-none) */}
         <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
-            
-            {/* ESQUERDA: Sidebar de Gestão */}
-            {/* Z-Index 90: Fica ACIMA do HUD quando abre */}
             <div 
                 className={`
                     absolute top-0 left-0 bottom-0 w-[350px] 
@@ -184,8 +173,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
                 />
             </div>
 
-            {/* DIREITA: Chat */}
-            {/* Z-Index 90: Fica ACIMA do HUD quando abre */}
             <div 
                 className={`
                     absolute top-4 right-4 bottom-24 w-80 
@@ -198,8 +185,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
             </div>
         </div>
 
-        {/* === CAMADA 3: TOOLBAR (FIXED, NO FUNDO) === */}
-        {/* Z-Index 60: Acima do HUD, Abaixo dos Painéis se eles a taparem */}
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] pointer-events-auto">
             <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 flex items-center gap-2 transition-transform hover:scale-105">
                     <MasterToolbar 

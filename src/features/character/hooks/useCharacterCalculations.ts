@@ -2,9 +2,8 @@
 
 import { useMemo } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { roundUpDiv, Armor, InventoryItem } from "../character.schema";
+import { roundUpDiv, Armor, InventoryItem, Weapon } from "../character.schema";
 
-// Helper para garantir número nos cálculos
 const num = (val: any) => Number(val) || 0;
 
 export const useCharacterCalculations = () => {
@@ -23,6 +22,7 @@ export const useCharacterCalculations = () => {
   
   const toughnessBonus = form.watch("toughness.bonus");
   const armors = form.watch("armors");
+  const weapons = form.watch("weapons");
   const inventory = form.watch("inventory");
   const experience = form.watch("experience");
   const painThresholdBonus = form.watch("painThresholdBonus");
@@ -30,14 +30,8 @@ export const useCharacterCalculations = () => {
 
   const totalAttributePointsSpent = useMemo(() => {
     return (
-      num(cunning) +
-      num(discreet) +
-      num(persuasive) +
-      num(precise) +
-      num(quick) +
-      num(resolute) +
-      num(vigilant) +
-      num(vigorous)
+      num(cunning) + num(discreet) + num(persuasive) + num(precise) +
+      num(quick) + num(resolute) + num(vigilant) + num(vigorous)
     );
   }, [cunning, discreet, persuasive, precise, quick, resolute, vigilant, vigorous]);
   
@@ -59,14 +53,23 @@ export const useCharacterCalculations = () => {
     return roundUpDiv(num(resolute), 2);
   }, [resolute]);
 
+  // --- CORREÇÃO: SOMA COMPLETA DE PESO ---
   const currentWeight = useMemo(() => {
-    if (!Array.isArray(inventory)) return 0;
-    return inventory.reduce(
-      (acc: number, item: InventoryItem) =>
-        acc + num(item.weight) * num(item.quantity),
-      0,
-    );
-  }, [inventory]);
+    let total = 0;
+    // 1. Mochila
+    if (Array.isArray(inventory)) {
+      total += inventory.reduce((acc, item) => acc + num(item.weight) * num(item.quantity), 0);
+    }
+    // 2. Armas
+    if (Array.isArray(weapons)) {
+      total += weapons.reduce((acc, w) => acc + num(w.weight), 0);
+    }
+    // 3. Armaduras
+    if (Array.isArray(armors)) {
+      total += armors.reduce((acc, a) => acc + num(a.weight), 0);
+    }
+    return total;
+  }, [inventory, weapons, armors]);
 
   const encumbranceThreshold = useMemo(() => num(vigorous), [vigorous]);
   const maxEncumbrance = useMemo(() => num(vigorous) * 2, [vigorous]);
@@ -89,11 +92,9 @@ export const useCharacterCalculations = () => {
 
   const totalDefense = useMemo(() => {
     let effectiveQuick = num(quick);
-
     if (activeBerserk && activeBerserk.level !== 'Mestre') {
        effectiveQuick = 5;
     }
-
     return effectiveQuick - totalObstrutiva - encumbrancePenalty;
   }, [quick, totalObstrutiva, encumbrancePenalty, activeBerserk]);
 

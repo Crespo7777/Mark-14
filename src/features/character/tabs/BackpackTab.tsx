@@ -34,7 +34,6 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   getDefaultWeapon, 
   getDefaultArmor, 
-  InventoryItem 
 } from "../character.schema";
 import {
   Dialog,
@@ -117,13 +116,11 @@ export const BackpackTab = () => {
       const item = form.getValues(`inventory.${index}`);
       const category = item.data?.category;
 
-      // Se soubermos o que é, equipamos direto
       if (category === 'weapon') {
           performEquip(index, 'weapon');
       } else if (category === 'armor') {
           performEquip(index, 'armor');
       } else {
-          // Se não soubermos, perguntamos ao utilizador
           setItemToEquipIndex(index);
           setEquipDialogOpen(true);
       }
@@ -133,39 +130,31 @@ export const BackpackTab = () => {
       const item = form.getValues(`inventory.${index}`);
       const currentWeapons = form.getValues("weapons") || [];
       
-      // Limite de armas
       if (type === 'weapon' && currentWeapons.length >= 2) {
-          toast({ 
-              title: "Limite Atingido", 
-              description: "Você já tem 2 armas equipadas. Desequipe uma primeiro.", 
-              variant: "destructive" 
-          });
+          toast({ title: "Limite Atingido", description: "Você já tem 2 armas equipadas. Desequipe uma primeiro.", variant: "destructive" });
           setEquipDialogOpen(false);
           return;
       }
 
-      // Reduzir quantidade ou remover da mochila
       const currentQty = Number(item.quantity);
       if (currentQty > 1) {
           form.setValue(`inventory.${index}.quantity`, currentQty - 1, { shouldDirty: true });
       } else {
-          // Remove o item da lista
           const currentInv = form.getValues("inventory");
           const newInv = currentInv.filter((_, i) => i !== index);
           form.setValue("inventory", newInv, { shouldDirty: true });
       }
 
-      // Adicionar à lista correta
       if (type === 'weapon') {
           const newWeapon = {
               ...getDefaultWeapon(),
               name: item.name,
-              // Tenta recuperar dados, senão usa defaults
               damage: item.data?.damage || "",
               attribute: item.data?.attribute || "",
               attackAttribute: item.data?.attackAttribute || "",
               quality: item.data?.quality || "",
-              quality_desc: item.description || "", // A descrição original vai para as notas da qualidade
+              quality_desc: item.description || "",
+              weight: Number(item.weight) || 1, 
           };
           const newWeapons = [...currentWeapons, newWeapon];
           form.setValue("weapons", newWeapons, { shouldDirty: true });
@@ -176,10 +165,11 @@ export const BackpackTab = () => {
               ...getDefaultArmor(),
               name: item.name,
               protection: item.data?.protection || "",
-              obstructive: Number(item.weight) || 0, // Armadura usa peso como estorvo muitas vezes
+              obstructive: Number(item.data?.obstructive) || 0,
               quality: item.data?.quality || "",
               quality_desc: item.description || "",
-              equipped: true
+              equipped: true,
+              weight: Number(item.weight) || 0,
           };
           const newArmors = [...currentArmors, newArmor];
           form.setValue("armors", newArmors, { shouldDirty: true });
@@ -193,7 +183,6 @@ export const BackpackTab = () => {
     <div className="space-y-6">
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Card Dinheiro */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><Coins className="w-4 h-4"/> Dinheiro</CardTitle>
@@ -216,7 +205,6 @@ export const BackpackTab = () => {
           </CardContent>
         </Card>
 
-        {/* Card Experiência */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><TrendingUp className="w-4 h-4"/> Experiência</CardTitle>
@@ -234,7 +222,6 @@ export const BackpackTab = () => {
           </CardContent>
         </Card>
 
-        {/* Card Carga */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base"><Weight className="w-4 h-4"/> Carga</CardTitle>
@@ -259,7 +246,6 @@ export const BackpackTab = () => {
       <div className="space-y-6">
         <SharedProjectileList control={form.control} name="projectiles" />
         
-        {/* Passamos a função de equipar aqui */}
         <SharedInventoryList 
             control={form.control} 
             name="inventory" 
@@ -268,7 +254,6 @@ export const BackpackTab = () => {
         />
       </div>
 
-      {/* DIALOGO PARA ESCOLHER O TIPO DE EQUIPAMENTO (Se não tiver categoria definida) */}
       <Dialog open={equipDialogOpen} onOpenChange={setEquipDialogOpen}>
           <DialogContent>
               <DialogHeader>

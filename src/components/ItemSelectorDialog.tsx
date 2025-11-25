@@ -1,6 +1,7 @@
 // src/components/ItemSelectorDialog.tsx
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,56 +11,51 @@ import { supabase } from "@/integrations/supabase/client";
 import { ItemTemplate } from "@/types/app-types";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ItemSelectorDialogProps {
   tableId: string;
-  categories?: string[]; // Agora opcional
-  category?: string;     // Suporte para legado (singular)
+  categories?: string[];
+  category?: string;
   children: React.ReactNode;
   onSelect: (template: ItemTemplate | null) => void;
   title?: string;
 }
 
+const fetchItemsForSelector = async (tableId: string, categories: string[]) => {
+  let query = supabase
+    .from("item_templates")
+    .select("*")
+    .eq("table_id", tableId)
+    .order("name");
+    
+  if (categories.length > 0) {
+     query = query.in("category", categories);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return data as ItemTemplate[];
+};
+
 export const ItemSelectorDialog = ({ tableId, categories, category, children, onSelect, title }: ItemSelectorDialogProps) => {
-  // LÓGICA DE SEGURANÇA: Usa 'categories' se existir, senão usa 'category' num array, senão array vazio.
   const targetCategories = categories || (category ? [category] : []);
   
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<ItemTemplate[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  // Evita erro se o array estiver vazio
-  const [activeTab, setActiveTab] = useState(targetCategories[0] || "");
+  const [activeTab, setActiveTab] = useState(targetCategories[0] || "all");
 
-  useEffect(() => {
-    if (open && targetCategories.length > 0) {
-      setLoading(true);
-      const categoryToFetch = targetCategories.length > 1 ? activeTab : targetCategories[0];
-      
-      // Se o activeTab estiver vazio (caso inicial), define-o
-      if (!activeTab) setActiveTab(categoryToFetch);
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ['item_templates', tableId, targetCategories.join(',')],
+    queryFn: () => fetchItemsForSelector(tableId, targetCategories),
+    enabled: open,
+  });
 
-      let query = supabase
-        .from("item_templates")
-        .select("*")
-        .eq("table_id", tableId)
-        .order("name");
-        
-      if (targetCategories.length > 1 && activeTab) {
-         query = query.eq("category", activeTab);
-      } else {
-         // Se só tem uma categoria ou activeTab ainda não setou, busca por todas as permitidas
-         query = query.in("category", targetCategories);
-      }
-
-      query.then(({ data }) => {
-          if (data) setItems(data as any);
-          setLoading(false);
-        });
-    }
-  }, [open, tableId, activeTab, targetCategories.join(",")]); // Dependência em string para evitar loops com arrays
-
-  const filteredItems = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredItems = items.filter(i => {
+      const matchesSearch = i.name.toLowerCase().includes(search.toLowerCase());
+      const matchesTab = targetCategories.length > 1 ? i.category === activeTab : true;
+      return matchesSearch && matchesTab;
+  });
 
   const handleSelect = (item: ItemTemplate | null) => {
     onSelect(item);
@@ -111,9 +107,9 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
 
         {targetCategories.length > 1 && (
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="flex flex-wrap h-auto bg-muted/50 p-1 justify-start">
+                <TabsList className="flex flex-wrap h-auto bg-muted/50 p-1 justify-start w-full">
                     {targetCategories.map(cat => (
-                        <TabsTrigger key={cat} value={cat} className="text-xs px-3 py-1.5">
+                        <TabsTrigger key={cat} value={cat} className="text-xs px-3 py-1.5 flex-1">
                             {getLabel(cat)}
                         </TabsTrigger>
                     ))}
@@ -143,9 +139,15 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
                     <Plus className="w-4 h-4 mr-2" /> Criar Customizado (Vazio)
                 </Button>
                 
-                {loading && <p className="text-center text-sm text-muted-foreground py-4">Carregando Compêndio...</p>}
+                {isLoading && (
+                    <div className="space-y-2 py-4">
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                        <Skeleton className="h-12 w-full" />
+                    </div>
+                )}
                 
-                {!loading && filteredItems.map(item => (
+                {!isLoading && filteredItems.map(item => (
                     <div 
                         key={item.id} 
                         className="flex flex-col p-3 border rounded-md hover:bg-accent cursor-pointer transition-colors bg-card"
@@ -154,9 +156,9 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
                         <div className="flex justify-between items-center">
                             <span className="font-bold flex items-center gap-2">
                                 {item.name}
-                                {item.data.price && <span className="text-[10px] font-normal text-muted-foreground border px-1 rounded">{item.data.price}</span>}
+                                {item.data.price && <span className="text-[10px] font-normal text-muted-foreground border px-1 rounded bg-muted/50">{item.data.price}</span>}
                             </span>
-                            {item.category !== 'ability' && item.category !== 'trait' && <Badge variant="secondary" className="text-xs">{item.weight} peso</Badge>}
+                            {item.category !== 'ability' && item.category !== 'trait' && <Badge variant="secondary" className="text-xs font-normal">{item.weight} peso</Badge>}
                         </div>
                         {item.description && (
                             <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description}</p>
@@ -165,15 +167,14 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
                         <div className="flex gap-2 mt-2 text-[10px] opacity-80 flex-wrap">
                              {item.data.damage && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Dano: {item.data.damage}</span>}
                              {item.data.protection && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Prot: {item.data.protection}</span>}
-                             {item.data.effect && <span className="bg-background/50 px-1.5 py-0.5 rounded border text-purple-500">Efeito: {item.data.effect}</span>}
-                             {item.data.corruption && <span className="bg-background/50 px-1.5 py-0.5 rounded border text-destructive">Corr: {item.data.corruption}</span>}
+                             {item.data.effect && <span className="bg-background/50 px-1.5 py-0.5 rounded border text-purple-400 border-purple-500/30">Efeito: {item.data.effect}</span>}
                              {item.data.level && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Nível: {item.data.level}</span>}
                         </div>
                     </div>
                 ))}
                 
-                {!loading && filteredItems.length === 0 && (
-                    <p className="text-center text-xs text-muted-foreground py-8">Nenhum item encontrado.</p>
+                {!isLoading && filteredItems.length === 0 && (
+                    <p className="text-center text-xs text-muted-foreground py-8">Nenhum item encontrado nesta categoria.</p>
                 )}
             </div>
         </ScrollArea>
