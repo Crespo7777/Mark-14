@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Eraser, Brush, Square, Ban, MousePointer2 } from "lucide-react";
+import { Eye, EyeOff, Eraser, Brush, Square, Ban, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -19,18 +19,22 @@ interface FogLayerProps {
 type ToolType = 'reveal' | 'hide';
 type ShapeType = 'brush' | 'rect';
 
+const BUCKET_NAME = "campaign-media";
+
 export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, containerHeight }: FogLayerProps) => {
   const mainCanvasRef = useRef<HTMLCanvasElement>(null); // Canvas da Névoa (Persistente)
   const uiCanvasRef = useRef<HTMLCanvasElement>(null);   // Canvas de Interface (Temporário/Previsão)
   
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState<{x: number, y: number} | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Configurações da Ferramenta
   const [toolMode, setToolMode] = useState<ToolType>('reveal'); // Revelar (Borracha) vs Esconder (Pincel)
   const [shapeMode, setShapeMode] = useState<ShapeType>('brush'); // Pincel Livre vs Retângulo
   const [brushSize, setBrushSize] = useState(50);
   
+  // Estado local para sincronia imediata (Optimistic UI)
   const [localData, setLocalData] = useState<string | null>(fogData);
   const { toast } = useToast();
 
@@ -41,19 +45,26 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Ajustar resolução
+    // Ajustar resolução para bater certo com o container
     canvas.width = containerWidth;
     canvas.height = containerHeight;
 
     if (localData) {
       const img = new Image();
+      // IMPORTANTE: Permite manipular o canvas sem o marcar como "tainted" (sujo/inseguro)
+      img.crossOrigin = "Anonymous"; 
+      
       img.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       };
+      img.onerror = () => {
+        console.error("Erro ao carregar imagem da névoa:", localData);
+      };
       img.src = localData;
     } else {
-      // Padrão: Tudo coberto
+      // Padrão: Se não houver dados, assume tudo coberto (Preto)
+      ctx.globalCompositeOperation = 'source-over';
       ctx.fillStyle = "black";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
@@ -68,9 +79,12 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
     }
   }, [containerWidth, containerHeight]);
 
-  // Sincronia Realtime
+  // 3. Sincronia Realtime (Quando o servidor manda um novo URL)
   useEffect(() => {
-      if (fogData !== localData) setLocalData(fogData);
+      // Só atualiza se o URL for diferente para evitar flicker
+      if (fogData !== localData) {
+          setLocalData(fogData);
+      }
   }, [fogData]);
 
 
@@ -96,7 +110,7 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
   };
 
   const startAction = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isMaster) return;
+    if (!isMaster || isSaving) return;
     setIsDrawing(true);
     const { x, y } = getCoords(e);
     setStartPos({ x, y });
@@ -109,14 +123,14 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
     if (!isMaster) return;
     const { x, y } = getCoords(e);
 
-    // Limpa o UI Canvas a cada frame
+    // Limpa o UI Canvas a cada frame para desenhar o cursor/previsão
     const uiCtx = uiCanvasRef.current?.getContext('2d');
     if(uiCtx) uiCtx.clearRect(0, 0, uiCtx.canvas.width, uiCtx.canvas.height);
 
     if (isDrawing && startPos) {
         if (shapeMode === 'brush') {
             drawBrush(x, y);
-            // Desenha o cursor do brush no UI
+            // Desenha o cursor do brush no UI para feedback visual
             drawCursor(x, y, uiCtx);
         } else if (shapeMode === 'rect') {
             // Desenha o retângulo de previsão no UI
@@ -131,7 +145,7 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
   const endAction = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isMaster || !isDrawing) return;
     
-    // Se for retângulo, aplica agora no canvas principal
+    // Se for retângulo, aplica agora no canvas principal de forma definitiva
     if (shapeMode === 'rect' && startPos) {
         const { x, y } = getCoords(e);
         const w = x - startPos.x;
@@ -146,6 +160,7 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
     const uiCtx = uiCanvasRef.current?.getContext('2d');
     if(uiCtx) uiCtx.clearRect(0, 0, uiCtx.canvas.width, uiCtx.canvas.height);
     
+    // Salva no servidor
     saveFogState();
   };
 
@@ -155,6 +170,7 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
     const ctx = mainCanvasRef.current?.getContext('2d');
     if (!ctx) return;
     
+    // 'destination-out' apaga (torna transparente), 'source-over' pinta
     ctx.globalCompositeOperation = toolMode === 'reveal' ? 'destination-out' : 'source-over';
     ctx.fillStyle = "black";
     ctx.beginPath();
@@ -188,17 +204,66 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
       ctx.fillRect(x, y, w, h);
   };
 
+  // --- SALVAR NO STORAGE (OTIMIZAÇÃO) ---
   const saveFogState = async () => {
       const canvas = mainCanvasRef.current;
       if (!canvas) return;
-      const newData = canvas.toDataURL('image/webp', 0.5);
-      setLocalData(newData); // Optimistic
-      await supabase.from("scenes").update({ fog_data: newData }).eq("id", sceneId);
+
+      setIsSaving(true);
+
+      // 1. Converter Canvas para Blob (WebP para melhor compressão)
+      canvas.toBlob(async (blob) => {
+          if (!blob) {
+              setIsSaving(false);
+              return;
+          }
+
+          // 2. Nome do ficheiro: fog/{sceneId}.webp
+          const fileName = `fog/${sceneId}.webp`;
+
+          // 3. Upload para o Storage (Upsert = sobrescrever)
+          const { error: uploadError } = await supabase.storage
+              .from(BUCKET_NAME)
+              .upload(fileName, blob, { upsert: true, contentType: 'image/webp' });
+
+          if (uploadError) {
+              console.error("Erro no upload da névoa:", uploadError);
+              toast({ title: "Erro ao salvar névoa", variant: "destructive" });
+              setIsSaving(false);
+              return;
+          }
+
+          // 4. Obter URL Público
+          const { data: publicUrlData } = supabase.storage
+              .from(BUCKET_NAME)
+              .getPublicUrl(fileName);
+
+          // 5. Adicionar Timestamp para Cache Busting
+          // Isto garante que o React veja uma string diferente e recarregue a imagem
+          const publicUrlWithTimestamp = `${publicUrlData.publicUrl}?t=${Date.now()}`;
+
+          // 6. Atualizar Base de Dados com o novo URL
+          const { error: dbError } = await supabase
+              .from("scenes")
+              .update({ fog_data: publicUrlWithTimestamp })
+              .eq("id", sceneId);
+
+          if (dbError) {
+              console.error("Erro ao atualizar BD:", dbError);
+          } else {
+              // Atualizar localmente apenas para garantir consistência imediata
+              // (Embora o upload já tenha acontecido)
+              setLocalData(publicUrlWithTimestamp);
+          }
+          
+          setIsSaving(false);
+
+      }, 'image/webp', 0.8); // Qualidade 0.8
   };
 
   // Ações Globais
   const fillAll = () => {
-      if(!confirm("Cobrir tudo?")) return;
+      if(!confirm("Cobrir tudo com névoa?")) return;
       const ctx = mainCanvasRef.current?.getContext('2d');
       if(!ctx) return;
       ctx.globalCompositeOperation = 'source-over';
@@ -217,7 +282,7 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
 
   return (
     <>
-      {/* 1. Canvas Principal (Dados) */}
+      {/* 1. Canvas Principal (Dados da Névoa) */}
       <canvas
         ref={mainCanvasRef}
         className={`absolute inset-0 z-30 pointer-events-none ${isMaster ? 'opacity-60' : 'opacity-100'}`}
@@ -241,8 +306,13 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
 
       {/* Toolbar do Mestre */}
       {isMaster && (
-          <div className="absolute top-4 right-4 z-50 flex flex-col gap-2 bg-black/90 p-2.5 rounded-xl border border-white/10 backdrop-blur-md shadow-2xl w-14 items-center">
+          <div className="absolute top-4 right-4 z-50 flex flex-col gap-2 bg-black/90 p-2.5 rounded-xl border border-white/10 backdrop-blur-md shadow-2xl w-14 items-center transition-all hover:bg-black">
               
+              {/* Indicador de Salvamento */}
+              <div className="h-4 w-4 flex items-center justify-center">
+                  {isSaving && <Loader2 className="w-3 h-3 animate-spin text-accent" />}
+              </div>
+
               {/* Modo (Revelar/Esconder) */}
               <div className="flex flex-col gap-1 w-full">
                   <Button 
@@ -294,10 +364,10 @@ export const FogLayer = ({ sceneId, fogData, isMaster, containerWidth, container
 
               {/* Ações Globais */}
               <div className="flex flex-col gap-1 w-full">
-                  <Button size="icon" variant="ghost" className="h-9 w-9 text-white/50 hover:text-white" onClick={fillAll} title="Cobrir Tudo">
+                  <Button size="icon" variant="ghost" className="h-9 w-9 text-white/50 hover:text-white" onClick={fillAll} title="Cobrir Tudo" disabled={isSaving}>
                       <EyeOff className="w-4 h-4" />
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-9 w-9 text-white/50 hover:text-white" onClick={clearAll} title="Revelar Tudo">
+                  <Button size="icon" variant="ghost" className="h-9 w-9 text-white/50 hover:text-white" onClick={clearAll} title="Revelar Tudo" disabled={isSaving}>
                       <Eye className="w-4 h-4" />
                   </Button>
               </div>

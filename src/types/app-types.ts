@@ -33,6 +33,7 @@ export type FolderType = {
   name: string;
 };
 
+// Lojas
 export interface Shop {
   id: string;
   table_id: string;
@@ -41,6 +42,7 @@ export interface Shop {
   created_at: string;
 }
 
+// Itens da Loja
 export interface ShopItem {
   id: string;
   shop_id: string;
@@ -50,16 +52,38 @@ export interface ShopItem {
   price: number; // Em Ortegas
   quantity: number;
 }
-// src/types/app-types.ts
 
-// ... (mantenha o código existente)
-
+// --- NOVO TEMPLATE DE ITEM (Para o Database/Compêndio) ---
 export interface ItemTemplate {
   id: string;
   table_id: string;
   name: string;
   description?: string;
-  category: 'weapon' | 'armor' | 'item' | 'ability';
+  image_url?: string | null;
+  // Lista expandida com todas as novas categorias
+  category: 
+    | 'quality' 
+    | 'weapon' 
+    | 'armor' 
+    | 'ability' 
+    | 'trait' 
+    | 'consumable' // Elixires
+    | 'general'    // Equipamentos
+    | 'mount'      // Transporte
+    | 'construction'
+    | 'service'
+    | 'material'
+    | 'container'  // Recipientes
+    | 'ammunition' // Munições
+    | 'animal'     // Animais de Fazenda
+    | 'asset'      // Proventos
+    | 'clothing'   // Roupas
+    | 'tool'       // Ferramenta
+    | 'food'       // Comida e bebida
+    | 'artifact'   // Artefatos Menores
+    | 'trap'       // Armadilhas
+    | 'spec_tool'  // Ferramentas Especializadas
+    | 'musical';   // Instrumentos Musicais
   weight: number;
   data: any; // JSON flexível para dados específicos
 }

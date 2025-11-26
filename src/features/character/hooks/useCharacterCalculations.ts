@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { roundUpDiv, Armor, InventoryItem, Weapon } from "../character.schema";
+import { roundUpDiv, Armor } from "../character.schema";
 
 const num = (val: any) => Number(val) || 0;
 
@@ -22,7 +22,7 @@ export const useCharacterCalculations = () => {
   
   const toughnessBonus = form.watch("toughness.bonus");
   const armors = form.watch("armors");
-  const weapons = form.watch("weapons");
+  // const weapons = form.watch("weapons"); // Não precisamos mais vigiar weapons para peso, mas pode ser útil para outros cálculos futuros
   const inventory = form.watch("inventory");
   const experience = form.watch("experience");
   const painThresholdBonus = form.watch("painThresholdBonus");
@@ -53,23 +53,21 @@ export const useCharacterCalculations = () => {
     return roundUpDiv(num(resolute), 2);
   }, [resolute]);
 
-  // --- CORREÇÃO: SOMA COMPLETA DE PESO ---
+  // --- ALTERAÇÃO: Peso apenas do Inventário ---
   const currentWeight = useMemo(() => {
     let total = 0;
-    // 1. Mochila
+    
+    // 1. Mochila (Itens não equipados) contam para o peso
     if (Array.isArray(inventory)) {
       total += inventory.reduce((acc, item) => acc + num(item.weight) * num(item.quantity), 0);
     }
-    // 2. Armas
-    if (Array.isArray(weapons)) {
-      total += weapons.reduce((acc, w) => acc + num(w.weight), 0);
-    }
-    // 3. Armaduras
-    if (Array.isArray(armors)) {
-      total += armors.reduce((acc, a) => acc + num(a.weight), 0);
-    }
+    
+    // NOTA: Armas e Armaduras equipadas (arrays 'weapons' e 'armors') 
+    // foram removidas deste cálculo conforme solicitado.
+    // Elas só pesam se voltarem para o 'inventory'.
+
     return total;
-  }, [inventory, weapons, armors]);
+  }, [inventory]); // Dependência apenas do inventário agora
 
   const encumbranceThreshold = useMemo(() => num(vigorous), [vigorous]);
   const maxEncumbrance = useMemo(() => num(vigorous) * 2, [vigorous]);

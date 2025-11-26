@@ -16,7 +16,8 @@ import {
   BookOpen,
   LogOut,
   MessageSquare,
-  X
+  X,
+  Book // Ícone para Regras
 } from "lucide-react";
 
 import { MasterCharactersTab } from "@/features/master/MasterCharactersTab";
@@ -26,13 +27,13 @@ import { MasterPlayersTab } from "@/features/master/MasterPlayersTab";
 import { MasterShopsTab } from "@/features/master/MasterShopsTab";
 import { MasterMediaTab } from "@/features/master/MasterMediaTab";
 import { MasterDatabaseTab } from "@/features/master/MasterDatabaseTab";
+import { MasterRulesTab } from "@/features/master/MasterRulesTab";
 
 import { SceneBoard } from "@/features/map/SceneBoard";
 import { VttGridBackground } from "@/components/VttGridBackground";
-// import { MasterSidebar } from "@/features/master/MasterSidebar"; // Removido em favor da Dock
 import { MasterRightPanel } from "@/features/master/MasterRightPanel";
 import { CombatTracker } from "@/features/combat/CombatTracker"; 
-import { VttDock } from "@/features/vtt/VttDock"; // <-- Importar a Dock
+import { VttDock } from "@/features/vtt/VttDock"; 
 
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,12 +47,13 @@ interface MasterViewProps {
 const MasterDashboardTabs = ({ tableId }: { tableId: string }) => (
     <Tabs defaultValue="characters" className="w-full h-full flex flex-col">
         <div className="px-4 pt-2 border-b border-border/40 bg-muted/20">
-            <TabsList className="grid w-full grid-cols-7 h-auto p-1 gap-1 bg-transparent">
+            <TabsList className="grid w-full grid-cols-8 h-auto p-1 gap-1 bg-transparent">
                 <TabsTrigger value="characters" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><UserSquare className="w-4 h-4"/> PCs</TabsTrigger>
                 <TabsTrigger value="npcs" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> NPCs</TabsTrigger>
                 <TabsTrigger value="journal" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><BookOpen className="w-4 h-4"/> Diário</TabsTrigger>
                 <TabsTrigger value="shops" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Store className="w-4 h-4"/> Lojas</TabsTrigger>
                 <TabsTrigger value="database" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Database className="w-4 h-4"/> DB</TabsTrigger>
+                <TabsTrigger value="rules" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Book className="w-4 h-4"/> Regras</TabsTrigger> 
                 <TabsTrigger value="media" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Clapperboard className="w-4 h-4"/> Studio</TabsTrigger>
                 <TabsTrigger value="players" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> Jog.</TabsTrigger>
             </TabsList>
@@ -62,6 +64,7 @@ const MasterDashboardTabs = ({ tableId }: { tableId: string }) => (
             <TabsContent value="journal" className="mt-0 h-full"><MasterJournalTab tableId={tableId} /></TabsContent>
             <TabsContent value="shops" className="mt-0 h-full"><MasterShopsTab tableId={tableId} /></TabsContent>
             <TabsContent value="database" className="mt-0 h-full"><MasterDatabaseTab tableId={tableId} /></TabsContent>
+            <TabsContent value="rules" className="mt-0 h-full"><MasterRulesTab tableId={tableId} /></TabsContent>
             <TabsContent value="media" className="mt-0 h-full"><MasterMediaTab tableId={tableId} /></TabsContent>
             <TabsContent value="players" className="mt-0 h-full"><MasterPlayersTab tableId={tableId} /></TabsContent>
         </div>
@@ -148,7 +151,7 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
             )}
         </div>
 
-        {/* Botão Chat (Agora no topo direito, igual ao jogador) */}
+        {/* Botão Chat */}
         <div className="fixed top-4 right-4 z-50 pointer-events-auto">
             <Button 
                 variant={isChatOpen ? "default" : "secondary"} 
@@ -161,21 +164,20 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
             </Button>
         </div>
 
-        {/* Combat Tracker (Topo Esquerdo, abaixo do HUD) */}
+        {/* Combat Tracker */}
         <div className="fixed top-16 left-4 z-40 pointer-events-auto">
              <CombatTracker tableId={tableId} />
         </div>
 
-        {/* CAMADA 2: DOCK (FUNDO) - Substitui a MasterToolbar e Sidebar Antiga */}
+        {/* CAMADA 2: DOCK */}
         <VttDock 
             tableId={tableId} 
             onDragStart={(item) => {
-                // O evento de drag é nativo do HTML5, o SceneBoard vai capturar
                 console.log("Dragging:", item.name);
             }} 
         />
 
-        {/* CAMADA 3: PAINEL DE CHAT (DIREITA) */}
+        {/* CAMADA 3: CHAT */}
         <div 
             className={`
                 fixed top-16 right-4 bottom-24 w-80 
