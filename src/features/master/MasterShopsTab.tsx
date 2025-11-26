@@ -17,10 +17,19 @@ import { formatPrice } from "@/lib/economy-utils";
 import { Separator } from "@/components/ui/separator";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
-// Interface estendida para incluir 'data' no ShopItem (já que o tipo base pode não ter ainda)
+// Interface estendida para incluir 'data'
 interface ExtendedShopItem extends ShopItem {
   data?: any;
 }
+
+const SHOP_CATEGORIES = [
+  { value: 'general', label: 'Geral' },
+  { value: 'weapon', label: 'Arma' },
+  { value: 'armor', label: 'Armadura' },
+  { value: 'consumable', label: 'Consumível' },
+  { value: 'mystic', label: 'Místico' },
+  { value: 'tool', label: 'Ferramenta' },
+];
 
 const fetchShops = async (tableId: string) => {
   const { data, error } = await supabase.from("shops").select("*").eq("table_id", tableId).order("created_at");
@@ -185,7 +194,8 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, description: "" });
+  // Adicionamos 'data' ao estado para guardar os campos extras
+  const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, description: "", category: "general", data: {} as any });
   const [currencyType, setCurrencyType] = useState<"ortega" | "shekel" | "taler">("ortega");
   const [itemToSend, setItemToSend] = useState<ExtendedShopItem | null>(null);
 
@@ -198,6 +208,11 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
     queryKey: ['characters', tableId],
     queryFn: () => fetchCharacters(tableId),
   });
+
+  // Reset do formulário quando muda a categoria (para limpar dados antigos)
+  useEffect(() => {
+      setNewItem(prev => ({ ...prev, data: {} }));
+  }, [newItem.category]);
 
   const handleAddItem = async () => {
     if (!newItem.name) {
@@ -216,12 +231,17 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       price: finalPrice, 
       weight: newItem.weight,
       description: newItem.description,
-      data: {} // Item manual, sem dados complexos por enquanto
+      // Monta o objeto data com a categoria e os campos dinâmicos
+      data: {
+          category: newItem.category,
+          ...newItem.data
+      }
     });
 
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
     else {
-      setNewItem({ name: "", amount: 0, weight: 0, description: "" }); 
+      // Reset
+      setNewItem({ name: "", amount: 0, weight: 0, description: "", category: "general", data: {} }); 
       setCurrencyType("ortega");
       queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
     }
@@ -240,7 +260,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         else price = val;
      }
 
-     // --- CORREÇÃO: IMPORTAÇÃO DO CAMPO 'DATA' COMPLETO ---
      const { error } = await supabase.from("shop_items").insert({
         shop_id: shop.id,
         name: template.name,
@@ -248,14 +267,14 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         weight: template.weight,
         price: price,
         data: { 
-            ...template.data, // Copia stats (dano, proteção, etc)
-            category: template.category // Garante que a categoria vai junto
+            ...template.data, 
+            category: template.category 
         }
      });
 
      if (error) toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
      else {
-         toast({ title: "Item Importado!", description: `${template.name} adicionado à loja com estatísticas.` });
+         toast({ title: "Item Importado!", description: `${template.name} adicionado.` });
          queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
      }
   };
@@ -276,7 +295,7 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       quantity: 1,
       weight: itemToSend.weight,
       description: itemToSend.description || "Presente do Mestre",
-      data: itemToSend.data || {} // Passa os dados do item para o jogador
+      data: itemToSend.data || {}
     };
 
     const currentInventory = (char.data as any).inventory || [];
@@ -298,6 +317,51 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
     }
   };
 
+  // Helper para atualizar o data dinâmico
+  const updateData = (key: string, value: string) => {
+    setNewItem(prev => ({ ...prev, data: { ...prev.data, [key]: value } }));
+  };
+
+  // Renderização condicional dos campos extras (baseada na categoria)
+  const renderSpecificFields = () => {
+    switch (newItem.category) {
+      case 'weapon':
+        return (
+           <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
+               <Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="h-8 text-xs"/>
+               <Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="h-8 text-xs"/>
+               <Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} />
+           </div>
+        );
+      case 'armor':
+        return (
+           <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
+               <Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="h-8 text-xs"/>
+               <Input placeholder="Obstrutiva (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="h-8 text-xs"/>
+               <Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} />
+           </div>
+        );
+      case 'consumable':
+        return (
+           <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
+               <Input placeholder="Efeito Principal" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} />
+               <Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="h-8 text-xs"/>
+               <Input placeholder="Uso (Beber...)" value={newItem.data.usage || ""} onChange={e => updateData('usage', e.target.value)} className="h-8 text-xs"/>
+           </div>
+        );
+      case 'mystic':
+         return (
+            <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
+                <Input placeholder="Poder" value={newItem.data.powerLevel || ""} onChange={e => updateData('powerLevel', e.target.value)} className="h-8 text-xs"/>
+                <Input placeholder="Corrupção" value={newItem.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="h-8 text-xs"/>
+                <Input placeholder="Efeito" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} />
+            </div>
+         );
+      default:
+        return null;
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -305,22 +369,39 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         <CardDescription>Adicione itens que estarão à venda aqui.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="bg-muted/20 p-4 rounded-md space-y-4">
+        <div className="bg-muted/20 p-4 rounded-md space-y-4 border border-dashed border-border">
+            
+            {/* LINHA 1: Nome, Categoria, Peso */}
             <div className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-6">
                     <Label className="text-xs">Nome do Item</Label>
-                    <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Ex: Poção de Cura" />
+                    <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Ex: Adaga Curta" />
+                </div>
+                <div className="col-span-4">
+                    <Label className="text-xs">Categoria</Label>
+                    <Select value={newItem.category} onValueChange={v => setNewItem({...newItem, category: v})}>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            {SHOP_CATEGORIES.map(cat => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="col-span-2">
                     <Label className="text-xs">Peso</Label>
                     <Input type="number" value={newItem.weight} onChange={e => setNewItem({...newItem, weight: parseInt(e.target.value)||0})} />
                 </div>
-                <div className="col-span-4">
-                    <Label className="text-xs">Descrição (Opcional)</Label>
-                     <Input value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} placeholder="..." />
-                </div>
             </div>
 
+            {/* LINHA 2: Campos Dinâmicos (Opcional) */}
+            {renderSpecificFields()}
+
+            {/* LINHA 3: Descrição */}
+            <div className="w-full">
+                <Label className="text-xs">Descrição (Opcional)</Label>
+                <Input value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} placeholder="..." />
+            </div>
+
+            {/* LINHA 4: Preço e Botões */}
             <div className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-3">
                     <Label className="text-xs">Valor</Label>
@@ -338,7 +419,7 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                     </Select>
                 </div>
                 <div className="col-span-5 flex gap-1">
-                    <Button onClick={handleAddItem} className="flex-1"><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
+                    <Button onClick={handleAddItem} className="flex-1 bg-green-600 hover:bg-green-700"><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
                     
                     <ItemSelectorDialog 
                         tableId={tableId} 
@@ -363,8 +444,9 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                 <div className="flex-1">
                    <div className="font-bold flex items-center gap-2">
                         {item.name}
-                        {item.data?.damage && <span className="text-[10px] bg-background border px-1 rounded text-muted-foreground">Dano: {item.data.damage}</span>}
-                        {item.data?.protection && <span className="text-[10px] bg-background border px-1 rounded text-muted-foreground">Prot: {item.data.protection}</span>}
+                        {item.data?.category && <span className="text-[9px] uppercase border px-1 rounded bg-background text-muted-foreground">{item.data.category === 'general' ? 'Geral' : item.data.category}</span>}
+                        {item.data?.damage && <span className="text-[9px] border px-1 rounded bg-background text-muted-foreground">Dano: {item.data.damage}</span>}
+                        {item.data?.protection && <span className="text-[9px] border px-1 rounded bg-background text-muted-foreground">Prot: {item.data.protection}</span>}
                    </div>
                    <div className="text-xs text-muted-foreground">{item.description}</div>
                 </div>
