@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { useTableContext } from "@/features/table/TableContext";
 import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import { 
   UserSquare, 
   MessageSquare, 
   Dices, 
   LogOut, 
-  Menu, 
   X, 
   Users, 
   ShoppingBag, 
@@ -27,6 +27,7 @@ import { SceneBoard } from "@/features/map/SceneBoard";
 import { ChatPanel } from "@/components/ChatPanel";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 import { VttGridBackground } from "@/components/VttGridBackground";
+import { CombatTracker } from "@/features/combat/CombatTracker"; // <-- NOVO
 
 // UI
 import { Button } from "@/components/ui/button";
@@ -34,8 +35,6 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import { useTableRealtime } from "@/hooks/useTableRealtime";
-import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface PlayerViewProps {
@@ -43,6 +42,7 @@ interface PlayerViewProps {
 }
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
+  const navigate = useNavigate();
   const { userId } = useTableContext();
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
   const [shopsOpen, setShopsOpen] = useState(false);
@@ -89,65 +89,71 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
   // --- RENDERIZAÇÃO: MODO DASHBOARD (Lobby) ---
   if (mode === 'dashboard') {
     return (
-      <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      <div className="space-y-6 animate-in fade-in duration-500 pb-20 p-6 max-w-[1600px] mx-auto">
         
-        {/* Banner de Entrada na Mesa */}
-        <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-8 rounded-xl border border-slate-700 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-6">
-             <div className="space-y-2 text-center md:text-left">
-                 <h2 className="text-3xl font-bold text-white flex items-center gap-3 justify-center md:justify-start">
-                    <MapIcon className="w-8 h-8 text-green-500" /> 
-                    Mesa Virtual
-                 </h2>
-                 <p className="text-slate-400 max-w-md">
-                    Entre no modo imersivo para ver o mapa, mover seu token e interagir com o ambiente em tempo real.
-                 </p>
-             </div>
-             <Button 
-                size="lg" 
-                className="bg-green-600 hover:bg-green-700 text-white font-bold text-lg px-8 py-6 shadow-glow transition-all hover:scale-105"
-                onClick={() => setMode('immersive')}
-             >
+        {/* --- CABEÇALHO PADRONIZADO (Igual ao Mestre) --- */}
+        <div className="flex flex-wrap justify-between items-center gap-4 bg-card p-6 rounded-xl border shadow-sm">
+          <div>
+              <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                 <MapIcon className="w-8 h-8 text-primary" />
+                 Mesa Virtual
+              </h2>
+              <p className="text-muted-foreground">
+                 Consulte suas fichas ou entre no modo de jogo.
+              </p>
+          </div>
+          <div className="flex gap-2 items-center">
+              <Button variant="outline" onClick={() => navigate("/dashboard")}>
+                  <LogOut className="w-4 h-4 mr-2" /> Sair
+              </Button>
+              
+              <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
+              
+              <Button 
+                 size="lg" 
+                 className="bg-green-600 hover:bg-green-700 text-white shadow-glow font-bold px-6" 
+                 onClick={() => setMode('immersive')}
+              >
                 <Maximize className="w-5 h-5 mr-2" /> Entrar na Mesa
-             </Button>
+              </Button>
+          </div>
         </div>
 
-        <Separator className="my-6" />
-
-        <h3 className="text-xl font-semibold text-muted-foreground mb-4">Gestão & Consultas</h3>
-
-        <Tabs defaultValue="characters" className="w-full">
-            <TabsList className={`grid w-full ${shopsOpen ? "grid-cols-4" : "grid-cols-3"}`}>
-                <TabsTrigger value="characters"><UserSquare className="w-4 h-4 mr-2" /> Fichas</TabsTrigger>
-                <TabsTrigger value="npcs"><Users className="w-4 h-4 mr-2" /> NPCs</TabsTrigger>
-                <TabsTrigger value="journal"><BookOpen className="w-4 h-4 mr-2" /> Diário</TabsTrigger>
-                {shopsOpen && <TabsTrigger value="shops"><ShoppingBag className="w-4 h-4 mr-2" /> Mercado</TabsTrigger>}
-            </TabsList>
-            
-            <div className="mt-4 min-h-[500px]">
-                <TabsContent value="characters">{userId && <PlayerCharactersTab tableId={tableId} userId={userId} />}</TabsContent>
-                <TabsContent value="npcs"><PlayerNpcsTab tableId={tableId} /></TabsContent>
-                <TabsContent value="journal">{userId && <PlayerJournalTab tableId={tableId} userId={userId} />}</TabsContent>
-                {shopsOpen && <TabsContent value="shops">{userId && <PlayerShopsTab tableId={tableId} userId={userId} />}</TabsContent>}
-            </div>
-        </Tabs>
+        {/* --- ÁREA DE CONTEÚDO (Abas) --- */}
+        <div className="bg-card border rounded-xl shadow-sm min-h-[600px] overflow-hidden p-4">
+            <Tabs defaultValue="characters" className="w-full h-full flex flex-col">
+                <div className="px-4 pt-2 border-b border-border/40 bg-muted/20 mb-4 rounded-t-lg">
+                    <TabsList className={`grid w-full h-auto p-1 gap-1 bg-transparent ${shopsOpen ? "grid-cols-4" : "grid-cols-3"}`}>
+                        <TabsTrigger value="characters" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><UserSquare className="w-4 h-4 mr-2" /> Fichas</TabsTrigger>
+                        <TabsTrigger value="npcs" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4 mr-2" /> NPCs</TabsTrigger>
+                        <TabsTrigger value="journal" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><BookOpen className="w-4 h-4 mr-2" /> Diário</TabsTrigger>
+                        {shopsOpen && <TabsTrigger value="shops" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><ShoppingBag className="w-4 h-4 mr-2" /> Mercado</TabsTrigger>}
+                    </TabsList>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-2">
+                    <TabsContent value="characters" className="mt-0">{userId && <PlayerCharactersTab tableId={tableId} userId={userId} />}</TabsContent>
+                    <TabsContent value="npcs" className="mt-0"><PlayerNpcsTab tableId={tableId} /></TabsContent>
+                    <TabsContent value="journal" className="mt-0">{userId && <PlayerJournalTab tableId={tableId} userId={userId} />}</TabsContent>
+                    {shopsOpen && <TabsContent value="shops" className="mt-0">{userId && <PlayerShopsTab tableId={tableId} userId={userId} />}</TabsContent>}
+                </div>
+            </Tabs>
+        </div>
       </div>
     );
   }
 
   // --- RENDERIZAÇÃO: MODO IMERSIVO (VTT) ---
-  // CORREÇÃO AQUI: Removido "flex flex-col" para evitar overflow lateral do chat
   return (
     <div className="fixed inset-0 bg-black overflow-hidden animate-in fade-in zoom-in-95 duration-700 z-50">
         
         {/* CAMADA 1: FUNDO E MAPA */}
         <VttGridBackground className="absolute inset-0 z-0">
-             {/* O SceneBoard gere o que mostra: Mapa se houver ID, ou vazio se null */}
              <SceneBoard sceneId={activeSceneId} isMaster={false} userId={userId || undefined} />
         </VttGridBackground>
 
         {/* CAMADA 2: HUD SUPERIOR */}
         <div className="absolute top-0 left-0 w-full p-4 z-40 flex justify-between pointer-events-none">
-             {/* Botão Sair (Canto Esquerdo) */}
              <div className="pointer-events-auto">
                 <Button 
                     variant="secondary" 
@@ -159,14 +165,12 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                 </Button>
              </div>
 
-             {/* Status do Mapa (Centro) */}
              {!activeSceneId && (
                  <div className="bg-black/60 text-white/70 px-4 py-1 rounded-full backdrop-blur-md border border-white/10 text-xs font-mono pointer-events-auto">
                      Aguardando mapa do Mestre...
                  </div>
              )}
 
-             {/* Botão Chat (Canto Direito) */}
              <div className="pointer-events-auto">
                 <Button 
                     variant={isChatOpen ? "default" : "secondary"} 
@@ -180,11 +184,15 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
              </div>
         </div>
 
-        {/* CAMADA 3: DOCK INFERIOR (Ferramentas) */}
+        {/* === NOVO: COMBAT TRACKER (JOGADOR) === */}
+        <div className="absolute top-16 left-4 z-40 pointer-events-auto">
+             <CombatTracker tableId={tableId} />
+        </div>
+
+        {/* CAMADA 3: DOCK INFERIOR */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-auto">
             <div className="flex items-center gap-2 bg-black/80 backdrop-blur-xl p-2 px-4 rounded-2xl border border-white/10 shadow-2xl transform transition-transform hover:scale-105">
                 
-                {/* Minha Ficha */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         {myCharacterId ? (
@@ -204,7 +212,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                 
                 <div className="w-px h-8 bg-white/10 mx-1" />
 
-                {/* Menu Geral (Diário, NPCs, Lojas) */}
                 <Sheet>
                     <SheetTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-12 w-12 rounded-xl hover:bg-white/10 text-white transition-colors">
@@ -234,7 +241,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                     </SheetContent>
                 </Sheet>
 
-                {/* Atalho Dados */}
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button 

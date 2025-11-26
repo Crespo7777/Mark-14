@@ -6,6 +6,10 @@ export interface Scene {
   name: string;
   image_url: string;
   grid_active: boolean;
+  // --- NOVOS CAMPOS ---
+  fog_active: boolean;
+  fog_data: string | null;
+  // --------------------
   created_at: string;
 }
 
@@ -20,7 +24,7 @@ export interface SceneToken {
   label?: string | null;
   custom_image_url?: string | null;
   
-  // Campos virtuais vindos dos JOINS (opcionais)
+  // Campos virtuais vindos dos JOINS
   character?: { name: string, data: any }; 
   npc?: { name: string, data: any };
 }

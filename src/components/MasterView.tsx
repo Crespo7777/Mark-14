@@ -14,7 +14,9 @@ import {
   UserSquare,
   Users,
   BookOpen,
-  LogOut
+  LogOut,
+  MessageSquare,
+  X
 } from "lucide-react";
 
 import { MasterCharactersTab } from "@/features/master/MasterCharactersTab";
@@ -27,9 +29,10 @@ import { MasterDatabaseTab } from "@/features/master/MasterDatabaseTab";
 
 import { SceneBoard } from "@/features/map/SceneBoard";
 import { VttGridBackground } from "@/components/VttGridBackground";
-import { MasterSidebar } from "@/features/master/MasterSidebar";
-import { MasterToolbar } from "@/features/master/MasterToolbar";
+// import { MasterSidebar } from "@/features/master/MasterSidebar"; // Removido em favor da Dock
 import { MasterRightPanel } from "@/features/master/MasterRightPanel";
+import { CombatTracker } from "@/features/combat/CombatTracker"; 
+import { VttDock } from "@/features/vtt/VttDock"; // <-- Importar a Dock
 
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,7 +74,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
   const [mode, setMode] = useState<'dashboard' | 'immersive'>('dashboard');
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
   
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   useTableRealtime(tableId);
@@ -90,20 +92,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
         
       return () => { supabase.removeChannel(channel); };
   }, [tableId]);
-
-  const handleAddToken = async (type: 'npc'|'character', id: string) => {
-      if (!activeSceneId) {
-          toast({ title: "Sem Cena", description: "Ative ou crie uma cena primeiro.", variant: "destructive" });
-          return;
-      }
-      const payload: any = {
-         scene_id: activeSceneId,
-         x: 50, y: 50, scale: 1,
-         [type === 'npc' ? 'npc_id' : 'character_id']: id
-      };
-      const { error } = await supabase.from("scene_tokens").insert(payload);
-      if (!error) toast({ title: "Token Adicionado", description: "Verifique o centro do mapa." });
-  };
 
   if (mode === 'dashboard') {
     return (
@@ -131,14 +119,18 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
     );
   }
 
+  // --- MODO IMERSIVO (VTT) ---
   return (
     <div className="fixed inset-0 bg-black overflow-hidden font-sans text-foreground">
+        
+        {/* CAMADA 0: MAPA (Com Drop) */}
         <div className="absolute inset-0 z-0">
              <VttGridBackground>
                  <SceneBoard sceneId={activeSceneId} isMaster={true} />
              </VttGridBackground>
         </div>
 
+        {/* CAMADA 1: HUD SUPERIOR */}
         <div className="fixed top-4 left-4 z-40 flex gap-2 pointer-events-auto">
             <Button 
                 variant="secondary" 
@@ -156,46 +148,45 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
             )}
         </div>
 
-        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
-            <div 
-                className={`
-                    absolute top-0 left-0 bottom-0 w-[350px] 
-                    transition-transform duration-300 ease-in-out pointer-events-auto
-                    ${isLeftSidebarOpen ? "translate-x-0" : "-translate-x-full"}
-                `}
-                style={{ zIndex: 90 }} 
+        {/* Botão Chat (Agora no topo direito, igual ao jogador) */}
+        <div className="fixed top-4 right-4 z-50 pointer-events-auto">
+            <Button 
+                variant={isChatOpen ? "default" : "secondary"} 
+                size="icon" 
+                className="rounded-full shadow-xl h-10 w-10 border-2 border-black/20 bg-black/80 text-white hover:bg-white/20"
+                onClick={() => setIsChatOpen(!isChatOpen)}
+                title="Chat / Dados"
             >
-                <MasterSidebar 
-                    tableId={tableId} 
-                    isOpen={isLeftSidebarOpen} 
-                    setIsOpen={setIsLeftSidebarOpen} 
-                    onAddToken={handleAddToken}
-                />
-            </div>
-
-            <div 
-                className={`
-                    absolute top-4 right-4 bottom-24 w-80 
-                    transition-all duration-300 ease-in-out pointer-events-auto
-                    ${isChatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"}
-                `}
-                style={{ zIndex: 90 }}
-            >
-                 <MasterRightPanel tableId={tableId} onClose={() => setIsChatOpen(false)} />
-            </div>
+                {isChatOpen ? <X className="w-4 h-4"/> : <MessageSquare className="w-4 h-4" />}
+            </Button>
         </div>
 
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] pointer-events-auto">
-            <div className="bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl p-2 flex items-center gap-2 transition-transform hover:scale-105">
-                    <MasterToolbar 
-                    tableId={tableId}
-                    isChatOpen={isChatOpen}
-                    onToggleChat={() => setIsChatOpen(!isChatOpen)}
-                    isSidebarOpen={isLeftSidebarOpen}
-                    onToggleSidebar={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
-                    />
-            </div>
+        {/* Combat Tracker (Topo Esquerdo, abaixo do HUD) */}
+        <div className="fixed top-16 left-4 z-40 pointer-events-auto">
+             <CombatTracker tableId={tableId} />
         </div>
+
+        {/* CAMADA 2: DOCK (FUNDO) - Substitui a MasterToolbar e Sidebar Antiga */}
+        <VttDock 
+            tableId={tableId} 
+            onDragStart={(item) => {
+                // O evento de drag é nativo do HTML5, o SceneBoard vai capturar
+                console.log("Dragging:", item.name);
+            }} 
+        />
+
+        {/* CAMADA 3: PAINEL DE CHAT (DIREITA) */}
+        <div 
+            className={`
+                fixed top-16 right-4 bottom-24 w-80 
+                transition-all duration-300 ease-in-out pointer-events-auto
+                ${isChatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"}
+            `}
+            style={{ zIndex: 90 }}
+        >
+             <MasterRightPanel tableId={tableId} onClose={() => setIsChatOpen(false)} />
+        </div>
+
     </div>
   );
 };
