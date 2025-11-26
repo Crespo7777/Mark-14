@@ -20,7 +20,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MediaLibrary } from "@/components/MediaLibrary";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
+import { Textarea } from "@/components/ui/textarea"; // <--- IMPORTAÇÃO QUE FALTAVA
 
 // Lazy load do editor para performance
 const RichTextEditor = lazy(() => 
@@ -126,7 +126,11 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const filteredItems = items.filter(item => {
     const term = searchQuery.toLowerCase();
-    return item.name.toLowerCase().includes(term);
+    const nameMatch = item.name.toLowerCase().includes(term);
+    const subCategoryMatch = item.data.subcategory 
+        ? String(item.data.subcategory).toLowerCase().includes(term) 
+        : false;
+    return nameMatch || subCategoryMatch;
   });
 
   const handleSave = async () => {
@@ -137,7 +141,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         category,
         name: newItem.name,
         description: newItem.description,
-        image_url: newItem.image_url || null, 
+        // image_url removido da lógica de save, como pedido anteriormente
         weight: parseFloat(newItem.weight) || 0,
         data: newItem.data
     };
@@ -164,7 +168,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
       setNewItem({
           name: item.name,
           description: item.description || "",
-          image_url: item.image_url || "",
+          // image_url mantido no estado local apenas para não quebrar lógica, mas não usado visualmente
           weight: String(item.weight || ""), 
           data: item.data || {}
       });
@@ -210,7 +214,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     </Select>
                     <Input placeholder="Custo / Pontos" value={newItem.data.cost || ""} onChange={e => updateData('cost', e.target.value)} className="bg-background"/>
                  </div>
-                 {/* NOVOS CAMPOS DE NÍVEL PARA TRAÇOS */}
+                 {/* CAMPOS DE NÍVEL QUE CAUSARAM O ERRO (AGORA COM TEXTAREA IMPORTADO) */}
                  <div className="space-y-2 border-t pt-2">
                     <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível (Opcional)</Label>
                     <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
@@ -228,11 +232,19 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     <SelectContent>{WEAPON_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
                  </Select>
                  <Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/>
+                 
                  <Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="bg-background"/>
                  <Input placeholder="Qualidades (ex: Precisa)" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} className="bg-background"/>
+                 
                  {isReloadable && (
-                    <Input placeholder="Recarga (ex: Ação Livre)" value={newItem.data.reloadAction || ""} onChange={e => updateData('reloadAction', e.target.value)} className="bg-background col-span-2 md:col-span-1 border-accent/50"/>
+                    <Input 
+                        placeholder="Recarga (ex: Ação Livre)" 
+                        value={newItem.data.reloadAction || ""} 
+                        onChange={e => updateData('reloadAction', e.target.value)} 
+                        className="bg-background col-span-2 md:col-span-1 border-accent/50"
+                    />
                  )}
+
                  <Input placeholder="Preço (ex: 5 Tálers)" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/>
              </div>
           );
@@ -274,7 +286,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                 </div>
              </div>
           );
-        case 'consumable': 
+        case 'consumable':
            return (
              <div className="grid grid-cols-2 gap-3">
                  <Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="bg-background"/>
@@ -328,6 +340,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   return (
     <div className="space-y-6">
+       {/* CARD DE EDIÇÃO / CRIAÇÃO */}
        <Card className={`border-dashed border-2 transition-colors ${editingId ? "bg-accent/5 border-accent" : "bg-muted/20"}`}>
           <CardContent className="p-4 space-y-4">
               <div className="flex justify-between items-center">
@@ -338,21 +351,10 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
               </div>
 
               <div className="grid grid-cols-12 gap-4">
-                 <div className="col-span-12 md:col-span-3 flex flex-col gap-2">
-                    <Label>Imagem</Label>
-                    <div className="border-2 border-dashed rounded-md aspect-square flex items-center justify-center bg-background overflow-hidden relative group cursor-pointer">
-                        {newItem.image_url ? (
-                           <img src={newItem.image_url} className="w-full h-full object-cover" />
-                        ) : (
-                           <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
-                        )}
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <MediaLibrary filter="image" onSelect={(url) => setNewItem({...newItem, image_url: url})} trigger={<Button variant="secondary" size="sm">Escolher</Button>}/>
-                        </div>
-                    </div>
-                 </div>
+                 {/* COLUNA 1: Imagem (Visualmente removida, layout ajustado) */}
 
-                 <div className="col-span-12 md:col-span-9 space-y-4">
+                 {/* COLUNA 2: Dados Principais */}
+                 <div className="col-span-12 space-y-4">
                      <div className="grid grid-cols-12 gap-3">
                         <div className="col-span-8 space-y-2">
                             <Label>Nome</Label>
@@ -368,10 +370,15 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                      {renderSpecificFields()}
                  </div>
                  
+                 {/* DESCRIÇÃO */}
                  <div className="col-span-12 space-y-2">
                      <Label>Descrição Completa / Regras</Label>
                      <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
-                        <RichTextEditor value={newItem.description} onChange={val => setNewItem({...newItem, description: val})} placeholder="Regras e detalhes..." />
+                        <RichTextEditor 
+                            value={newItem.description} 
+                            onChange={val => setNewItem({...newItem, description: val})} 
+                            placeholder="Escreva as regras, efeitos e detalhes aqui..." 
+                        />
                      </Suspense>
                  </div>
                  
@@ -385,28 +392,43 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           </CardContent>
        </Card>
        
+       {/* BARRA DE PESQUISA */}
        <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Pesquisar..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-8 bg-background"/>
+          <Input 
+             placeholder="Pesquisar..." 
+             value={searchQuery} 
+             onChange={(e) => setSearchQuery(e.target.value)} 
+             className="pl-8 bg-background"
+          />
        </div>
 
+       {/* LISTAGEM DE ITENS */}
        <div className="grid grid-cols-1 gap-2 pb-10">
           {filteredItems.map(item => (
              <div key={item.id} className="flex gap-3 p-3 border rounded-md bg-card hover:bg-accent/50 group cursor-pointer transition-all items-start" onClick={() => handleEdit(item)}>
-                <div className="w-12 h-12 rounded bg-muted shrink-0 overflow-hidden border">
-                    {item.image_url ? <img src={item.image_url} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-muted-foreground"><Star className="w-4 h-4 opacity-20"/></div>}
-                </div>
+                {/* SEM IMAGEM NA LISTA */}
                 <div className="flex-1 min-w-0">
                     <div className="font-bold flex items-center gap-2 flex-wrap">
                         {item.name}
                         {item.data.subcategory && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-primary/10 text-primary border-primary/20">{item.data.subcategory}</span>}
                         {item.data.reloadAction && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-accent/10 text-accent border-accent/20">Recarga: {item.data.reloadAction}</span>}
                     </div>
-                    <div className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description?.replace(/<[^>]*>?/gm, '') || "Sem descrição."}</div>
+                    
+                    <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                        {item.description?.replace(/<[^>]*>?/gm, '') || "Sem descrição."}
+                    </div>
                 </div>
+
                 <div className="flex items-center gap-2 self-center">
-                    {item.weight > 0 && <div className="text-xs text-muted-foreground border px-2 py-1 rounded bg-muted/30 whitespace-nowrap">{item.weight} peso</div>}
-                    <Button variant="ghost" size="icon" className="text-destructive opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}><Trash2 className="w-4 h-4" /></Button>
+                    {item.weight > 0 && (
+                        <div className="text-xs text-muted-foreground border px-2 py-1 rounded bg-muted/30 whitespace-nowrap">
+                             {item.weight} peso
+                        </div>
+                    )}
+                    <Button variant="ghost" size="icon" className="text-destructive opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
+                        <Trash2 className="w-4 h-4" />
+                    </Button>
                 </div>
              </div>
            ))}
