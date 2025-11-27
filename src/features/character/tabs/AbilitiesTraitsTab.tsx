@@ -34,8 +34,8 @@ import { Badge } from "@/components/ui/badge";
 import { SharedTraitList } from "@/components/SharedTraitList";
 import { useTableContext } from "@/features/table/TableContext";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-import { RichTextEditor } from "@/components/RichTextEditor"; // <--- NOVO
-import { JournalRenderer } from "@/components/JournalRenderer"; // <--- NOVO
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { JournalRenderer } from "@/components/JournalRenderer";
 
 type AbilityRollData = {
   abilityName: string;
@@ -45,7 +45,7 @@ type AbilityRollData = {
 };
 
 export const AbilitiesTraitsTab = () => {
-  const { form, isReadOnly } = useCharacterSheet(); // isReadOnly vem do contexto
+  const { form, isReadOnly } = useCharacterSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const [openAbilityItems, setOpenAbilityItems] = useState<string[]>([]);
   const { getValues } = useFormContext();
@@ -97,17 +97,23 @@ export const AbilitiesTraitsTab = () => {
                 title="Adicionar Habilidade"
                 onSelect={(template) => {
                     if (template) {
-                        // Aqui mantemos o HTML vindo do template
-                        let desc = template.description || "";
-                        // Adiciona dados extras como texto simples se necessário, mas preserva o HTML base
-                        if (template.data.novice) desc += `<p><strong>[NOVATO]:</strong> ${template.data.novice}</p>`;
-                        if (template.data.adept)  desc += `<p><strong>[ADEPTO]:</strong> ${template.data.adept}</p>`;
-                        if (template.data.master) desc += `<p><strong>[MESTRE]:</strong> ${template.data.master}</p>`;
+                        // Lógica de formatação melhorada
+                        let desc = "";
+                        if(template.description && template.description !== "<p></p>") {
+                             desc += template.description;
+                        }
+                        
+                        // Adiciona todos os níveis como lista bonita
+                        desc += `<hr/><p><strong>EFEITOS:</strong></p><ul>`;
+                        if (template.data.novice) desc += `<li><strong>Novato:</strong> ${template.data.novice}</li>`;
+                        if (template.data.adept)  desc += `<li><strong>Adepto:</strong> ${template.data.adept}</li>`;
+                        if (template.data.master) desc += `<li><strong>Mestre:</strong> ${template.data.master}</li>`;
+                        desc += `</ul>`;
                         
                         appendAbility({
                             ...getDefaultAbility(),
                             name: template.name,
-                            level: template.data.level || "Novato",
+                            level: template.data.level || "Novato", 
                             type: template.data.type || "Habilidade",
                             description: desc, 
                             corruptionCost: template.data.corruptionCost || "0",
@@ -297,7 +303,6 @@ export const AbilitiesTraitsTab = () => {
                         <FormItem>
                           <FormLabel>Descrição (Regras)</FormLabel>
                           <FormControl>
-                             {/* AQUI ESTÁ A CORREÇÃO MAGISTRAL */}
                              {isReadOnly ? (
                                  <div className="p-3 border rounded-md bg-background/50 min-h-[80px]">
                                      <JournalRenderer content={field.value} />

@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, Trash2, Sword, Shield, FlaskConical, Backpack, Gem, 
-  PawPrint, HandCoins, Zap, Dna, Star, Save, X, Search, 
+  PawPrint, Zap, Dna, Star, Save, X, Search, 
   Image as ImageIcon, Castle, Box, CircleDot, Wheat, Coins, 
   Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music,
   Loader2 
@@ -36,7 +36,6 @@ const RichTextEditor = lazy(() =>
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
 );
 
-// ... (MANTENHA AS CONSTANTES CATEGORIES E SUBCATEGORIES IGUAIS) ...
 const CATEGORIES = [
   { id: 'quality', label: 'Qualidades', icon: Star },
   { id: 'weapon', label: 'Armamentos', icon: Sword },
@@ -58,8 +57,8 @@ const CATEGORIES = [
   { id: 'artifact', label: 'Artefatos Menores', icon: Sparkles },
   { id: 'musical', label: 'Instr. Musicais', icon: Music },
   { id: 'asset', label: 'Proventos', icon: Coins },
-  { id: 'service', label: 'Serviços', icon: HandCoins },
   { id: 'material', label: 'Materiais', icon: Gem },
+  // "Serviços" removido daqui
 ];
 
 const WEAPON_SUBCATEGORIES = [
@@ -123,6 +122,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const [searchQuery, setSearchQuery] = useState("");
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
 
   useEffect(() => {
     cancelEdit();
@@ -162,7 +162,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         let savedData;
         
         if (editingId) {
-            // UPDATE
             const { data, error } = await supabase
                 .from("item_templates")
                 .update(payload)
@@ -173,7 +172,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
             if (error) throw error;
             savedData = data;
 
-            // OTIMIZAÇÃO: Atualiza o cache localmente sem refetch
             queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
                 return old ? old.map(i => i.id === editingId ? savedData : i) : [savedData];
             });
@@ -181,7 +179,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
             toast({ title: "Item Atualizado!" });
 
         } else {
-            // CREATE
             const { data, error } = await supabase
                 .from("item_templates")
                 .insert(payload)
@@ -191,7 +188,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
             if (error) throw error;
             savedData = data;
 
-            // OTIMIZAÇÃO: Adiciona ao cache localmente sem refetch
             queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
                 return old ? [...old, savedData].sort((a,b) => a.name.localeCompare(b.name)) : [savedData];
             });
@@ -215,18 +211,19 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           weight: String(item.weight || ""), 
           data: item.data || {}
       });
+      setEditorKey(prev => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEdit = () => {
       setEditingId(null);
       setNewItem(JSON.parse(JSON.stringify(defaultState)));
+      setEditorKey(prev => prev + 1);
   };
 
   const confirmDelete = async () => {
      if (!itemToDelete) return;
      
-     // Optimistic Delete: Remove da UI antes de confirmar no servidor (para parecer instantâneo)
      const previousData = queryClient.getQueryData<ItemTemplate[]>(queryKey);
      queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
          return old ? old.filter(i => i.id !== itemToDelete) : [];
@@ -235,7 +232,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
      const { error } = await supabase.from("item_templates").delete().eq("id", itemToDelete);
      
      if (error) {
-        // Rollback se falhar
         queryClient.setQueryData(queryKey, previousData);
         toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
      } else {
@@ -250,13 +246,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   };
 
   const renderSpecificFields = () => {
-      // ... (MANTENHA O SWITCH CASE INTEIRO IGUAL AO ANTERIOR) ...
-      // Vou resumir para poupar espaço na resposta, mas você deve manter o código
-      // do switch(category) exatamente como estava no ficheiro anterior.
-      // Se precisar, copie do arquivo 'MasterDatabaseTab.tsx' que você me enviou antes.
-      // A lógica de renderização não mudou.
-      
-      // COPIAR DA VERSÃO ANTERIOR (renderSpecificFields)
       switch (category) {
         case 'quality': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Aplicável em (Arma/Armadura...)" value={newItem.data.targetType || ""} onChange={e => updateData('targetType', e.target.value)} className="bg-background col-span-2"/></div>);
         case 'trait': return (<div className="space-y-3"><div className="grid grid-cols-2 gap-3"><Select value={newItem.data.type || "Traço"} onValueChange={v => updateData('type', v)}><SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger><SelectContent><SelectItem value="Traço">Traço</SelectItem><SelectItem value="Dádiva">Dádiva</SelectItem><SelectItem value="Fardo">Fardo</SelectItem><SelectItem value="Monstruoso">Traço de Criatura</SelectItem></SelectContent></Select><Input placeholder="Custo / Pontos" value={newItem.data.cost || ""} onChange={e => updateData('cost', e.target.value)} className="bg-background"/></div><div className="space-y-2 border-t pt-2"><Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label><Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} /><Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} /><Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} /></div></div>);
@@ -289,7 +278,9 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                             <Label>Nome</Label>
                             <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Nome..." className="bg-background" />
                         </div>
-                        {category !== 'ability' && category !== 'service' && category !== 'quality' && category !== 'trait' && (
+                        
+                        {/* --- ALTERAÇÃO: Serviços removido da lista de exceção de peso pois a categoria foi removida --- */}
+                        {category !== 'ability' && category !== 'quality' && category !== 'trait' && category !== 'construction' && (
                             <div className="col-span-4 space-y-2">
                                 <Label>Peso</Label>
                                 <Input type="number" value={newItem.weight} onChange={e => setNewItem({...newItem, weight: e.target.value})} className="bg-background" />
@@ -302,6 +293,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                      <Label>Descrição Completa / Regras</Label>
                      <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
                         <RichTextEditor 
+                            key={`${editingId || 'new'}-${category}-${editorKey}`}
                             value={newItem.description} 
                             onChange={val => setNewItem({...newItem, description: val})} 
                             placeholder="Escreva as regras, efeitos e detalhes aqui..." 

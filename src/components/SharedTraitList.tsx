@@ -29,8 +29,8 @@ import { getDefaultTrait } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTableContext } from "@/features/table/TableContext"; 
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-import { RichTextEditor } from "@/components/RichTextEditor"; // <--- NOVO
-import { JournalRenderer } from "@/components/JournalRenderer"; // <--- NOVO
+import { RichTextEditor } from "@/components/RichTextEditor"; 
+import { JournalRenderer } from "@/components/JournalRenderer"; 
 
 const TraitItem = ({ 
   index, 
@@ -141,7 +141,7 @@ const TraitItem = ({
               <FormItem>
                 <FormLabel>Descrição (Regras)</FormLabel>
                 <FormControl>
-                    {/* CORREÇÃO AQUI TAMBÉM */}
+                    {/* AQUI ESTÁ A CORREÇÃO: Usa RichTextEditor ou JournalRenderer */}
                     {isReadOnly ? (
                          <div className="p-3 border rounded-md bg-background/50 min-h-[80px]">
                              <JournalRenderer content={field.value} />
@@ -192,8 +192,26 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
                 title="Adicionar Traço"
                 onSelect={(template) => {
                     if (template) {
-                        let desc = template.description || "";
-                        if (template.data.cost) desc += `<p><strong>[Custo/Pontos]:</strong> ${template.data.cost}</p>`;
+                        // LÓGICA MELHORADA DE IMPORTAÇÃO
+                        let desc = "";
+                        
+                        // 1. Se tiver descrição base, adiciona
+                        if (template.description && template.description !== "<p></p>") {
+                            desc += template.description;
+                        }
+
+                        // 2. Adiciona os níveis formatados em HTML bonito (Lista)
+                        if (template.data.novice || template.data.adept || template.data.master) {
+                            desc += `<hr/><p><strong>NÍVEIS:</strong></p><ul>`;
+                            if (template.data.novice) desc += `<li><strong>I (Novato):</strong> ${template.data.novice}</li>`;
+                            if (template.data.adept) desc += `<li><strong>II (Adepto):</strong> ${template.data.adept}</li>`;
+                            if (template.data.master) desc += `<li><strong>III (Mestre):</strong> ${template.data.master}</li>`;
+                            desc += `</ul>`;
+                        }
+                        
+                        if (template.data.cost) {
+                             desc += `<p><em>Custo: ${template.data.cost}</em></p>`;
+                        }
 
                         append({
                             ...getDefaultTrait(),
@@ -226,7 +244,7 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           onValueChange={setOpenItems}
         >
           {fields.map((field, index) => {
-            // @ts-ignore - react-hook-form typing weirdness with useFieldArray
+            // @ts-ignore
             const stableId = field.id; 
             return (
               <TraitItem 
