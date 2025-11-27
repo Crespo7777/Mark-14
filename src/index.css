@@ -7,32 +7,23 @@
   :root {
     --background: 25 20% 8%;
     --foreground: 40 15% 85%;
-
     --card: 25 18% 12%;
     --card-foreground: 40 15% 85%;
-
     --popover: 25 20% 10%;
     --popover-foreground: 40 15% 85%;
-
     --primary: 142 45% 35%;
     --primary-foreground: 40 15% 95%;
-
     --secondary: 32 35% 25%;
     --secondary-foreground: 40 15% 95%;
-
     --muted: 25 15% 20%;
     --muted-foreground: 40 10% 60%;
-
     --accent: 45 65% 50%;
     --accent-foreground: 25 20% 10%;
-
     --destructive: 0 65% 45%;
     --destructive-foreground: 40 15% 95%;
-
     --border: 25 15% 25%;
     --input: 25 15% 20%;
     --ring: 142 45% 35%;
-
     --radius: 0.5rem;
     
     --gradient-primary: linear-gradient(135deg, hsl(142 45% 35%), hsl(142 55% 25%));
@@ -46,33 +37,30 @@
   * {
     @apply border-border;
   }
-
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
-  
   h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     letter-spacing: -0.02em;
   }
-
-  /* --- ESTILOS DO EDITOR DE TEXTO (PROSE) --- */
   
+  /* --- ESTILOS GERAIS DO TEXTO (PROSE) --- */
   .prose {
     @apply text-foreground;
   }
   .prose :where(img):not(:where([class~="not-prose"] *)) {
-    @apply rounded-md border border-border/50 shadow-sm;
+    @apply rounded-md border border-border/50 shadow-sm max-w-full h-auto;
   }
   .prose :where(h1, h2, h3):not(:where([class~="not-prose"] *)) {
-    @apply text-primary-foreground mt-6 mb-4;
+    @apply text-primary-foreground mt-6 mb-4 font-bold;
   }
   .prose :where(strong):not(:where([class~="not-prose"] *)) {
     @apply text-foreground font-bold;
   }
   .prose :where(a):not(:where([class~="not-prose"] *)) {
-    @apply text-accent underline decoration-accent/50 underline-offset-4;
+    @apply text-accent underline decoration-accent/50 underline-offset-4 cursor-pointer;
   }
   .prose :where(blockquote):not(:where([class~="not-prose"] *)) {
     @apply border-l-4 border-accent pl-4 italic text-muted-foreground bg-muted/10 py-1 my-4 rounded-r;
@@ -81,121 +69,86 @@
     @apply text-secondary-foreground bg-muted/50 px-1.5 py-0.5 rounded font-mono text-sm;
   }
   
-  /* Ícone personalizado */
-  .prose journal-icon,
-  journal-icon {
+  .prose journal-icon, journal-icon {
     @apply inline-block align-text-bottom mx-1 text-accent;
   }
-
-  /* Menções (@Nome) */
   .mention {
     @apply bg-accent/30 text-accent-foreground font-semibold px-1 py-0.5 rounded-sm;
   }
 
-  /* --- ESTILOS DE TABELA AVANÇADOS (TIPTAP) --- */
-
-  .prose table {
-    border-collapse: separate; /* Permite border-radius */
-    border-spacing: 0;
-    width: 100%;
-    margin: 1.5rem 0;
-    overflow: hidden;
-    border-radius: var(--radius);
-    border: 1px solid hsl(var(--border));
-    background-color: hsl(var(--card) / 0.3);
-  }
-
-  .prose td,
-  .prose th {
-    min-width: 1em;
-    border-right: 1px solid hsl(var(--border) / 0.5);
-    border-bottom: 1px solid hsl(var(--border) / 0.5);
-    padding: 10px 12px;
-    vertical-align: top;
-    box-sizing: border-box;
-    position: relative;
-    font-size: 0.9rem;
-    line-height: 1.5;
-  }
-
-  /* Remover bordas duplas nas extremidades */
-  .prose tr:last-child td {
-    border-bottom: none;
-  }
-  .prose td:last-child,
-  .prose th:last-child {
-    border-right: none;
-  }
-
-  /* Cabeçalhos (Header) */
-  .prose th {
-    font-weight: 700;
-    text-align: left;
-    background-color: hsl(var(--muted) / 0.7);
-    color: hsl(var(--foreground));
-    border-bottom: 2px solid hsl(var(--border));
-  }
-
-  /* Efeito de seleção de célula */
-  .prose .selectedCell:after {
-    z-index: 2;
-    position: absolute;
-    content: "";
-    inset: 0;
-    background: hsl(var(--primary) / 0.15);
-    border: 1px solid hsl(var(--primary) / 0.5);
-    pointer-events: none;
-  }
-
-  /* Remove margens de parágrafos dentro de tabelas para alinhar melhor */
-  .prose td p, .prose th p {
-    margin: 0;
-  }
-
-  /* Pega de redimensionamento da coluna */
-  .prose .column-resize-handle {
-    position: absolute;
-    right: -2px;
-    top: 0;
-    bottom: -2px;
-    width: 4px;
-    background-color: hsl(var(--primary));
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.2s;
-    z-index: 10;
-  }
-  
-  .prose table:hover .column-resize-handle {
-    opacity: 1;
-  }
-
-  /* --- INPUTS NUMÉRICOS (Remover setas) --- */
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
   }
-
   input[type=number] {
     -moz-appearance: textfield;
   }
 }
 
 @layer utilities {
-  .gradient-primary {
-    background: var(--gradient-primary);
-  }
-  
-  .gradient-card {
-    background: var(--gradient-card);
-  }
-  
-  .shadow-glow {
-    box-shadow: var(--shadow-glow);
-  }
-  
-  .shadow-card {
-    box-shadow: var(--shadow-card);
-  }
+  .gradient-primary { background: var(--gradient-primary); }
+  .gradient-card { background: var(--gradient-card); }
+  .shadow-glow { box-shadow: var(--shadow-glow); }
+  .shadow-card { box-shadow: var(--shadow-card); }
+}
+
+/* --- ESTILOS OBRIGATÓRIOS DO TIPTAP TABLE --- */
+.ProseMirror {
+  outline: none;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  min-width: 1em;
+  border: 1px solid hsl(var(--border));
+  padding: 6px 8px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.ProseMirror th {
+  font-weight: bold;
+  text-align: left;
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.ProseMirror .selectedCell:after {
+  z-index: 2;
+  position: absolute;
+  content: "";
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(var(--primary), 0.2);
+  pointer-events: none;
+}
+
+.ProseMirror .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px;
+  width: 4px;
+  background-color: hsl(var(--primary));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 10;
+}
+
+.ProseMirror table:hover .column-resize-handle {
+  opacity: 1;
+}
+
+.ProseMirror p {
+  margin: 0;
 }
