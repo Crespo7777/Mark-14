@@ -15,6 +15,16 @@ import { CreateNpcDialog } from "@/components/CreateNpcDialog";
 import { CreateCharacterDialog } from "@/components/CreateCharacterDialog";
 import { useTableContext } from "@/features/table/TableContext";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface MasterSidebarProps {
     tableId: string;
@@ -32,6 +42,7 @@ export const MasterSidebar = ({ tableId, isOpen, setIsOpen, onAddToken }: Master
   const [newSceneName, setNewSceneName] = useState("");
   const [newSceneImage, setNewSceneImage] = useState("");
   const [isCreatingScene, setIsCreatingScene] = useState(false);
+  const [sceneToDelete, setSceneToDelete] = useState<string | null>(null);
 
   const { data: scenes = [] } = useQuery({ 
     queryKey: ['scenes', tableId], 
@@ -62,15 +73,16 @@ export const MasterSidebar = ({ tableId, isOpen, setIsOpen, onAddToken }: Master
     toast({ title: "Cena Projetada!" });
   };
 
-  const handleDeleteScene = async (id: string) => {
-      if(!confirm("Apagar cena?")) return;
-      await supabase.from("scenes").delete().eq("id", id);
+  const confirmDeleteScene = async () => {
+      if(!sceneToDelete) return;
+      await supabase.from("scenes").delete().eq("id", sceneToDelete);
       queryClient.invalidateQueries({ queryKey: ['scenes', tableId] });
+      setSceneToDelete(null);
+      toast({ title: "Cena apagada" });
   };
 
   return (
     <div className="h-full w-full bg-black/95 backdrop-blur-md border-r border-white/10 flex flex-col shadow-2xl">
-        {/* Header com botão de fechar */}
         <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center h-14 shrink-0">
             <h2 className="font-bold text-white text-sm uppercase tracking-wider flex items-center gap-2">
                 Biblioteca
@@ -93,7 +105,6 @@ export const MasterSidebar = ({ tableId, isOpen, setIsOpen, onAddToken }: Master
                 </TabsList>
             </div>
 
-            {/* CONTEÚDO: CENAS */}
             <TabsContent value="scenes" className="flex-1 flex flex-col min-h-0 p-0 m-0 data-[state=inactive]:hidden">
                 <div className="p-3">
                     <Dialog open={isCreatingScene} onOpenChange={setIsCreatingScene}>
@@ -126,7 +137,7 @@ export const MasterSidebar = ({ tableId, isOpen, setIsOpen, onAddToken }: Master
                                     <Button size="icon" variant="ghost" className="h-7 w-7 text-green-400 hover:bg-green-900/30" onClick={() => handleActivateScene(scene.id)} title="Projetar">
                                         <Play className="w-3 h-3" />
                                     </Button>
-                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:bg-red-900/30" onClick={() => handleDeleteScene(scene.id)}>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400 hover:bg-red-900/30" onClick={() => setSceneToDelete(scene.id)}>
                                         <Trash2 className="w-3 h-3" />
                                     </Button>
                                 </div>
@@ -136,7 +147,6 @@ export const MasterSidebar = ({ tableId, isOpen, setIsOpen, onAddToken }: Master
                 </ScrollArea>
             </TabsContent>
 
-            {/* CONTEÚDO: NPCs (Tokens) */}
             <TabsContent value="tokens" className="flex-1 flex flex-col min-h-0 p-0 m-0 data-[state=inactive]:hidden">
                 <div className="p-3 pb-1 flex gap-2">
                      <div className="relative flex-1">
@@ -169,7 +179,6 @@ export const MasterSidebar = ({ tableId, isOpen, setIsOpen, onAddToken }: Master
                 </ScrollArea>
             </TabsContent>
             
-            {/* CONTEÚDO: PERSONAGENS (Fichas) */}
             <TabsContent value="chars" className="flex-1 flex flex-col min-h-0 p-0 m-0 data-[state=inactive]:hidden">
                 <div className="p-3 pb-1 flex gap-2">
                      <div className="relative flex-1">
@@ -210,6 +219,19 @@ export const MasterSidebar = ({ tableId, isOpen, setIsOpen, onAddToken }: Master
                 </ScrollArea>
             </TabsContent>
         </Tabs>
+
+        <AlertDialog open={!!sceneToDelete} onOpenChange={() => setSceneToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Apagar Cena?</AlertDialogTitle>
+                    <AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmDeleteScene} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Apagar</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     </div>
   );
 };

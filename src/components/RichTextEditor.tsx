@@ -1,227 +1,352 @@
 // src/components/RichTextEditor.tsx
 
-import { useEffect, useCallback } from "react";
-import { useEditor, EditorContent, Editor, BubbleMenu } from "@tiptap/react";
+import { useEffect, useState, useRef } from "react";
+import { useEditor, EditorContent, type Editor, NodeViewWrapper, ReactNodeViewRenderer, BubbleMenu } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Placeholder from "@tiptap/extension-placeholder";
-import Image from "@tiptap/extension-image";
+import ImageExtension from "@tiptap/extension-image";
+import LinkExtension from "@tiptap/extension-link";
+import Underline from "@tiptap/extension-underline";
+import TextAlign from "@tiptap/extension-text-align";
 import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
-import Underline from "@tiptap/extension-underline";
-import Link from "@tiptap/extension-link";
-import TextAlign from "@tiptap/extension-text-align";
-
-import {
-  Bold, Italic, Strikethrough, List, ListOrdered, Heading1, Heading2, Quote,
-  ImageIcon, Table as TableIcon, Trash2, 
-  ArrowUp, ArrowDown, ArrowLeft, ArrowRight,
-  Merge, Split, Columns, Rows, 
-  Underline as UnderlineIcon, Link as LinkIcon, Unlink,
-  AlignLeft, AlignCenter, AlignRight, AlignJustify
+import { 
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough, 
+  List, ListOrdered, Quote, Heading1, Heading2, 
+  AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, 
+  Image as ImageIcon, Undo, Redo, Eraser, Check, Unlink, Trash2,
+  AlignJustify
 } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { MediaLibrary } from "@/components/MediaLibrary";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
-// --- BOTÃO ROBUSTO (Sem componentes UI complexos para evitar conflitos) ---
-const MenuButton = ({ onClick, icon: Icon, title, isActive = false, variant = "default" }: any) => {
-  const baseClass = "h-7 w-7 flex items-center justify-center rounded transition-colors cursor-pointer";
-  const activeClass = isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground";
-  const destructiveClass = "text-destructive hover:bg-destructive/10";
+// --- COMPONENTE DE IMAGEM PRO (Redimensionável + Alinhamento Avançado) ---
+const ResizableImage = ({ node, updateAttributes, selected }: any) => {
+  const [isResizing, setIsResizing] = useState(false);
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  const { width, align } = node.attrs;
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+
+    const startX = e.clientX;
+    const startWidth = imageRef.current ? imageRef.current.clientWidth : (width || 200);
+
+    const onMouseMove = (e: MouseEvent) => {
+      const currentX = e.clientX;
+      const diffX = currentX - startX;
+      const newWidth = Math.max(50, startWidth + diffX); 
+      
+      if (imageRef.current) {
+         imageRef.current.style.width = `${newWidth}px`;
+      }
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      const currentX = e.clientX;
+      const diffX = currentX - startX;
+      const newWidth = Math.max(50, startWidth + diffX);
+      
+      updateAttributes({ width: newWidth });
+      setIsResizing(false);
+      
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  };
+
+  // Lógica de Estilo para o Alinhamento (Float vs Block)
+  let containerStyle: React.CSSProperties = {
+      display: 'inline-block',
+      position: 'relative',
+      lineHeight: '0',
+      marginRight: '0.5rem',
+      transition: 'all 0.2s ease-in-out'
+  };
   
+  if (align === 'center') {
+      containerStyle = { ...containerStyle, display: 'block', margin: '0.5rem auto', textAlign: 'center' };
+  } else if (align === 'right') {
+      containerStyle = { ...containerStyle, float: 'right', marginLeft: '1rem', marginRight: '0' };
+  } else if (align === 'left') {
+      containerStyle = { ...containerStyle, float: 'left', marginRight: '1rem' };
+  }
+
   return (
-    <button
-      type="button"
-      className={cn(baseClass, variant === "destructive" ? destructiveClass : activeClass)}
-      title={title}
-      // ESTA É A CORREÇÃO: Previne perda de foco e executa imediatamente
-      onMouseDown={(e) => {
-        e.preventDefault(); // Impede que o botão roube o foco do editor
-        e.stopPropagation();
-        onClick();
-      }}
-    >
-      <Icon className="w-4 h-4" />
-    </button>
+    <NodeViewWrapper style={containerStyle} className="image-component">
+      <div 
+        className={cn(
+          "relative inline-block transition-all group",
+          (selected || isResizing) ? "ring-2 ring-primary ring-offset-1 rounded-sm z-10" : ""
+        )}
+      >
+        <img
+          ref={imageRef}
+          src={node.attrs.src}
+          alt={node.attrs.alt}
+          style={{ 
+            width: width ? `${width}px` : 'auto',
+            maxWidth: '100%',
+            display: 'block',
+          }}
+          className={cn(
+            "rounded-md shadow-sm transition-shadow bg-background",
+            selected ? "cursor-move" : "cursor-pointer hover:brightness-95"
+          )}
+          draggable="true" 
+          data-drag-handle
+        />
+        {(selected || isResizing) && (
+            <div 
+              className="absolute bottom-1 right-1 w-3 h-3 bg-primary border border-white rounded-full cursor-nwse-resize z-20 shadow-md" 
+              onMouseDown={handleMouseDown} 
+            />
+        )}
+      </div>
+    </NodeViewWrapper>
   );
 };
 
-// --- BARRA DE FERRAMENTAS FIXA (TOPO) ---
-const TopToolbar = ({ editor }: { editor: Editor | null }) => {
+const CustomImage = ImageExtension.extend({
+  inline: true, 
+  group: 'inline',
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        renderHTML: attributes => ({ width: attributes.width }),
+        parseHTML: element => element.getAttribute('width'),
+      },
+      align: {
+        default: 'center', // Padrão: Centrado
+        renderHTML: attributes => ({ 'data-align': attributes.align }),
+        parseHTML: element => element.getAttribute('data-align'),
+      }
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImage);
+  },
+});
+
+// --- MENU FLUTUANTE DE IMAGEM ---
+const ImageBubbleMenu = ({ editor }: { editor: Editor }) => {
   if (!editor) return null;
 
-  const addImage = () => {
-    const url = window.prompt('URL da imagem:');
-    if (url) editor.chain().focus().setImage({ src: url }).run();
-  };
-
-  const setLink = () => {
-    const previousUrl = editor.getAttributes('link').href;
-    const url = window.prompt('URL do link:', previousUrl);
-    if (url === null) return;
-    if (url === '') {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      return;
-    }
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  const setAlign = (align: 'left' | 'center' | 'right') => {
+    editor.chain().focus().updateAttributes('image', { align }).run();
   };
 
   return (
-    <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-card/50 sticky top-0 z-20 backdrop-blur-sm">
-      <MenuButton icon={Bold} title="Negrito" onClick={() => editor.chain().focus().toggleBold().run()} isActive={editor.isActive('bold')} />
-      <MenuButton icon={Italic} title="Itálico" onClick={() => editor.chain().focus().toggleItalic().run()} isActive={editor.isActive('italic')} />
-      <MenuButton icon={UnderlineIcon} title="Sublinhado" onClick={() => editor.chain().focus().toggleUnderline().run()} isActive={editor.isActive('underline')} />
-      <MenuButton icon={Strikethrough} title="Rasurado" onClick={() => editor.chain().focus().toggleStrike().run()} isActive={editor.isActive('strike')} />
-      
-      <div className="w-px h-5 bg-border mx-1" />
-      
-      <MenuButton icon={AlignLeft} title="Esquerda" onClick={() => editor.chain().focus().setTextAlign('left').run()} isActive={editor.isActive({ textAlign: 'left' })} />
-      <MenuButton icon={AlignCenter} title="Centro" onClick={() => editor.chain().focus().setTextAlign('center').run()} isActive={editor.isActive({ textAlign: 'center' })} />
-      <MenuButton icon={AlignRight} title="Direita" onClick={() => editor.chain().focus().setTextAlign('right').run()} isActive={editor.isActive({ textAlign: 'right' })} />
-      <MenuButton icon={AlignJustify} title="Justificado" onClick={() => editor.chain().focus().setTextAlign('justify').run()} isActive={editor.isActive({ textAlign: 'justify' })} />
-
-      <div className="w-px h-5 bg-border mx-1" />
-
-      <MenuButton icon={Heading1} title="Título 1" onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} isActive={editor.isActive('heading', { level: 1 })} />
-      <MenuButton icon={Heading2} title="Título 2" onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} isActive={editor.isActive('heading', { level: 2 })} />
-      <MenuButton icon={List} title="Lista" onClick={() => editor.chain().focus().toggleBulletList().run()} isActive={editor.isActive('bulletList')} />
-      <MenuButton icon={ListOrdered} title="Lista Numerada" onClick={() => editor.chain().focus().toggleOrderedList().run()} isActive={editor.isActive('orderedList')} />
-      <MenuButton icon={Quote} title="Citação" onClick={() => editor.chain().focus().toggleBlockquote().run()} isActive={editor.isActive('blockquote')} />
-
-      <div className="w-px h-5 bg-border mx-1" />
-
-      <MenuButton icon={TableIcon} title="Inserir Tabela" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} />
-      <MenuButton icon={ImageIcon} title="Imagem" onClick={addImage} />
-      <MenuButton icon={editor.isActive('link') ? Unlink : LinkIcon} title="Link" onClick={setLink} isActive={editor.isActive('link')} />
-    </div>
-  );
-};
-
-// --- MENU FLUTUANTE DE TABELA (LAYOUT HORIZONTAL) ---
-const TableFloatingMenu = ({ editor }: { editor: Editor | null }) => {
-  if (!editor) return null;
-
-  return (
-    <BubbleMenu
-      editor={editor}
-      tippyOptions={{ 
-        duration: 100,
-        placement: 'top', // Volta a aparecer em cima, como pedido
-        interactive: true,
-        zIndex: 50,
-        appendTo: document.body 
-      }}
-      shouldShow={({ editor }) => editor.isActive('table')}
-      // Layout Horizontal limpo
-      className="flex items-center gap-1 p-1 rounded-md border bg-popover text-popover-foreground shadow-lg animate-in fade-in zoom-in-95"
+    <BubbleMenu 
+        editor={editor} 
+        tippyOptions={{ duration: 100, zIndex: 50 }} 
+        shouldShow={({ editor }) => editor.isActive('image')}
+        className="flex items-center gap-1 p-1 rounded-lg border border-border bg-popover shadow-xl"
     >
-      {/* Grupo Colunas */}
-      <div className="flex items-center px-1 gap-0.5 border-r border-border/50 pr-2">
-          <Columns className="w-3 h-3 text-muted-foreground mr-1 opacity-50" />
-          <MenuButton onClick={() => editor.chain().focus().addColumnBefore().run()} icon={ArrowLeft} title="Add Coluna Esq." />
-          <MenuButton onClick={() => editor.chain().focus().addColumnAfter().run()} icon={ArrowRight} title="Add Coluna Dir." />
-          <MenuButton onClick={() => editor.chain().focus().deleteColumn().run()} icon={Trash2} title="Apagar Coluna" variant="destructive" />
-      </div>
-
-      {/* Grupo Linhas */}
-      <div className="flex items-center px-1 gap-0.5 border-r border-border/50 pr-2">
-          <Rows className="w-3 h-3 text-muted-foreground mr-1 opacity-50" />
-          <MenuButton onClick={() => editor.chain().focus().addRowBefore().run()} icon={ArrowUp} title="Add Linha Cima" />
-          <MenuButton onClick={() => editor.chain().focus().addRowAfter().run()} icon={ArrowDown} title="Add Linha Baixo" />
-          <MenuButton onClick={() => editor.chain().focus().deleteRow().run()} icon={Trash2} title="Apagar Linha" variant="destructive" />
-      </div>
-
-      {/* Grupo Células */}
-      <div className="flex items-center px-1 gap-0.5 border-r border-border/50 pr-2">
-          <MenuButton onClick={() => editor.chain().focus().mergeCells().run()} icon={Merge} title="Fundir" />
-          <MenuButton onClick={() => editor.chain().focus().splitCell().run()} icon={Split} title="Separar" />
-      </div>
-
-      {/* Apagar Tabela */}
-      <div className="pl-1">
-          <button 
-            className="flex items-center gap-1 bg-destructive hover:bg-destructive/90 text-destructive-foreground text-[10px] font-bold px-2 py-1 rounded h-7 transition-colors"
-            onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().deleteTable().run(); }}
-          >
-             <Trash2 className="w-3 h-3" /> Tabela
-          </button>
-      </div>
+        <Toggle size="sm" className="h-8 w-8" onPressedChange={() => setAlign('left')} pressed={editor.getAttributes('image').align === 'left'} title="Esquerda (Texto Flui)">
+            <AlignLeft className="w-4 h-4" />
+        </Toggle>
+        <Toggle size="sm" className="h-8 w-8" onPressedChange={() => setAlign('center')} pressed={editor.getAttributes('image').align === 'center'} title="Centro (Bloco)">
+            <AlignCenter className="w-4 h-4" />
+        </Toggle>
+        <Toggle size="sm" className="h-8 w-8" onPressedChange={() => setAlign('right')} pressed={editor.getAttributes('image').align === 'right'} title="Direita (Texto Flui)">
+            <AlignRight className="w-4 h-4" />
+        </Toggle>
+        <Separator orientation="vertical" className="h-6 mx-1" />
+        <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => editor.chain().focus().deleteSelection().run()} title="Remover">
+            <Trash2 className="w-4 h-4" />
+        </Button>
     </BubbleMenu>
   );
 };
 
-// --- COMPONENTE PRINCIPAL ---
+// --- TOOLBAR COMPONENT ---
+const EditorToolbar = ({ editor, onImageSelect }: { editor: Editor | null, onImageSelect: (url: string) => void }) => {
+  if (!editor) return null;
+
+  // Link Selector interno
+  const LinkSelector = () => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [url, setUrl] = useState("");
+
+    useEffect(() => {
+      if (isOpen) setUrl(editor.getAttributes('link').href || "");
+    }, [isOpen]);
+
+    const saveLink = () => {
+      if (url === '') editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      else editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+      setIsOpen(false);
+    };
+
+    return (
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
+        <PopoverTrigger asChild>
+          <Button variant={editor.isActive('link') ? "secondary" : "ghost"} size="icon" className="h-8 w-8" title="Link"><LinkIcon className="h-4 w-4" /></Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-2 bg-card border-border" align="start">
+           <div className="flex gap-2 items-center">
+               <Input placeholder="https://..." value={url} onChange={e => setUrl(e.target.value)} className="h-8 text-xs" onKeyDown={(e) => e.key === 'Enter' && saveLink()} />
+               <Button size="icon" variant="ghost" className="h-8 w-8 text-green-500" onClick={saveLink}><Check className="w-4 h-4" /></Button>
+               {editor.isActive('link') && <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => { editor.chain().focus().unsetLink().run(); setIsOpen(false); }}><Unlink className="w-4 h-4" /></Button>}
+           </div>
+        </PopoverContent>
+      </Popover>
+    );
+  };
+
+  const toggle = (cb: () => void) => { cb(); editor.view.focus(); };
+
+  return (
+    <div className="border-b border-border bg-muted/30 p-2 flex flex-wrap items-center gap-1 sticky top-0 z-20 backdrop-blur-sm">
+      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}><Undo className="h-4 w-4" /></Button>
+      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}><Redo className="h-4 w-4" /></Button>
+      <Separator orientation="vertical" className="h-6 mx-1 bg-border" />
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("bold")} onPressedChange={() => toggle(() => editor.chain().focus().toggleBold().run())}><Bold className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("italic")} onPressedChange={() => toggle(() => editor.chain().focus().toggleItalic().run())}><Italic className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("underline")} onPressedChange={() => toggle(() => editor.chain().focus().toggleUnderline().run())}><UnderlineIcon className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("strike")} onPressedChange={() => toggle(() => editor.chain().focus().toggleStrike().run())}><Strikethrough className="h-4 w-4" /></Toggle>
+      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => editor.chain().focus().unsetAllMarks().run()}><Eraser className="h-4 w-4" /></Button>
+      <Separator orientation="vertical" className="h-6 mx-1 bg-border" />
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive({ textAlign: 'left' })} onPressedChange={() => toggle(() => editor.chain().focus().setTextAlign('left').run())}><AlignLeft className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive({ textAlign: 'center' })} onPressedChange={() => toggle(() => editor.chain().focus().setTextAlign('center').run())}><AlignCenter className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive({ textAlign: 'right' })} onPressedChange={() => toggle(() => editor.chain().focus().setTextAlign('right').run())}><AlignRight className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive({ textAlign: 'justify' })} onPressedChange={() => toggle(() => editor.chain().focus().setTextAlign('justify').run())}><AlignJustify className="h-4 w-4" /></Toggle>
+      <Separator orientation="vertical" className="h-6 mx-1 bg-border" />
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("heading", { level: 1 })} onPressedChange={() => toggle(() => editor.chain().focus().toggleHeading({ level: 1 }).run())}><Heading1 className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("heading", { level: 2 })} onPressedChange={() => toggle(() => editor.chain().focus().toggleHeading({ level: 2 }).run())}><Heading2 className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("bulletList")} onPressedChange={() => toggle(() => editor.chain().focus().toggleBulletList().run())}><List className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("orderedList")} onPressedChange={() => toggle(() => editor.chain().focus().toggleOrderedList().run())}><ListOrdered className="h-4 w-4" /></Toggle>
+      <Toggle size="sm" className="h-8 w-8" pressed={editor.isActive("blockquote")} onPressedChange={() => toggle(() => editor.chain().focus().toggleBlockquote().run())}><Quote className="h-4 w-4" /></Toggle>
+      <Separator orientation="vertical" className="h-6 mx-1 bg-border" />
+      <LinkSelector />
+      <MediaLibrary filter="image" onSelect={(url) => { onImageSelect(url); setTimeout(() => editor.view.focus(), 100); }} trigger={<Button variant="ghost" size="icon" className="h-8 w-8"><ImageIcon className="h-4 w-4" /></Button>} />
+    </div>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL DO EDITOR ---
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  className?: string;
 }
 
-export const RichTextEditor = ({ value, onChange, placeholder }: RichTextEditorProps) => {
+export const RichTextEditor = ({ value, onChange, placeholder, className }: RichTextEditorProps) => {
+  const { toast } = useToast();
+  // Removed local content state to avoid sync issues. Rely on Editor's internal state.
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        history: true,
-        codeBlock: false,
-        horizontalRule: false,
-        dropcursor: { class: "bg-primary w-0.5" }
+        heading: { levels: [1, 2, 3] },
+        bulletList: { keepMarks: true, keepAttributes: false },
+        orderedList: { keepMarks: true, keepAttributes: false },
       }),
-      Placeholder.configure({
-        placeholder: placeholder || "Comece a escrever...",
-      }),
-      Image.configure({
-        inline: true,
-        allowBase64: true,
-      }),
-      Table.configure({
-        resizable: true,
-        HTMLAttributes: {
-          class: 'my-custom-table',
-        },
-      }),
+      Underline,
+      TextAlign.configure({ types: ['heading', 'paragraph', 'image'] }),
+      LinkExtension.configure({ openOnClick: false, autolink: true }),
+      CustomImage, // Usar a nossa extensão Custom
+      Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCell,
-      Underline,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          class: 'text-primary underline cursor-pointer',
-        },
-      }),
-      TextAlign.configure({
-        types: ['heading', 'paragraph'],
-      }),
     ],
-    content: value,
-    onUpdate: ({ editor }) => {
-        // Atualiza o pai a cada keystroke
-        onChange(editor.getHTML());
-    },
+    content: value, // Inicia com o valor
     editorProps: {
       attributes: {
-        class: "prose prose-sm prose-invert max-w-none min-h-[200px] p-4 focus:outline-none",
+        class: "prose prose-invert max-w-none min-h-[150px] p-4 focus:outline-none text-sm [&_img]:max-w-full",
       },
+      handlePaste: (view, event) => {
+        const items = Array.from(event.clipboardData?.items || []);
+        const imageItem = items.find(item => item.type.indexOf('image') === 0);
+        if (imageItem) {
+          event.preventDefault();
+          const file = imageItem.getAsFile();
+          if (file) {
+             const reader = new FileReader();
+             reader.onload = (readerEvent) => {
+                 const base64 = readerEvent.target?.result;
+                 if (base64) {
+                    const node = view.state.schema.nodes.image.create({ src: base64 });
+                    const transaction = view.state.tr.replaceSelectionWith(node);
+                    view.dispatch(transaction);
+                    toast({ title: "Imagem colada!", description: "Convertida para Base64." });
+                 }
+             };
+             reader.readAsDataURL(file);
+             return true;
+          }
+        }
+        return false;
+      },
+      handleDrop: (view, event, _slice, moved) => {
+        if (!moved && event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+           event.preventDefault();
+           const file = event.dataTransfer.files[0];
+           if (file.type.startsWith('image/')) {
+              const reader = new FileReader();
+              reader.onload = (readerEvent) => {
+                 const base64 = readerEvent.target?.result;
+                 if (base64) {
+                    const coordinates = view.posAtCoords({ left: event.clientX, top: event.clientY });
+                    if (coordinates) {
+                       const node = view.state.schema.nodes.image.create({ src: base64 });
+                       const transaction = view.state.tr.insert(coordinates.pos, node);
+                       view.dispatch(transaction);
+                       toast({ title: "Imagem adicionada!" });
+                    }
+                 }
+              };
+              reader.readAsDataURL(file);
+              return true;
+           }
+        }
+        return false;
+      }
+    },
+    onUpdate: ({ editor }) => {
+      onChange(editor.getHTML());
     },
   });
 
-  // Sincronia inteligente para evitar loops e lentidão
+  // Sincronia One-Way: Apenas se o editor estiver "virgem" ou o valor mudar radicalmente (ex: troca de página)
+  // mas não a cada keystroke para evitar bugs de cursor.
   useEffect(() => {
     if (editor && value) {
-       const current = editor.getHTML();
-       if (current !== value && !editor.isFocused) {
-           // Usar queueMicrotask ou setTimeout(0) ajuda a evitar bloqueios na UI
-           setTimeout(() => editor.commands.setContent(value), 0);
-       }
+        const currentHTML = editor.getHTML();
+        // Verifica se está vazio ou se é radicalmente diferente (troca de contexto)
+        // A comparação simples de string pode falhar se o Tiptap reordenar atributos, mas serve para o carregamento inicial
+        if (editor.isEmpty && value !== '<p></p>') {
+            editor.commands.setContent(value);
+        }
     }
   }, [value, editor]);
 
   return (
-    <div className="flex flex-col w-full border rounded-md bg-card shadow-sm overflow-hidden relative group">
-      <TopToolbar editor={editor} />
-      {editor && <TableFloatingMenu editor={editor} />}
-      <div className="flex-1 overflow-y-auto max-h-[600px] bg-background/50">
+    <div className={cn("flex flex-col w-full border border-border rounded-md bg-card shadow-sm overflow-hidden", className)}>
+      <EditorToolbar editor={editor} onImageSelect={(url) => editor?.chain().focus().setImage({ src: url }).run()} />
+      
+      {/* Menu Flutuante da Imagem */}
+      {editor && <ImageBubbleMenu editor={editor} />}
+
+      <div className="flex-1 bg-muted/5 cursor-text" onClick={() => editor?.view.focus()}>
         <EditorContent editor={editor} />
       </div>
     </div>

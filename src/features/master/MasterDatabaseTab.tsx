@@ -18,16 +18,23 @@ import {
 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MediaLibrary } from "@/components/MediaLibrary";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea"; // Importação essencial para os Traços/Habilidades
+import { Textarea } from "@/components/ui/textarea"; 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-// Lazy load do editor para performance
 const RichTextEditor = lazy(() => 
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
 );
 
-// --- CATEGORIAS GERAIS ---
 const CATEGORIES = [
   { id: 'quality', label: 'Qualidades', icon: Star },
   { id: 'weapon', label: 'Armamentos', icon: Sword },
@@ -53,7 +60,6 @@ const CATEGORIES = [
   { id: 'material', label: 'Materiais', icon: Gem },
 ];
 
-// --- SUBCATEGORIAS ---
 const WEAPON_SUBCATEGORIES = [
   "Arma de uma Mão", "Arma Curta", "Arma Longa", "Arma Pesada",
   "Arma de Arremesso", "Arma de Projétil", "Ataque Desarmado", "Escudo", "Armas de Cerco"
@@ -113,6 +119,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const [newItem, setNewItem] = useState<any>(defaultState);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     cancelEdit();
@@ -141,7 +148,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         category,
         name: newItem.name,
         description: newItem.description,
-        // image_url removido da lógica de save
         weight: parseFloat(newItem.weight) || 0,
         data: newItem.data
     };
@@ -168,7 +174,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
       setNewItem({
           name: item.name,
           description: item.description || "",
-          // image_url mantido no estado local apenas para não quebrar a lógica, mas não usado
           weight: String(item.weight || ""), 
           data: item.data || {}
       });
@@ -180,16 +185,17 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
       setNewItem(JSON.parse(JSON.stringify(defaultState)));
   };
 
-  const handleDelete = async (id: string) => {
-     if(!confirm("Tem a certeza que quer apagar este item?")) return;
-     const { error } = await supabase.from("item_templates").delete().eq("id", id);
+  const confirmDelete = async () => {
+     if (!itemToDelete) return;
+     const { error } = await supabase.from("item_templates").delete().eq("id", itemToDelete);
      if (error) {
         toast({ title: "Erro", description: error.message, variant: "destructive" });
      } else {
         toast({ title: "Item apagado" });
         queryClient.invalidateQueries({ queryKey: ['item_templates', tableId, category] });
-        if (editingId === id) cancelEdit();
+        if (editingId === itemToDelete) cancelEdit();
      }
+     setItemToDelete(null);
   };
 
   const updateData = (key: string, value: string) => {
@@ -231,10 +237,8 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     <SelectContent>{WEAPON_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
                  </Select>
                  <Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/>
-                 
                  <Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="bg-background"/>
                  <Input placeholder="Qualidades (ex: Precisa)" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} className="bg-background"/>
-                 
                  {isReloadable && (
                     <Input 
                         placeholder="Recarga (ex: Ação Livre)" 
@@ -243,7 +247,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                         className="bg-background col-span-2 md:col-span-1 border-accent/50"
                     />
                  )}
-
                  <Input placeholder="Preço (ex: 5 Tálers)" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/>
              </div>
           );
@@ -265,7 +268,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           return (
              <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
-                    {/* NÍVEL REMOVIDO, AGORA A HABILIDADE CONTÉM TODOS OS EFEITOS */}
                     <Select value={newItem.data.type || "Habilidade"} onValueChange={v => updateData('type', v)}>
                        <SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger>
                        <SelectContent><SelectItem value="Habilidade">Habilidade</SelectItem><SelectItem value="Poder">Poder</SelectItem><SelectItem value="Ritual">Ritual</SelectItem></SelectContent>
@@ -274,8 +276,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     <Input placeholder="Atributo Assoc." className="bg-background" value={newItem.data.associatedAttribute || ""} onChange={e => updateData('associatedAttribute', e.target.value)} />
                     <Input placeholder="Tradição" value={newItem.data.tradition || ""} onChange={e => updateData('tradition', e.target.value)} className="bg-background"/>
                 </div>
-                
-                {/* --- NOVOS CAMPOS: EFEITOS POR NÍVEL --- */}
                 <div className="space-y-2 border-t pt-2">
                     <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label>
                     <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
@@ -326,19 +326,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     <Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/>
                 </div>
              );
-        // Categorias Genéricas (Apenas Preço e Peso)
-        case 'container':
-        case 'ammunition':
-        case 'animal':
-        case 'clothing':
-        case 'tool':
-        case 'spec_tool':
-        case 'musical':
-        case 'asset':
-        case 'mount':
-        case 'service':
-        case 'material':
-        case 'general':
         default: 
           return (
              <div className="grid grid-cols-2 gap-3">
@@ -350,7 +337,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   return (
     <div className="space-y-6">
-       {/* CARD DE EDIÇÃO / CRIAÇÃO */}
        <Card className={`border-dashed border-2 transition-colors ${editingId ? "bg-accent/5 border-accent" : "bg-muted/20"}`}>
           <CardContent className="p-4 space-y-4">
               <div className="flex justify-between items-center">
@@ -359,18 +345,13 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                   </h3>
                   {editingId && <Button variant="ghost" size="sm" onClick={cancelEdit}><X className="w-4 h-4 mr-1"/> Cancelar Edição</Button>}
               </div>
-
               <div className="grid grid-cols-12 gap-4">
-                 {/* COLUNA 1: Imagem (Visualmente removida, layout ajustado) */}
-
-                 {/* COLUNA 2: Dados Principais */}
                  <div className="col-span-12 space-y-4">
                      <div className="grid grid-cols-12 gap-3">
                         <div className="col-span-8 space-y-2">
                             <Label>Nome</Label>
                             <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Nome..." className="bg-background" />
                         </div>
-                        {/* Peso: Removido para Habilidades, Qualidades, Serviços e Traços */}
                         {category !== 'ability' && category !== 'service' && category !== 'quality' && category !== 'trait' && (
                             <div className="col-span-4 space-y-2">
                                 <Label>Peso</Label>
@@ -380,8 +361,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                      </div>
                      {renderSpecificFields()}
                  </div>
-                 
-                 {/* DESCRIÇÃO */}
                  <div className="col-span-12 space-y-2">
                      <Label>Descrição Completa / Regras</Label>
                      <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
@@ -392,7 +371,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                         />
                      </Suspense>
                  </div>
-                 
                  <div className="col-span-12 flex justify-end pt-2">
                      <Button onClick={handleSave} className="w-full sm:w-auto">
                          {editingId ? <Save className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>} 
@@ -403,7 +381,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           </CardContent>
        </Card>
        
-       {/* BARRA DE PESQUISA */}
        <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input 
@@ -414,30 +391,26 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           />
        </div>
 
-       {/* LISTAGEM DE ITENS */}
        <div className="grid grid-cols-1 gap-2 pb-10">
           {filteredItems.map(item => (
              <div key={item.id} className="flex gap-3 p-3 border rounded-md bg-card hover:bg-accent/50 group cursor-pointer transition-all items-start" onClick={() => handleEdit(item)}>
-                {/* SEM IMAGEM NA LISTA */}
                 <div className="flex-1 min-w-0">
                     <div className="font-bold flex items-center gap-2 flex-wrap">
                         {item.name}
                         {item.data.subcategory && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-primary/10 text-primary border-primary/20">{item.data.subcategory}</span>}
                         {item.data.reloadAction && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-accent/10 text-accent border-accent/20">Recarga: {item.data.reloadAction}</span>}
                     </div>
-                    
                     <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
                         {item.description?.replace(/<[^>]*>?/gm, '') || "Sem descrição."}
                     </div>
                 </div>
-
                 <div className="flex items-center gap-2 self-center">
                     {item.weight > 0 && (
                         <div className="text-xs text-muted-foreground border px-2 py-1 rounded bg-muted/30 whitespace-nowrap">
                              {item.weight} peso
                         </div>
                     )}
-                    <Button variant="ghost" size="icon" className="text-destructive opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all" onClick={(e) => { e.stopPropagation(); handleDelete(item.id); }}>
+                    <Button variant="ghost" size="icon" className="text-destructive opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all" onClick={(e) => { e.stopPropagation(); setItemToDelete(item.id); }}>
                         <Trash2 className="w-4 h-4" />
                     </Button>
                 </div>
@@ -445,6 +418,21 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
            ))}
           {filteredItems.length === 0 && <p className="text-center text-muted-foreground py-8 italic">Nenhum item encontrado nesta categoria.</p>}
        </div>
+       
+       <AlertDialog open={!!itemToDelete} onOpenChange={() => setItemToDelete(null)}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Apagar Item?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Tem a certeza que quer remover este item do banco de dados?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Apagar</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+       </AlertDialog>
     </div>
   );
 }
