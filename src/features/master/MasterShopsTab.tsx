@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch"; 
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database } from "lucide-react";
+import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database, Loader2 } from "lucide-react";
 import { formatPrice } from "@/lib/economy-utils";
 import { Separator } from "@/components/ui/separator";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
@@ -48,6 +48,7 @@ const fetchCharacters = async (tableId: string) => {
   return (data || []) as CharacterWithRelations[];
 };
 
+// --- COMPONENTE PRINCIPAL EXPORTADO ---
 export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -103,6 +104,7 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
   const handleToggleShopVisibility = async (shop: Shop & { is_open: boolean }, e: React.MouseEvent) => {
     e.stopPropagation();
     const newState = !shop.is_open;
+    // Atualiza localmente para feedback imediato na lista
     if (selectedShop?.id === shop.id) setSelectedShop({...shop, is_open: newState});
 
     const { error } = await supabase.from("shops").update({ is_open: newState }).eq("id", shop.id);
@@ -194,13 +196,15 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Adicionamos 'data' ao estado para guardar os campos extras
   const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, description: "", category: "general", data: {} as any });
   const [currencyType, setCurrencyType] = useState<"ortega" | "shekel" | "taler">("ortega");
   const [itemToSend, setItemToSend] = useState<ExtendedShopItem | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+
+  const queryKey = ['shop_items', shop.id];
 
   const { data: items = [] } = useQuery({
-    queryKey: ['shop_items', shop.id],
+    queryKey: queryKey,
     queryFn: () => fetchShopItems(shop.id),
   });
 
@@ -209,7 +213,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
     queryFn: () => fetchCharacters(tableId),
   });
 
-  // Reset do formulário quando muda a categoria (para limpar dados antigos)
   useEffect(() => {
       setNewItem(prev => ({ ...prev, data: {} }));
   }, [newItem.category]);
@@ -219,36 +222,45 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         toast({ title: "Erro", description: "Nome obrigatório", variant: "destructive" });
         return;
     }
+    setIsAdding(true);
 
     let multiplier = 1;
     if (currencyType === "shekel") multiplier = 10;
     if (currencyType === "taler") multiplier = 100;
     const finalPrice = (parseInt(newItem.amount as any) || 0) * multiplier;
 
-    const { error } = await supabase.from("shop_items").insert({
+    const payload = {
       shop_id: shop.id,
       name: newItem.name,
       price: finalPrice, 
       weight: newItem.weight,
       description: newItem.description,
-      // Monta o objeto data com a categoria e os campos dinâmicos
-      data: {
-          category: newItem.category,
-          ...newItem.data
-      }
-    });
+      data: { category: newItem.category, ...newItem.data }
+    };
 
-    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else {
-      // Reset
-      setNewItem({ name: "", amount: 0, weight: 0, description: "", category: "general", data: {} }); 
-      setCurrencyType("ortega");
-      queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
+    try {
+        const { data, error } = await supabase.from("shop_items").insert(payload).select().single();
+        
+        if (error) throw error;
+
+        // OTIMIZAÇÃO: Atualiza o cache instantaneamente
+        queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
+            return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
+        });
+
+        setNewItem({ name: "", amount: 0, weight: 0, description: "", category: "general", data: {} }); 
+        setCurrencyType("ortega");
+
+    } catch (error: any) {
+        toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+        setIsAdding(false);
     }
   };
 
   const handleImportFromDatabase = async (template: ItemTemplate | null) => {
      if (!template) return;
+     setIsAdding(true);
 
      let price = 0;
      const templatePriceStr = template.data?.price ? String(template.data.price).toLowerCase() : "";
@@ -260,28 +272,44 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         else price = val;
      }
 
-     const { error } = await supabase.from("shop_items").insert({
-        shop_id: shop.id,
-        name: template.name,
-        description: template.description,
-        weight: template.weight,
-        price: price,
-        data: { 
-            ...template.data, 
-            category: template.category 
-        }
-     });
+     try {
+         const { data, error } = await supabase.from("shop_items").insert({
+            shop_id: shop.id,
+            name: template.name,
+            description: template.description,
+            weight: template.weight,
+            price: price,
+            data: { ...template.data, category: template.category }
+         }).select().single();
 
-     if (error) toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
-     else {
-         toast({ title: "Item Importado!", description: `${template.name} adicionado.` });
-         queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
+         if (error) throw error;
+
+         // OTIMIZAÇÃO
+         queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
+             return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
+         });
+
+         toast({ title: "Item Importado!" });
+     } catch (error: any) {
+         toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
+     } finally {
+         setIsAdding(false);
      }
   };
 
   const handleDeleteItem = async (id: string) => {
-    await supabase.from("shop_items").delete().eq("id", id);
-    queryClient.invalidateQueries({ queryKey: ['shop_items', shop.id] });
+    // Optimistic Delete
+    const previousData = queryClient.getQueryData<ExtendedShopItem[]>(queryKey);
+    queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
+        return old ? old.filter(i => i.id !== id) : [];
+    });
+
+    const { error } = await supabase.from("shop_items").delete().eq("id", id);
+    
+    if (error) {
+        queryClient.setQueryData(queryKey, previousData);
+        toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
+    }
   };
 
   const handleSendLoot = async (charId: string) => {
@@ -317,12 +345,10 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
     }
   };
 
-  // Helper para atualizar o data dinâmico
   const updateData = (key: string, value: string) => {
     setNewItem(prev => ({ ...prev, data: { ...prev.data, [key]: value } }));
   };
 
-  // Renderização condicional dos campos extras (baseada na categoria)
   const renderSpecificFields = () => {
     switch (newItem.category) {
       case 'weapon':
@@ -370,8 +396,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="bg-muted/20 p-4 rounded-md space-y-4 border border-dashed border-border">
-            
-            {/* LINHA 1: Nome, Categoria, Peso */}
             <div className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-6">
                     <Label className="text-xs">Nome do Item</Label>
@@ -391,17 +415,11 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                     <Input type="number" value={newItem.weight} onChange={e => setNewItem({...newItem, weight: parseInt(e.target.value)||0})} />
                 </div>
             </div>
-
-            {/* LINHA 2: Campos Dinâmicos (Opcional) */}
             {renderSpecificFields()}
-
-            {/* LINHA 3: Descrição */}
             <div className="w-full">
                 <Label className="text-xs">Descrição (Opcional)</Label>
                 <Input value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} placeholder="..." />
             </div>
-
-            {/* LINHA 4: Preço e Botões */}
             <div className="grid grid-cols-12 gap-2 items-end">
                 <div className="col-span-3">
                     <Label className="text-xs">Valor</Label>
@@ -419,24 +437,24 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                     </Select>
                 </div>
                 <div className="col-span-5 flex gap-1">
-                    <Button onClick={handleAddItem} className="flex-1 bg-green-600 hover:bg-green-700"><Plus className="w-4 h-4 mr-2" /> Adicionar</Button>
-                    
+                    <Button onClick={handleAddItem} className="flex-1 bg-green-600 hover:bg-green-700" disabled={isAdding}>
+                        {isAdding ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Plus className="w-4 h-4 mr-2" />} 
+                        Adicionar
+                    </Button>
                     <ItemSelectorDialog 
                         tableId={tableId} 
                         categories={['weapon', 'armor', 'consumable', 'general', 'material', 'mystic', 'service', 'mount']} 
                         onSelect={handleImportFromDatabase}
                         title="Importar"
                     >
-                         <Button variant="outline" size="icon" title="Importar do Database">
+                         <Button variant="outline" size="icon" title="Importar do Database" disabled={isAdding}>
                             <Database className="w-4 h-4" />
                          </Button>
                     </ItemSelectorDialog>
                 </div>
             </div>
         </div>
-
         <Separator />
-
         <div className="space-y-2">
            {items.length === 0 && <p className="text-muted-foreground text-center py-4">Sem estoque.</p>}
            {items.map(item => (
@@ -452,23 +470,13 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                 </div>
                 <div className="flex items-center gap-4 text-right">
                    <div>
-                      <div className="font-bold text-accent flex items-center justify-end gap-1">
-                         {formatPrice(item.price)}
-                      </div>
+                      <div className="font-bold text-accent flex items-center justify-end gap-1">{formatPrice(item.price)}</div>
                       <div className="text-xs text-muted-foreground">{item.weight} peso</div>
                    </div>
-                   
                    <Dialog>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setItemToSend(item)}>
-                           <Send className="w-3 h-3" />
-                        </Button>
-                      </DialogTrigger>
+                      <DialogTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setItemToSend(item)}><Send className="w-3 h-3" /></Button></DialogTrigger>
                       <DialogContent>
-                         <DialogHeader>
-                           <DialogTitle>Enviar {item.name}</DialogTitle>
-                           <DialogDescription>O jogador receberá este item gratuitamente.</DialogDescription>
-                         </DialogHeader>
+                         <DialogHeader><DialogTitle>Enviar {item.name}</DialogTitle><DialogDescription>O jogador receberá este item gratuitamente.</DialogDescription></DialogHeader>
                          <div className="grid gap-2 py-4">
                             {characters.map(char => (
                                <Button key={char.id} variant="ghost" className="justify-start" onClick={() => handleSendLoot(char.id)}>
@@ -479,7 +487,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                          </div>
                       </DialogContent>
                    </Dialog>
-
                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteItem(item.id)}>
                       <Trash2 className="w-3 h-3" />
                    </Button>

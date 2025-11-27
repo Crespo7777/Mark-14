@@ -13,15 +13,12 @@ import Dashboard from "./pages/Dashboard";
 import TableView from "./pages/TableView";
 import NotFound from "./pages/NotFound";
 
-// --- CORREÇÃO DE CONFIGURAÇÃO ---
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      // Evita recarregar dados só porque o utilizador clicou fora e voltou à janela
       refetchOnWindowFocus: false, 
-      // Mantém os dados em cache por mais tempo antes de considerar "velhos"
-      staleTime: 1000 * 60 * 2, // 2 minutos
-      // Se falhar, tenta menos vezes para não bloquear a UI
+      // Aumentamos o tempo de "stale" porque agora confiamos nas nossas atualizações manuais
+      staleTime: 1000 * 60 * 5, // 5 minutos
       retry: 1,
     },
   },

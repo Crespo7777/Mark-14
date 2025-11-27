@@ -14,7 +14,8 @@ import {
   Plus, Trash2, Sword, Shield, FlaskConical, Backpack, Gem, 
   PawPrint, HandCoins, Zap, Dna, Star, Save, X, Search, 
   Image as ImageIcon, Castle, Box, CircleDot, Wheat, Coins, 
-  Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music 
+  Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music,
+  Loader2 
 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -35,6 +36,7 @@ const RichTextEditor = lazy(() =>
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
 );
 
+// ... (MANTENHA AS CONSTANTES CATEGORIES E SUBCATEGORIES IGUAIS) ...
 const CATEGORIES = [
   { id: 'quality', label: 'Qualidades', icon: Star },
   { id: 'weapon', label: 'Armamentos', icon: Sword },
@@ -120,14 +122,17 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     cancelEdit();
     setSearchQuery("");
   }, [category]);
 
+  const queryKey = ['item_templates', tableId, category];
+
   const { data: items = [] } = useQuery({
-    queryKey: ['item_templates', tableId, category],
+    queryKey: queryKey,
     queryFn: () => fetchTemplates(tableId, category),
   });
 
@@ -142,6 +147,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const handleSave = async () => {
     if (!newItem.name) return toast({ title: "Nome obrigatório", variant: "destructive" });
+    setIsSaving(true);
 
     const payload = {
         table_id: tableId,
@@ -152,20 +158,52 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         data: newItem.data
     };
 
-    let error;
-    if (editingId) {
-        const { error: err } = await supabase.from("item_templates").update(payload).eq("id", editingId);
-        error = err;
-    } else {
-        const { error: err } = await supabase.from("item_templates").insert(payload);
-        error = err;
-    }
-    
-    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else {
-        toast({ title: editingId ? "Item Atualizado!" : "Item Criado!" });
+    try {
+        let savedData;
+        
+        if (editingId) {
+            // UPDATE
+            const { data, error } = await supabase
+                .from("item_templates")
+                .update(payload)
+                .eq("id", editingId)
+                .select()
+                .single();
+            
+            if (error) throw error;
+            savedData = data;
+
+            // OTIMIZAÇÃO: Atualiza o cache localmente sem refetch
+            queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
+                return old ? old.map(i => i.id === editingId ? savedData : i) : [savedData];
+            });
+            
+            toast({ title: "Item Atualizado!" });
+
+        } else {
+            // CREATE
+            const { data, error } = await supabase
+                .from("item_templates")
+                .insert(payload)
+                .select()
+                .single();
+
+            if (error) throw error;
+            savedData = data;
+
+            // OTIMIZAÇÃO: Adiciona ao cache localmente sem refetch
+            queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
+                return old ? [...old, savedData].sort((a,b) => a.name.localeCompare(b.name)) : [savedData];
+            });
+
+            toast({ title: "Item Criado!" });
+        }
         cancelEdit();
-        queryClient.invalidateQueries({ queryKey: ['item_templates', tableId, category] });
+
+    } catch (error: any) {
+        toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } finally {
+        setIsSaving(false);
     }
   };
 
@@ -187,12 +225,21 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const confirmDelete = async () => {
      if (!itemToDelete) return;
+     
+     // Optimistic Delete: Remove da UI antes de confirmar no servidor (para parecer instantâneo)
+     const previousData = queryClient.getQueryData<ItemTemplate[]>(queryKey);
+     queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
+         return old ? old.filter(i => i.id !== itemToDelete) : [];
+     });
+
      const { error } = await supabase.from("item_templates").delete().eq("id", itemToDelete);
+     
      if (error) {
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
+        // Rollback se falhar
+        queryClient.setQueryData(queryKey, previousData);
+        toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
      } else {
         toast({ title: "Item apagado" });
-        queryClient.invalidateQueries({ queryKey: ['item_templates', tableId, category] });
         if (editingId === itemToDelete) cancelEdit();
      }
      setItemToDelete(null);
@@ -203,135 +250,25 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   };
 
   const renderSpecificFields = () => {
+      // ... (MANTENHA O SWITCH CASE INTEIRO IGUAL AO ANTERIOR) ...
+      // Vou resumir para poupar espaço na resposta, mas você deve manter o código
+      // do switch(category) exatamente como estava no ficheiro anterior.
+      // Se precisar, copie do arquivo 'MasterDatabaseTab.tsx' que você me enviou antes.
+      // A lógica de renderização não mudou.
+      
+      // COPIAR DA VERSÃO ANTERIOR (renderSpecificFields)
       switch (category) {
-        case 'quality':
-            return (
-               <div className="grid grid-cols-2 gap-3">
-                   <Input placeholder="Aplicável em (Arma/Armadura...)" value={newItem.data.targetType || ""} onChange={e => updateData('targetType', e.target.value)} className="bg-background col-span-2"/>
-               </div>
-            );
-        case 'trait': 
-           return (
-              <div className="space-y-3">
-                 <div className="grid grid-cols-2 gap-3">
-                    <Select value={newItem.data.type || "Traço"} onValueChange={v => updateData('type', v)}>
-                            <SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                            <SelectContent><SelectItem value="Traço">Traço</SelectItem><SelectItem value="Dádiva">Dádiva</SelectItem><SelectItem value="Fardo">Fardo</SelectItem><SelectItem value="Monstruoso">Traço de Criatura</SelectItem></SelectContent>
-                    </Select>
-                    <Input placeholder="Custo / Pontos" value={newItem.data.cost || ""} onChange={e => updateData('cost', e.target.value)} className="bg-background"/>
-                 </div>
-                 <div className="space-y-2 border-t pt-2">
-                    <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label>
-                    <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
-                    <Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} />
-                    <Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} />
-                 </div>
-              </div>
-           );
-        case 'weapon': {
-          const isReloadable = newItem.data.subcategory === "Arma de Projétil" || newItem.data.subcategory === "Arma de Arremesso";
-          return (
-             <div className="grid grid-cols-2 gap-3">
-                 <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                    <SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Categoria da Arma" /></SelectTrigger>
-                    <SelectContent>{WEAPON_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
-                 </Select>
-                 <Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/>
-                 <Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="bg-background"/>
-                 <Input placeholder="Qualidades (ex: Precisa)" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} className="bg-background"/>
-                 {isReloadable && (
-                    <Input 
-                        placeholder="Recarga (ex: Ação Livre)" 
-                        value={newItem.data.reloadAction || ""} 
-                        onChange={e => updateData('reloadAction', e.target.value)} 
-                        className="bg-background col-span-2 md:col-span-1 border-accent/50"
-                    />
-                 )}
-                 <Input placeholder="Preço (ex: 5 Tálers)" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/>
-             </div>
-          );
-        }
-        case 'armor':
-          return (
-             <div className="grid grid-cols-2 gap-3">
-                 <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                    <SelectTrigger className="col-span-2 bg-background"><SelectValue placeholder="Tipo de Armadura" /></SelectTrigger>
-                    <SelectContent>{ARMOR_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
-                 </Select>
-                 <Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="bg-background"/>
-                 <Input placeholder="Penalidade (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="bg-background"/>
-                 <Input placeholder="Qualidades" className="col-span-2 bg-background" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} />
-                 <Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} />
-             </div>
-          );
-        case 'ability':
-          return (
-             <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                    <Select value={newItem.data.type || "Habilidade"} onValueChange={v => updateData('type', v)}>
-                       <SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                       <SelectContent><SelectItem value="Habilidade">Habilidade</SelectItem><SelectItem value="Poder">Poder</SelectItem><SelectItem value="Ritual">Ritual</SelectItem></SelectContent>
-                    </Select>
-                    <Input placeholder="Custo Corr." value={newItem.data.corruptionCost || ""} onChange={e => updateData('corruptionCost', e.target.value)} className="bg-background"/>
-                    <Input placeholder="Atributo Assoc." className="bg-background" value={newItem.data.associatedAttribute || ""} onChange={e => updateData('associatedAttribute', e.target.value)} />
-                    <Input placeholder="Tradição" value={newItem.data.tradition || ""} onChange={e => updateData('tradition', e.target.value)} className="bg-background"/>
-                </div>
-                <div className="space-y-2 border-t pt-2">
-                    <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label>
-                    <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
-                    <Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} />
-                    <Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} />
-                 </div>
-             </div>
-          );
-        case 'consumable':
-           return (
-             <div className="grid grid-cols-2 gap-3">
-                 <Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="bg-background"/>
-                 <Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/>
-             </div>
-           );
-        case 'food':
-            return (
-               <div className="grid grid-cols-2 gap-3">
-                   <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                      <SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Tipo de Alimento" /></SelectTrigger>
-                      <SelectContent>{FOOD_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
-                   </Select>
-                   <Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/>
-               </div>
-            );
-        case 'construction':
-            return (
-               <div className="grid grid-cols-2 gap-3">
-                   <Input placeholder="Integridade" value={newItem.data.integrity || ""} onChange={e => updateData('integrity', e.target.value)} className="bg-background"/>
-                   <Input placeholder="Resistência" value={newItem.data.resistance || ""} onChange={e => updateData('resistance', e.target.value)} className="bg-background"/>
-                   <Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} />
-               </div>
-            );
-        case 'trap':
-            return (
-               <div className="grid grid-cols-2 gap-3">
-                   <Input placeholder="Dificuldade Detetar" value={newItem.data.spotDifficulty || ""} onChange={e => updateData('spotDifficulty', e.target.value)} className="bg-background"/>
-                   <Input placeholder="Dificuldade Desarmar" value={newItem.data.disarmDifficulty || ""} onChange={e => updateData('disarmDifficulty', e.target.value)} className="bg-background"/>
-                   <Input placeholder="Dano / Efeito" className="col-span-2 bg-background" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} />
-                   <Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} />
-               </div>
-            );
-        case 'artifact':
-             return (
-                <div className="grid grid-cols-2 gap-3">
-                    <Input placeholder="Efeito Mágico" className="col-span-2 bg-background" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} />
-                    <Input placeholder="Corrupção" value={newItem.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="bg-background"/>
-                    <Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/>
-                </div>
-             );
-        default: 
-          return (
-             <div className="grid grid-cols-2 gap-3">
-                 <Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="col-span-2 bg-background"/>
-             </div>
-          );
+        case 'quality': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Aplicável em (Arma/Armadura...)" value={newItem.data.targetType || ""} onChange={e => updateData('targetType', e.target.value)} className="bg-background col-span-2"/></div>);
+        case 'trait': return (<div className="space-y-3"><div className="grid grid-cols-2 gap-3"><Select value={newItem.data.type || "Traço"} onValueChange={v => updateData('type', v)}><SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger><SelectContent><SelectItem value="Traço">Traço</SelectItem><SelectItem value="Dádiva">Dádiva</SelectItem><SelectItem value="Fardo">Fardo</SelectItem><SelectItem value="Monstruoso">Traço de Criatura</SelectItem></SelectContent></Select><Input placeholder="Custo / Pontos" value={newItem.data.cost || ""} onChange={e => updateData('cost', e.target.value)} className="bg-background"/></div><div className="space-y-2 border-t pt-2"><Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label><Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} /><Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} /><Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} /></div></div>);
+        case 'weapon': { const isReloadable = newItem.data.subcategory === "Arma de Projétil" || newItem.data.subcategory === "Arma de Arremesso"; return (<div className="grid grid-cols-2 gap-3"><Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Categoria da Arma" /></SelectTrigger><SelectContent>{WEAPON_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent></Select><Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/><Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="bg-background"/><Input placeholder="Qualidades (ex: Precisa)" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} className="bg-background"/>{isReloadable && (<Input placeholder="Recarga (ex: Ação Livre)" value={newItem.data.reloadAction || ""} onChange={e => updateData('reloadAction', e.target.value)} className="bg-background col-span-2 md:col-span-1 border-accent/50"/>)}<Input placeholder="Preço (ex: 5 Tálers)" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/></div>); }
+        case 'armor': return (<div className="grid grid-cols-2 gap-3"><Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="col-span-2 bg-background"><SelectValue placeholder="Tipo de Armadura" /></SelectTrigger><SelectContent>{ARMOR_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent></Select><Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="bg-background"/><Input placeholder="Penalidade (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="bg-background"/><Input placeholder="Qualidades" className="col-span-2 bg-background" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} /><Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} /></div>);
+        case 'ability': return (<div className="space-y-3"><div className="grid grid-cols-2 gap-3"><Select value={newItem.data.type || "Habilidade"} onValueChange={v => updateData('type', v)}><SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger><SelectContent><SelectItem value="Habilidade">Habilidade</SelectItem><SelectItem value="Poder">Poder</SelectItem><SelectItem value="Ritual">Ritual</SelectItem></SelectContent></Select><Input placeholder="Custo Corr." value={newItem.data.corruptionCost || ""} onChange={e => updateData('corruptionCost', e.target.value)} className="bg-background"/><Input placeholder="Atributo Assoc." className="bg-background" value={newItem.data.associatedAttribute || ""} onChange={e => updateData('associatedAttribute', e.target.value)} /><Input placeholder="Tradição" value={newItem.data.tradition || ""} onChange={e => updateData('tradition', e.target.value)} className="bg-background"/></div><div className="space-y-2 border-t pt-2"><Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label><Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} /><Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} /><Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} /></div></div>);
+        case 'consumable': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="bg-background"/><Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
+        case 'food': return (<div className="grid grid-cols-2 gap-3"><Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Tipo de Alimento" /></SelectTrigger><SelectContent>{FOOD_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent></Select><Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
+        case 'construction': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Integridade" value={newItem.data.integrity || ""} onChange={e => updateData('integrity', e.target.value)} className="bg-background"/><Input placeholder="Resistência" value={newItem.data.resistance || ""} onChange={e => updateData('resistance', e.target.value)} className="bg-background"/><Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} /></div>);
+        case 'trap': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Dificuldade Detetar" value={newItem.data.spotDifficulty || ""} onChange={e => updateData('spotDifficulty', e.target.value)} className="bg-background"/><Input placeholder="Dificuldade Desarmar" value={newItem.data.disarmDifficulty || ""} onChange={e => updateData('disarmDifficulty', e.target.value)} className="bg-background"/><Input placeholder="Dano / Efeito" className="col-span-2 bg-background" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} /><Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} /></div>);
+        case 'artifact': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Efeito Mágico" className="col-span-2 bg-background" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} /><Input placeholder="Corrupção" value={newItem.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="bg-background"/><Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
+        default: return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="col-span-2 bg-background"/></div>);
       }
   };
 
@@ -372,8 +309,8 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                      </Suspense>
                  </div>
                  <div className="col-span-12 flex justify-end pt-2">
-                     <Button onClick={handleSave} className="w-full sm:w-auto">
-                         {editingId ? <Save className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>} 
+                     <Button onClick={handleSave} className="w-full sm:w-auto" disabled={isSaving}>
+                         {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : (editingId ? <Save className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>)} 
                          {editingId ? "Salvar Alterações" : "Adicionar ao Database"}
                      </Button>
                  </div>
@@ -404,6 +341,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                         {item.description?.replace(/<[^>]*>?/gm, '') || "Sem descrição."}
                     </div>
                 </div>
+
                 <div className="flex items-center gap-2 self-center">
                     {item.weight > 0 && (
                         <div className="text-xs text-muted-foreground border px-2 py-1 rounded bg-muted/30 whitespace-nowrap">

@@ -16,7 +16,6 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -30,6 +29,8 @@ import { getDefaultTrait } from "@/features/character/character.schema";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTableContext } from "@/features/table/TableContext"; 
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
+import { RichTextEditor } from "@/components/RichTextEditor"; // <--- NOVO
+import { JournalRenderer } from "@/components/JournalRenderer"; // <--- NOVO
 
 const TraitItem = ({ 
   index, 
@@ -76,18 +77,19 @@ const TraitItem = ({
           </div>
         </AccordionTrigger>
 
-        <div className="flex pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            onClick={() => remove(index)}
-            disabled={isReadOnly}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
+        {!isReadOnly && (
+            <div className="flex pl-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="text-destructive hover:text-destructive"
+                onClick={() => remove(index)}
+            >
+                <Trash2 className="w-4 h-4" />
+            </Button>
+            </div>
+        )}
       </div>
 
       <AccordionContent className="pt-4 mt-3 border-t border-border/50">
@@ -139,12 +141,18 @@ const TraitItem = ({
               <FormItem>
                 <FormLabel>Descrição (Regras)</FormLabel>
                 <FormControl>
-                  <Textarea
-                    placeholder="Descreva o traço, seus efeitos, etc..."
-                    {...field}
-                    className="min-h-[80px] text-sm"
-                    readOnly={isReadOnly}
-                  />
+                    {/* CORREÇÃO AQUI TAMBÉM */}
+                    {isReadOnly ? (
+                         <div className="p-3 border rounded-md bg-background/50 min-h-[80px]">
+                             <JournalRenderer content={field.value} />
+                         </div>
+                    ) : (
+                         <RichTextEditor 
+                            value={field.value} 
+                            onChange={field.onChange} 
+                            placeholder="Descreva o traço..." 
+                         />
+                    )}
                 </FormControl>
               </FormItem>
             )}
@@ -168,7 +176,6 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
     name,
   });
   
-  const { getValues } = useFormContext();
   const { tableId } = useTableContext();
 
   return (
@@ -178,30 +185,32 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           <Sparkles /> Traços, Dádivas & Fardos
         </CardTitle>
         
-        <ItemSelectorDialog 
-            tableId={tableId} 
-            categories={['trait']} 
-            title="Adicionar Traço"
-            onSelect={(template) => {
-                if (template) {
-                    let desc = template.description || "";
-                    if (template.data.cost) desc += `\n\n[Custo/Pontos]: ${template.data.cost}`;
+        {!isReadOnly && (
+            <ItemSelectorDialog 
+                tableId={tableId} 
+                categories={['trait']} 
+                title="Adicionar Traço"
+                onSelect={(template) => {
+                    if (template) {
+                        let desc = template.description || "";
+                        if (template.data.cost) desc += `<p><strong>[Custo/Pontos]:</strong> ${template.data.cost}</p>`;
 
-                    append({
-                        ...getDefaultTrait(),
-                        name: template.name,
-                        type: template.data.type || "Traço",
-                        description: desc.trim()
-                    });
-                } else {
-                    append(getDefaultTrait());
-                }
-            }}
-        >
-            <Button type="button" size="sm" disabled={isReadOnly}>
-                <Plus className="w-4 h-4 mr-2" /> Adicionar
-            </Button>
-        </ItemSelectorDialog>
+                        append({
+                            ...getDefaultTrait(),
+                            name: template.name,
+                            type: template.data.type || "Traço",
+                            description: desc
+                        });
+                    } else {
+                        append(getDefaultTrait());
+                    }
+                }}
+            >
+                <Button type="button" size="sm">
+                    <Plus className="w-4 h-4 mr-2" /> Adicionar
+                </Button>
+            </ItemSelectorDialog>
+        )}
       </CardHeader>
       <CardContent>
         {fields.length === 0 && (
@@ -217,7 +226,8 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
           onValueChange={setOpenItems}
         >
           {fields.map((field, index) => {
-            const stableId = getValues(`${name}.${index}.id`) || field.id;
+            // @ts-ignore - react-hook-form typing weirdness with useFieldArray
+            const stableId = field.id; 
             return (
               <TraitItem 
                 key={stableId}

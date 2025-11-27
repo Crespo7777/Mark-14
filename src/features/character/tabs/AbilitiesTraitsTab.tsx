@@ -12,7 +12,6 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -32,10 +31,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { SharedTraitList } from "@/components/SharedTraitList";
 import { useTableContext } from "@/features/table/TableContext";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
+import { RichTextEditor } from "@/components/RichTextEditor"; // <--- NOVO
+import { JournalRenderer } from "@/components/JournalRenderer"; // <--- NOVO
 
 type AbilityRollData = {
   abilityName: string;
@@ -45,7 +45,7 @@ type AbilityRollData = {
 };
 
 export const AbilitiesTraitsTab = () => {
-  const { form } = useCharacterSheet();
+  const { form, isReadOnly } = useCharacterSheet(); // isReadOnly vem do contexto
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const [openAbilityItems, setOpenAbilityItems] = useState<string[]>([]);
   const { getValues } = useFormContext();
@@ -82,7 +82,7 @@ export const AbilitiesTraitsTab = () => {
   return (
     <div className="space-y-6">
       
-      <SharedTraitList control={form.control} name="traits" />
+      <SharedTraitList control={form.control} name="traits" isReadOnly={isReadOnly} />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -90,38 +90,40 @@ export const AbilitiesTraitsTab = () => {
             <Zap /> Habilidades, Poderes & Rituais
           </CardTitle>
           
-          <ItemSelectorDialog 
-              tableId={tableId} 
-              categories={['ability']} 
-              title="Adicionar Habilidade"
-              onSelect={(template) => {
-                  if (template) {
-                      let desc = template.description || "";
-                      if (template.data.novice) desc += `\n\n[NOVATO]: ${template.data.novice}`;
-                      if (template.data.adept)  desc += `\n\n[ADEPTO]: ${template.data.adept}`;
-                      if (template.data.master) desc += `\n\n[MESTRE]: ${template.data.master}`;
-                      if (template.data.time) desc += `\nTempo: ${template.data.time}`;
-                      if (template.data.components) desc += `\nComponentes: ${template.data.components}`;
-
-                      appendAbility({
-                          ...getDefaultAbility(),
-                          name: template.name,
-                          level: template.data.level || "Novato",
-                          type: template.data.type || "Habilidade",
-                          description: desc.trim(), 
-                          corruptionCost: template.data.corruptionCost || "0",
-                          associatedAttribute: template.data.associatedAttribute || "Nenhum",
-                          tradition: template.data.tradition || ""
-                      });
-                  } else {
-                      appendAbility(getDefaultAbility());
-                  }
-              }}
-          >
-              <Button type="button" size="sm">
-                  <Plus className="w-4 h-4 mr-2" /> Adicionar
-              </Button>
-          </ItemSelectorDialog>
+          {!isReadOnly && (
+            <ItemSelectorDialog 
+                tableId={tableId} 
+                categories={['ability']} 
+                title="Adicionar Habilidade"
+                onSelect={(template) => {
+                    if (template) {
+                        // Aqui mantemos o HTML vindo do template
+                        let desc = template.description || "";
+                        // Adiciona dados extras como texto simples se necessário, mas preserva o HTML base
+                        if (template.data.novice) desc += `<p><strong>[NOVATO]:</strong> ${template.data.novice}</p>`;
+                        if (template.data.adept)  desc += `<p><strong>[ADEPTO]:</strong> ${template.data.adept}</p>`;
+                        if (template.data.master) desc += `<p><strong>[MESTRE]:</strong> ${template.data.master}</p>`;
+                        
+                        appendAbility({
+                            ...getDefaultAbility(),
+                            name: template.name,
+                            level: template.data.level || "Novato",
+                            type: template.data.type || "Habilidade",
+                            description: desc, 
+                            corruptionCost: template.data.corruptionCost || "0",
+                            associatedAttribute: template.data.associatedAttribute || "Nenhum",
+                            tradition: template.data.tradition || ""
+                        });
+                    } else {
+                        appendAbility(getDefaultAbility());
+                    }
+                }}
+            >
+                <Button type="button" size="sm">
+                    <Plus className="w-4 h-4 mr-2" /> Adicionar
+                </Button>
+            </ItemSelectorDialog>
+          )}
         </CardHeader>
         <CardContent>
           {abilityFields.length === 0 && (
@@ -176,15 +178,17 @@ export const AbilitiesTraitsTab = () => {
                       {hasAttribute ? <Dices className="w-4 h-4" /> : <Hand className="w-4 h-4" />}
                       <span className="hidden sm:inline ml-2">{hasAttribute ? "Rolar" : "Usar"}</span>
                     </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => removeAbility(index)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {!isReadOnly && (
+                        <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => removeAbility(index)}
+                        >
+                        <Trash2 className="w-4 h-4" />
+                        </Button>
+                    )}
                   </div>
                 </div>
 
@@ -197,7 +201,7 @@ export const AbilitiesTraitsTab = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Nome</FormLabel>
-                            <FormControl><Input placeholder="Nome da Habilidade" {...field} /></FormControl>
+                            <FormControl><Input placeholder="Nome da Habilidade" {...field} readOnly={isReadOnly} /></FormControl>
                           </FormItem>
                         )}
                       />
@@ -207,7 +211,7 @@ export const AbilitiesTraitsTab = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Nível</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
                                 <SelectItem value="Novato">Novato</SelectItem>
@@ -224,7 +228,7 @@ export const AbilitiesTraitsTab = () => {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel>Tipo</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
                                 <SelectItem value="Habilidade">Habilidade</SelectItem>
@@ -243,7 +247,7 @@ export const AbilitiesTraitsTab = () => {
                         render={({ field }) => (
                           <FormItem className="md:col-span-2">
                             <FormLabel>Atributo Associado (para rolagem)</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
                                 <SelectItem value="Nenhum">Nenhum</SelectItem>
@@ -264,7 +268,7 @@ export const AbilitiesTraitsTab = () => {
                           <FormItem>
                             <FormLabel>Custo Corrupção</FormLabel>
                             <FormControl>
-                              <Input placeholder="0 ou 1d4" {...field} />
+                              <Input placeholder="0 ou 1d4" {...field} readOnly={isReadOnly} />
                             </FormControl>
                           </FormItem>
                         )}
@@ -278,7 +282,7 @@ export const AbilitiesTraitsTab = () => {
                             <FormItem>
                                 <FormLabel className="flex items-center gap-1 text-purple-400"><Scroll className="w-3 h-3"/> Tradição</FormLabel>
                                 <FormControl>
-                                    <Input placeholder="Feitiçaria, Teurgia..." {...field} />
+                                    <Input placeholder="Feitiçaria, Teurgia..." {...field} readOnly={isReadOnly} />
                                 </FormControl>
                             </FormItem>
                             )}
@@ -293,7 +297,18 @@ export const AbilitiesTraitsTab = () => {
                         <FormItem>
                           <FormLabel>Descrição (Regras)</FormLabel>
                           <FormControl>
-                            <Textarea placeholder="Descreva a habilidade..." {...field} className="min-h-[120px] text-sm font-mono" />
+                             {/* AQUI ESTÁ A CORREÇÃO MAGISTRAL */}
+                             {isReadOnly ? (
+                                 <div className="p-3 border rounded-md bg-background/50 min-h-[80px]">
+                                     <JournalRenderer content={field.value} />
+                                 </div>
+                             ) : (
+                                 <RichTextEditor 
+                                    value={field.value} 
+                                    onChange={field.onChange} 
+                                    placeholder="Descreva a habilidade..." 
+                                 />
+                             )}
                           </FormControl>
                         </FormItem>
                       )}
