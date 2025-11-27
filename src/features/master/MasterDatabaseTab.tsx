@@ -20,7 +20,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MediaLibrary } from "@/components/MediaLibrary";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea"; // <--- IMPORTAÇÃO QUE FALTAVA
+import { Textarea } from "@/components/ui/textarea"; // Importação essencial para os Traços
 
 // Lazy load do editor para performance
 const RichTextEditor = lazy(() => 
@@ -141,7 +141,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         category,
         name: newItem.name,
         description: newItem.description,
-        // image_url removido da lógica de save, como pedido anteriormente
+        // image_url removido da lógica de save
         weight: parseFloat(newItem.weight) || 0,
         data: newItem.data
     };
@@ -168,7 +168,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
       setNewItem({
           name: item.name,
           description: item.description || "",
-          // image_url mantido no estado local apenas para não quebrar lógica, mas não usado visualmente
+          // image_url mantido no estado local apenas para não quebrar a lógica, mas não usado
           weight: String(item.weight || ""), 
           data: item.data || {}
       });
@@ -214,7 +214,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     </Select>
                     <Input placeholder="Custo / Pontos" value={newItem.data.cost || ""} onChange={e => updateData('cost', e.target.value)} className="bg-background"/>
                  </div>
-                 {/* CAMPOS DE NÍVEL QUE CAUSARAM O ERRO (AGORA COM TEXTAREA IMPORTADO) */}
                  <div className="space-y-2 border-t pt-2">
                     <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível (Opcional)</Label>
                     <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
@@ -278,12 +277,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     <Input placeholder="Atributo Assoc." className="col-span-2 bg-background" value={newItem.data.associatedAttribute || ""} onChange={e => updateData('associatedAttribute', e.target.value)} />
                     <Input placeholder="Tradição" value={newItem.data.tradition || ""} onChange={e => updateData('tradition', e.target.value)} className="bg-background"/>
                 </div>
-                <div className="space-y-2 border-t pt-2">
-                    <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label>
-                    <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
-                    <Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} />
-                    <Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} />
-                </div>
              </div>
           );
         case 'consumable':
@@ -328,7 +321,19 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     <Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/>
                 </div>
              );
-        // Genéricos
+        // Categorias Genéricas (Apenas Preço e Peso)
+        case 'container':
+        case 'ammunition':
+        case 'animal':
+        case 'clothing':
+        case 'tool':
+        case 'spec_tool':
+        case 'musical':
+        case 'asset':
+        case 'mount':
+        case 'service':
+        case 'material':
+        case 'general':
         default: 
           return (
              <div className="grid grid-cols-2 gap-3">
@@ -360,6 +365,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                             <Label>Nome</Label>
                             <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Nome..." className="bg-background" />
                         </div>
+                        {/* Peso: Removido para Habilidades, Qualidades, Serviços e Traços */}
                         {category !== 'ability' && category !== 'service' && category !== 'quality' && category !== 'trait' && (
                             <div className="col-span-4 space-y-2">
                                 <Label>Peso</Label>
