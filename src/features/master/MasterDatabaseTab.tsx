@@ -20,7 +20,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MediaLibrary } from "@/components/MediaLibrary";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea"; // Importação essencial para os Traços
+import { Textarea } from "@/components/ui/textarea"; // Importação essencial para os Traços/Habilidades
 
 // Lazy load do editor para performance
 const RichTextEditor = lazy(() => 
@@ -215,7 +215,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     <Input placeholder="Custo / Pontos" value={newItem.data.cost || ""} onChange={e => updateData('cost', e.target.value)} className="bg-background"/>
                  </div>
                  <div className="space-y-2 border-t pt-2">
-                    <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível (Opcional)</Label>
+                    <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label>
                     <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
                     <Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} />
                     <Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} />
@@ -264,19 +264,24 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         case 'ability':
           return (
              <div className="space-y-3">
-                <div className="grid grid-cols-3 gap-3">
-                    <Select value={newItem.data.level || "Novato"} onValueChange={v => updateData('level', v)}>
-                       <SelectTrigger className="bg-background"><SelectValue placeholder="Nível" /></SelectTrigger>
-                       <SelectContent><SelectItem value="Novato">Novato</SelectItem><SelectItem value="Adepto">Adepto</SelectItem><SelectItem value="Mestre">Mestre</SelectItem></SelectContent>
-                    </Select>
+                <div className="grid grid-cols-2 gap-3">
+                    {/* NÍVEL REMOVIDO, AGORA A HABILIDADE CONTÉM TODOS OS EFEITOS */}
                     <Select value={newItem.data.type || "Habilidade"} onValueChange={v => updateData('type', v)}>
                        <SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger>
                        <SelectContent><SelectItem value="Habilidade">Habilidade</SelectItem><SelectItem value="Poder">Poder</SelectItem><SelectItem value="Ritual">Ritual</SelectItem></SelectContent>
                     </Select>
                     <Input placeholder="Custo Corr." value={newItem.data.corruptionCost || ""} onChange={e => updateData('corruptionCost', e.target.value)} className="bg-background"/>
-                    <Input placeholder="Atributo Assoc." className="col-span-2 bg-background" value={newItem.data.associatedAttribute || ""} onChange={e => updateData('associatedAttribute', e.target.value)} />
+                    <Input placeholder="Atributo Assoc." className="bg-background" value={newItem.data.associatedAttribute || ""} onChange={e => updateData('associatedAttribute', e.target.value)} />
                     <Input placeholder="Tradição" value={newItem.data.tradition || ""} onChange={e => updateData('tradition', e.target.value)} className="bg-background"/>
                 </div>
+                
+                {/* --- NOVOS CAMPOS: EFEITOS POR NÍVEL --- */}
+                <div className="space-y-2 border-t pt-2">
+                    <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label>
+                    <Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
+                    <Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} />
+                    <Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} />
+                 </div>
              </div>
           );
         case 'consumable':
