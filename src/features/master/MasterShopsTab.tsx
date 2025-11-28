@@ -12,12 +12,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch"; 
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database, Loader2 } from "lucide-react";
+import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database, Loader2, Infinity as InfinityIcon } from "lucide-react";
 import { formatPrice } from "@/lib/economy-utils";
 import { Separator } from "@/components/ui/separator";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
-// Interface estendida para incluir 'data'
+// ... (Interface e Fetch functions mantêm-se iguais)
 interface ExtendedShopItem extends ShopItem {
   data?: any;
 }
@@ -29,6 +29,7 @@ const SHOP_CATEGORIES = [
   { value: 'consumable', label: 'Consumível' },
   { value: 'mystic', label: 'Místico' },
   { value: 'tool', label: 'Ferramenta' },
+  { value: 'service', label: 'Serviço' },
 ];
 
 const fetchShops = async (tableId: string) => {
@@ -48,8 +49,12 @@ const fetchCharacters = async (tableId: string) => {
   return (data || []) as CharacterWithRelations[];
 };
 
-// --- COMPONENTE PRINCIPAL EXPORTADO ---
 export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
+  // ... (MasterShopsTab mantém-se igual, apenas o ShopItemsManager muda)
+  // (Copia o conteúdo do MasterShopsTab anterior ou mantém o que tens)
+  
+  // Vou incluir o ShopItemsManager completo aqui para garantir que tens tudo
+  
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newShopName, setNewShopName] = useState("");
@@ -104,11 +109,8 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
   const handleToggleShopVisibility = async (shop: Shop & { is_open: boolean }, e: React.MouseEvent) => {
     e.stopPropagation();
     const newState = !shop.is_open;
-    // Atualiza localmente para feedback imediato na lista
     if (selectedShop?.id === shop.id) setSelectedShop({...shop, is_open: newState});
-
     const { error } = await supabase.from("shops").update({ is_open: newState }).eq("id", shop.id);
-    
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
     else {
         queryClient.invalidateQueries({ queryKey: ['shops', tableId] });
@@ -196,7 +198,8 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, description: "", category: "general", data: {} as any });
+  // --- NOVO: stock no estado local (-1 para infinito) ---
+  const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, stock: -1, description: "", category: "general", data: {} as any });
   const [currencyType, setCurrencyType] = useState<"ortega" | "shekel" | "taler">("ortega");
   const [itemToSend, setItemToSend] = useState<ExtendedShopItem | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -234,23 +237,20 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       name: newItem.name,
       price: finalPrice, 
       weight: newItem.weight,
+      quantity: newItem.stock, // <-- USA AQUI O STOCK
       description: newItem.description,
       data: { category: newItem.category, ...newItem.data }
     };
 
     try {
         const { data, error } = await supabase.from("shop_items").insert(payload).select().single();
-        
         if (error) throw error;
-
-        // OTIMIZAÇÃO: Atualiza o cache instantaneamente
         queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
             return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
         });
-
-        setNewItem({ name: "", amount: 0, weight: 0, description: "", category: "general", data: {} }); 
+        // Reset
+        setNewItem({ name: "", amount: 0, weight: 0, stock: -1, description: "", category: "general", data: {} }); 
         setCurrencyType("ortega");
-
     } catch (error: any) {
         toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
@@ -261,7 +261,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   const handleImportFromDatabase = async (template: ItemTemplate | null) => {
      if (!template) return;
      setIsAdding(true);
-
      let price = 0;
      const templatePriceStr = template.data?.price ? String(template.data.price).toLowerCase() : "";
      const numMatch = templatePriceStr.match(/\d+/);
@@ -271,7 +270,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         else if (templatePriceStr.includes("xelim") || templatePriceStr.includes("shekel")) price = val * 10;
         else price = val;
      }
-
      try {
          const { data, error } = await supabase.from("shop_items").insert({
             shop_id: shop.id,
@@ -279,16 +277,13 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
             description: template.description,
             weight: template.weight,
             price: price,
+            quantity: -1, // Padrão para importados é Infinito
             data: { ...template.data, category: template.category }
          }).select().single();
-
          if (error) throw error;
-
-         // OTIMIZAÇÃO
          queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
              return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
          });
-
          toast({ title: "Item Importado!" });
      } catch (error: any) {
          toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
@@ -298,14 +293,11 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   };
 
   const handleDeleteItem = async (id: string) => {
-    // Optimistic Delete
     const previousData = queryClient.getQueryData<ExtendedShopItem[]>(queryKey);
     queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
         return old ? old.filter(i => i.id !== id) : [];
     });
-
     const { error } = await supabase.from("shop_items").delete().eq("id", id);
-    
     if (error) {
         queryClient.setQueryData(queryKey, previousData);
         toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
@@ -316,29 +308,36 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
     if (!itemToSend) return;
     const char = characters.find(c => c.id === charId);
     if (!char) return;
-
-    const newItemObj = {
-      id: crypto.randomUUID(),
-      name: itemToSend.name,
-      quantity: 1,
-      weight: itemToSend.weight,
-      description: itemToSend.description || "Presente do Mestre",
-      data: itemToSend.data || {}
-    };
-
+    const isService = itemToSend.data?.category === 'service';
+    
     const currentInventory = (char.data as any).inventory || [];
-    const newInventory = [...currentInventory, newItemObj];
-    const newData = { ...(char.data as any), inventory: newInventory };
+    let newInventory = currentInventory;
 
+    if (!isService) {
+        const newItemObj = {
+            id: crypto.randomUUID(),
+            name: itemToSend.name,
+            quantity: 1,
+            weight: itemToSend.weight,
+            description: itemToSend.description || "Presente do Mestre",
+            data: itemToSend.data || {}
+        };
+        newInventory = [...currentInventory, newItemObj];
+    }
+
+    const newData = { ...(char.data as any), inventory: newInventory };
     const { error } = await supabase.from("characters").update({ data: newData }).eq("id", charId);
 
     if (error) toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
     else {
-      toast({ title: "Item Enviado!", description: `${itemToSend.name} enviado para ${char.name}.` });
+      const msgText = isService 
+         ? `🎁 **${char.name}** recebeu o serviço **${itemToSend.name}**!`
+         : `🎁 **${char.name}** recebeu **${itemToSend.name}**!`;
+      toast({ title: "Enviado!", description: msgText.replace(/\*/g, '') });
       await supabase.from("chat_messages").insert({
         table_id: tableId,
         user_id: (await supabase.auth.getUser()).data.user?.id!,
-        message: `🎁 **${char.name}** recebeu **${itemToSend.name}**!`,
+        message: msgText,
         message_type: "info"
       });
       setItemToSend(null);
@@ -351,40 +350,11 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
 
   const renderSpecificFields = () => {
     switch (newItem.category) {
-      case 'weapon':
-        return (
-           <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
-               <Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="h-8 text-xs"/>
-               <Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="h-8 text-xs"/>
-               <Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} />
-           </div>
-        );
-      case 'armor':
-        return (
-           <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
-               <Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="h-8 text-xs"/>
-               <Input placeholder="Obstrutiva (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="h-8 text-xs"/>
-               <Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} />
-           </div>
-        );
-      case 'consumable':
-        return (
-           <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
-               <Input placeholder="Efeito Principal" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} />
-               <Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="h-8 text-xs"/>
-               <Input placeholder="Uso (Beber...)" value={newItem.data.usage || ""} onChange={e => updateData('usage', e.target.value)} className="h-8 text-xs"/>
-           </div>
-        );
-      case 'mystic':
-         return (
-            <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
-                <Input placeholder="Poder" value={newItem.data.powerLevel || ""} onChange={e => updateData('powerLevel', e.target.value)} className="h-8 text-xs"/>
-                <Input placeholder="Corrupção" value={newItem.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="h-8 text-xs"/>
-                <Input placeholder="Efeito" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} />
-            </div>
-         );
-      default:
-        return null;
+        case 'weapon': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="h-8 text-xs"/><Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="h-8 text-xs"/><Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} /></div>);
+        case 'armor': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="h-8 text-xs"/><Input placeholder="Obstrutiva (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="h-8 text-xs"/><Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} /></div>);
+        case 'consumable': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Efeito Principal" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} /><Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="h-8 text-xs"/><Input placeholder="Uso (Beber...)" value={newItem.data.usage || ""} onChange={e => updateData('usage', e.target.value)} className="h-8 text-xs"/></div>);
+        case 'mystic': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Poder" value={newItem.data.powerLevel || ""} onChange={e => updateData('powerLevel', e.target.value)} className="h-8 text-xs"/><Input placeholder="Corrupção" value={newItem.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="h-8 text-xs"/><Input placeholder="Efeito" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} /></div>);
+        default: return null;
     }
   };
 
@@ -405,9 +375,7 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                     <Label className="text-xs">Categoria</Label>
                     <Select value={newItem.category} onValueChange={v => setNewItem({...newItem, category: v})}>
                         <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            {SHOP_CATEGORIES.map(cat => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}
-                        </SelectContent>
+                        <SelectContent>{SHOP_CATEGORIES.map(cat => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
                 <div className="col-span-2">
@@ -425,18 +393,38 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                     <Label className="text-xs">Valor</Label>
                     <Input type="number" value={newItem.amount} onChange={e => setNewItem({...newItem, amount: parseInt(e.target.value)||0})} />
                 </div>
-                <div className="col-span-4">
+                <div className="col-span-3">
                     <Label className="text-xs">Moeda</Label>
                     <Select value={currencyType} onValueChange={(v: any) => setCurrencyType(v)}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="taler">Táler (Ouro)</SelectItem>
-                            <SelectItem value="shekel">Xelim (Prata)</SelectItem>
-                            <SelectItem value="ortega">Ortega (Cobre)</SelectItem>
-                        </SelectContent>
+                        <SelectContent><SelectItem value="taler">Táler (Ouro)</SelectItem><SelectItem value="shekel">Xelim (Prata)</SelectItem><SelectItem value="ortega">Ortega (Cobre)</SelectItem></SelectContent>
                     </Select>
                 </div>
-                <div className="col-span-5 flex gap-1">
+                {/* --- CAMPO DE ESTOQUE NOVO --- */}
+                <div className="col-span-3">
+                    <Label className="text-xs">Estoque</Label>
+                    <div className="flex items-center gap-2">
+                         <Input 
+                            type={newItem.stock === -1 ? "text" : "number"} 
+                            value={newItem.stock === -1 ? "Infinito" : newItem.stock} 
+                            onChange={e => {
+                                const val = e.target.value;
+                                if(val === "" || val === "-1" || val.toLowerCase().includes("inf")) setNewItem({...newItem, stock: -1});
+                                else setNewItem({...newItem, stock: parseInt(val)||0});
+                            }} 
+                            className={newItem.stock === -1 ? "text-accent font-bold" : ""}
+                         />
+                         <Button 
+                             size="icon" variant="ghost" 
+                             className={newItem.stock === -1 ? "text-accent bg-accent/20" : "text-muted-foreground"}
+                             onClick={() => setNewItem({...newItem, stock: newItem.stock === -1 ? 1 : -1})}
+                             title="Alternar Infinito"
+                         >
+                             <InfinityIcon className="w-4 h-4" />
+                         </Button>
+                    </div>
+                </div>
+                <div className="col-span-3 flex gap-1">
                     <Button onClick={handleAddItem} className="flex-1 bg-green-600 hover:bg-green-700" disabled={isAdding}>
                         {isAdding ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Plus className="w-4 h-4 mr-2" />} 
                         Adicionar
@@ -457,16 +445,22 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         <Separator />
         <div className="space-y-2">
            {items.length === 0 && <p className="text-muted-foreground text-center py-4">Sem estoque.</p>}
-           {items.map(item => (
+           {items.map(item => {
+             const cleanDescription = item.description?.replace(/<[^>]*>?/gm, '') || "";
+             const isInfinite = item.quantity === -1;
+
+             return (
              <div key={item.id} className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/10 text-sm">
                 <div className="flex-1">
                    <div className="font-bold flex items-center gap-2">
                         {item.name}
-                        {item.data?.category && <span className="text-[9px] uppercase border px-1 rounded bg-background text-muted-foreground">{item.data.category === 'general' ? 'Geral' : item.data.category}</span>}
-                        {item.data?.damage && <span className="text-[9px] border px-1 rounded bg-background text-muted-foreground">Dano: {item.data.damage}</span>}
-                        {item.data?.protection && <span className="text-[9px] border px-1 rounded bg-background text-muted-foreground">Prot: {item.data.protection}</span>}
+                        {item.data?.category === 'service' && <span className="text-[9px] font-mono uppercase bg-primary/20 text-primary px-1 rounded border border-primary/30">SERVICE</span>}
+                        {item.data?.category && item.data.category !== 'service' && <span className="text-[9px] uppercase border px-1 rounded bg-background text-muted-foreground">{item.data.category}</span>}
+                        {/* Mostra o estoque na lista */}
+                        {!isInfinite && <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${item.quantity === 0 ? "bg-red-500/20 text-red-500 border-red-500/30" : "bg-background text-muted-foreground"}`}>Qtd: {item.quantity}</span>}
+                        {isInfinite && <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono bg-background text-muted-foreground"><InfinityIcon className="w-3 h-3 inline"/></span>}
                    </div>
-                   <div className="text-xs text-muted-foreground">{item.description}</div>
+                   <div className="text-xs text-muted-foreground line-clamp-1">{cleanDescription}</div>
                 </div>
                 <div className="flex items-center gap-4 text-right">
                    <div>
@@ -476,7 +470,7 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                    <Dialog>
                       <DialogTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setItemToSend(item)}><Send className="w-3 h-3" /></Button></DialogTrigger>
                       <DialogContent>
-                         <DialogHeader><DialogTitle>Enviar {item.name}</DialogTitle><DialogDescription>O jogador receberá este item gratuitamente.</DialogDescription></DialogHeader>
+                         <DialogHeader><DialogTitle>Enviar {item.name}</DialogTitle><DialogDescription>O jogador receberá este {item.data?.category === 'service' ? 'serviço' : 'item'} gratuitamente.</DialogDescription></DialogHeader>
                          <div className="grid gap-2 py-4">
                             {characters.map(char => (
                                <Button key={char.id} variant="ghost" className="justify-start" onClick={() => handleSendLoot(char.id)}>
@@ -492,7 +486,8 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                    </Button>
                 </div>
              </div>
-           ))}
+             )
+           })}
         </div>
       </CardContent>
     </Card>
