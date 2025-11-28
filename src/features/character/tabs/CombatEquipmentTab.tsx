@@ -237,7 +237,7 @@ export const CombatEquipmentTab = () => {
 
     toast({ title: `Proteção: ${armor.name}`, description: `Total: ${protectionRoll.total}` });
     
-    // 1. Envia para o Chat da Mesa
+    // 1. Chat da Mesa
     await supabase.from("chat_messages").insert({
       table_id: character.table_id,
       user_id: user.id,
@@ -245,7 +245,7 @@ export const CombatEquipmentTab = () => {
       message_type: "roll",
     });
 
-    // 2. Envia para o Discord (WebHook)
+    // 2. Webhook Discord (Corrigido)
     const discordRollData = {
         rollType: "protection",
         armorName: armor.name,
