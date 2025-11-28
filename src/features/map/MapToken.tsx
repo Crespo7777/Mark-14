@@ -4,43 +4,54 @@ import { useState, useEffect, useRef } from "react";
 import { SceneToken } from "@/types/map-types";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
+import { Shield, Skull } from "lucide-react";
 
 interface MapTokenProps {
   token: SceneToken;
   isDraggable: boolean;
+  isSelected: boolean;
+  onSelect: (id: string) => void;
   onUpdatePosition: (id: string, x: number, y: number) => void;
   onDelete?: (id: string) => void;
   containerRef: React.RefObject<HTMLDivElement>;
 }
 
-// Tamanho da grelha visual em pixels (igual ao definido no SceneBoard)
 const GRID_SIZE_PX = 50;
-// Escala de distância: 1 quadrado = 1.5 metros
 const METERS_PER_GRID = 1.5;
 
-export const MapToken = ({ token, isDraggable, onUpdatePosition, onDelete, containerRef }: MapTokenProps) => {
+export const MapToken = ({ token, isDraggable, isSelected, onSelect, onUpdatePosition, onDelete, containerRef }: MapTokenProps) => {
   const [position, setPosition] = useState({ x: token.x, y: token.y });
   const [isDragging, setIsDragging] = useState(false);
-  // Guardar a posição inicial para a régua
   const [startDragPos, setStartDragPos] = useState<{x: number, y: number} | null>(null);
   const [measurement, setMeasurement] = useState<string | null>(null);
   
   const tokenRef = useRef<HTMLDivElement>(null);
 
-  // Sincronizar com props externas (realtime) se não estiver a arrastar
+  // Sincronizar posição (Realtime)
   useEffect(() => {
     if (!isDragging) {
       setPosition({ x: token.x, y: token.y });
     }
   }, [token.x, token.y, isDragging]);
 
+  // --- Lógica de Dados (HP) ---
+  // Tenta ler a estrutura padrão da ficha (Mark-14)
+  const charData = token.character?.data || token.npc?.data || {};
+  const currentHp = Number(charData.toughness?.current || charData.combat?.toughness_current);
+  const maxHp = Number(charData.attributes?.vigorous?.value || 10) + (Number(charData.toughness?.bonus || 0)); // Exemplo de cálculo, ajustável
+  const hpPercent = maxHp > 0 ? (currentHp / maxHp) * 100 : 100;
+  const isDead = currentHp <= 0 && maxHp > 0;
+
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Selecionar ao clicar (mesmo que não possa arrastar)
+    onSelect(token.id);
+
     if (!isDraggable) return;
     e.preventDefault();
     e.stopPropagation();
     
     setIsDragging(true);
-    setStartDragPos({ x: position.x, y: position.y }); // Guarda onde começou
+    setStartDragPos({ x: position.x, y: position.y });
     
     const container = containerRef.current;
     if (!container) return;
@@ -56,35 +67,24 @@ export const MapToken = ({ token, isDraggable, onUpdatePosition, onDelete, conta
     const container = containerRef.current;
     const rect = container.getBoundingClientRect();
 
-    // Calcular nova posição em % relativo ao container
     let newX = ((e.clientX - rect.left) / rect.width) * 100;
     let newY = ((e.clientY - rect.top) / rect.height) * 100;
 
-    // Limites (0 a 100)
     newX = Math.max(0, Math.min(100, newX));
     newY = Math.max(0, Math.min(100, newY));
 
     setPosition({ x: newX, y: newY });
 
-    // --- CÁLCULO DA RÉGUA ---
+    // Régua
     if (startDragPos) {
-        // Converter % para Pixels para calcular distância real
         const dxPx = ((newX - startDragPos.x) / 100) * rect.width;
         const dyPx = ((newY - startDragPos.y) / 100) * rect.height;
-        
-        // Distância euclidiana em pixels
         const distPx = Math.sqrt(dxPx*dxPx + dyPx*dyPx);
-        
-        // Converter para metros de jogo
         const squares = distPx / GRID_SIZE_PX;
         const meters = squares * METERS_PER_GRID;
         
-        // Só mostra se moveu um pouco
-        if (distPx > 10) {
-            setMeasurement(`${meters.toFixed(1)}m`);
-        } else {
-            setMeasurement(null);
-        }
+        if (distPx > 10) setMeasurement(`${meters.toFixed(1)}m`);
+        else setMeasurement(null);
     }
   };
 
@@ -94,28 +94,17 @@ export const MapToken = ({ token, isDraggable, onUpdatePosition, onDelete, conta
     const container = containerRef.current;
     const rect = container.getBoundingClientRect();
     
-    // --- LÓGICA DE GRID SNAPPING ---
     let finalX = position.x;
     let finalY = position.y;
 
-    // Se NÃO estiver a segurar SHIFT, aplica o "imã"
+    // Grid Snapping (Shift desativa)
     if (!e.shiftKey) {
-        // 1. Converter % atual para Pixels
         const currentXpx = (finalX / 100) * rect.width;
         const currentYpx = (finalY / 100) * rect.height;
-
-        // 2. Arredondar para o múltiplo de 50px mais próximo (Centro da grelha)
-        // Adicionamos 25px (metade da grelha) se quisermos centrar nas linhas, 
-        // ou usamos math.round simples para centrar no quadrado.
-        // Vamos assumir que (0,0) é o canto.
         const snappedXpx = Math.round(currentXpx / GRID_SIZE_PX) * GRID_SIZE_PX;
         const snappedYpx = Math.round(currentYpx / GRID_SIZE_PX) * GRID_SIZE_PX;
-
-        // 3. Converter de volta para %
         finalX = (snappedXpx / rect.width) * 100;
         finalY = (snappedYpx / rect.height) * 100;
-        
-        // Atualiza estado local para o utilizador ver o "salto" imediatamente
         setPosition({ x: finalX, y: finalY });
     }
 
@@ -124,65 +113,41 @@ export const MapToken = ({ token, isDraggable, onUpdatePosition, onDelete, conta
     setMeasurement(null);
     (e.target as Element).releasePointerCapture(e.pointerId);
     
-    // Salvar no servidor
+    // Evita update se moveu muito pouco (clique simples)
+    if (startDragPos && Math.abs(startDragPos.x - finalX) < 0.1 && Math.abs(startDragPos.y - finalY) < 0.1) return;
+
     onUpdatePosition(token.id, finalX, finalY);
   };
 
-  // Determinar Nome e Imagem
-  let displayName = token.label || "Token";
-  let displayImage = token.custom_image_url;
-
-  if (token.character) {
-      displayName = token.character.name;
-  } else if (token.npc) {
-      displayName = token.npc.name;
-  }
-
-  // Calcular tamanho
-  const baseSize = 6; // %
-  const sizePercent = baseSize * (token.scale || 1);
+  // Renderização
+  let displayName = token.label || (token.character?.name || token.npc?.name || "Token");
+  let displayImage = token.custom_image_url; 
+  const sizePercent = 6 * (token.scale || 1);
 
   return (
     <>
-        {/* RÉGUA (Linha e Texto) - Só aparece enquanto arrasta */}
+        {/* RÉGUA */}
         {isDragging && startDragPos && (
             <div className="absolute inset-0 pointer-events-none z-40">
-                {/* SVG para desenhar a linha */}
                 <svg className="w-full h-full overflow-visible">
-                    <line 
-                        x1={`${startDragPos.x}%`} 
-                        y1={`${startDragPos.y}%`} 
-                        x2={`${position.x}%`} 
-                        y2={`${position.y}%`} 
-                        stroke="white" 
-                        strokeWidth="2" 
-                        strokeDasharray="5,5" 
-                        className="drop-shadow-md"
-                    />
+                    <line x1={`${startDragPos.x}%`} y1={`${startDragPos.y}%`} x2={`${position.x}%`} y2={`${position.y}%`} stroke="white" strokeWidth="2" strokeDasharray="5,5" className="drop-shadow-md" />
                 </svg>
-                
-                {/* Etiqueta de Distância */}
                 {measurement && (
-                    <div 
-                        className="absolute bg-black/80 text-white text-xs px-2 py-1 rounded-full border border-white/20 shadow-xl font-mono z-50"
-                        style={{ 
-                            left: `${(startDragPos.x + position.x) / 2}%`, 
-                            top: `${(startDragPos.y + position.y) / 2}%`,
-                            transform: 'translate(-50%, -50%)'
-                        }}
-                    >
+                    <div className="absolute bg-black/80 text-white text-xs px-2 py-1 rounded-full border border-white/20 shadow-xl font-mono z-50 transform -translate-x-1/2 -translate-y-1/2" style={{ left: `${(startDragPos.x + position.x) / 2}%`, top: `${(startDragPos.y + position.y) / 2}%` }}>
                         {measurement}
                     </div>
                 )}
             </div>
         )}
 
-        {/* O TOKEN */}
+        {/* TOKEN */}
         <div
           ref={tokenRef}
           className={cn(
-            "absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center cursor-grab active:cursor-grabbing touch-none z-20 transition-transform hover:scale-110 hover:z-30",
-            isDragging ? "z-50 scale-110 cursor-grabbing" : "transition-all duration-300 ease-out" // Animação suave ao soltar (snap)
+            "absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center touch-none z-20 transition-transform select-none group",
+            isDraggable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+            isDragging ? "z-50 scale-110" : "transition-all duration-300 ease-out",
+            isDead && "grayscale opacity-80"
           )}
           style={{
             left: `${position.x}%`,
@@ -193,20 +158,35 @@ export const MapToken = ({ token, isDraggable, onUpdatePosition, onDelete, conta
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
-          onContextMenu={(e) => {
-              e.preventDefault();
-              if(onDelete) onDelete(token.id);
-          }}
-          title={displayName}
+          onContextMenu={(e) => { e.preventDefault(); if(onDelete) onDelete(token.id); }}
         >
-          <Avatar className="w-full h-full border-2 border-white shadow-lg ring-2 ring-black/50 pointer-events-none select-none">
+          {/* Anel de Seleção */}
+          {isSelected && (
+              <div className="absolute -inset-1 rounded-full border-2 border-primary animate-pulse shadow-[0_0_15px_rgba(34,197,94,0.6)] z-0" />
+          )}
+
+          {/* Avatar */}
+          <Avatar className="w-full h-full border-2 border-white shadow-lg ring-1 ring-black/50 bg-background relative z-10">
              {displayImage && <AvatarImage src={displayImage} className="object-cover" />}
-             <AvatarFallback className="bg-primary text-primary-foreground text-[8px] sm:text-xs font-bold truncate">
-                {displayName.substring(0, 2).toUpperCase()}
-             </AvatarFallback>
+             <AvatarFallback className="bg-muted text-muted-foreground text-[8px] font-bold">{displayName.substring(0, 2).toUpperCase()}</AvatarFallback>
+             {isDead && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Skull className="w-2/3 h-2/3 text-red-500 opacity-80" /></div>}
           </Avatar>
           
-          <div className="mt-1 bg-black/70 text-white text-[10px] px-1.5 py-0.5 rounded shadow-md whitespace-nowrap max-w-[150%] truncate pointer-events-none select-none">
+          {/* Barra de Vida (Mini) */}
+          {!isNaN(hpPercent) && maxHp > 0 && (
+              <div className="absolute -bottom-2 w-[120%] h-1.5 bg-black/80 rounded-full overflow-hidden border border-white/10 z-20">
+                  <div 
+                    className={cn("h-full transition-all duration-500", hpPercent < 30 ? "bg-red-500" : "bg-green-500")} 
+                    style={{ width: `${Math.min(100, Math.max(0, hpPercent))}%` }} 
+                  />
+              </div>
+          )}
+
+          {/* Nome (Hover ou Selecionado) */}
+          <div className={cn(
+              "mt-2.5 bg-black/70 text-white text-[9px] px-1.5 py-0.5 rounded shadow-md whitespace-nowrap max-w-[200%] truncate transition-opacity z-20 backdrop-blur-sm",
+              isSelected || isDragging ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+          )}>
              {displayName}
           </div>
         </div>

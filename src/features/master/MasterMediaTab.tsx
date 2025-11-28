@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Image as ImageIcon, Music, Play, Pause, Square, Film, Cast, MonitorPlay, FolderOpen, ListMusic, SkipForward } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { MediaLibrary } from "@/components/MediaLibrary";
+import { MediaLibrary } from "@/components/MediaLibrary"; // <-- Importação Correta
 
 const detectMediaType = (url: string): 'image' | 'video' => {
   if (!url) return 'image';
@@ -27,7 +27,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
 
   const detectedType = useMemo(() => detectMediaType(mediaUrl), [mediaUrl]);
 
-  // Verifica se é playlist manual (vários URLs separados por |)
+  // Playlist
   const isPlaylist = musicUrl.includes("|");
   const playlistCount = isPlaylist ? musicUrl.split("|").length : 0;
 
@@ -57,11 +57,9 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
     setLoading(false);
   };
 
-  // --- ÁUDIO (PLAY / PAUSE / STOP / SKIP) ---
-  
+  // --- ÁUDIO (BARDO) ---
   const handlePlayMusic = async () => {
     if (!musicUrl) return;
-    // Reseta o índice para 0 sempre que damos Play numa nova lista/música
     await supabase.from("game_states").update({
         active_music_url: musicUrl,
         is_music_playing: true,
@@ -87,14 +85,11 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
   };
 
   const handleSkipTrack = async () => {
-    // Para pular, precisamos saber o estado atual.
     const { data } = await supabase.from("game_states").select("active_music_url, active_music_index").eq("table_id", tableId).single();
     
     if (data && data.active_music_url) {
         const playlist = data.active_music_url.split("|");
         const currentIndex = data.active_music_index || 0;
-        
-        // Lógica de Loop: Se for a última, volta para a 0, senão +1
         const nextIndex = (currentIndex + 1) % playlist.length;
 
         await supabase.from("game_states").update({
@@ -105,6 +100,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
     }
   };
 
+  // Callback unificado para a biblioteca
   const handleLibrarySelect = (url: string, type: 'image' | 'video' | 'audio') => {
     if (type === 'audio') {
       setMusicUrl(url);
@@ -120,36 +116,37 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
       <Card className="border-border/50 shadow-sm">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            {/* ALTERADO PARA PRIOS */}
             <MonitorPlay className="text-primary" /> Prios
           </CardTitle>
           <CardDescription>Projeção de imagens e vídeos em ecrã cheio.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-             <div className="flex justify-between items-center">
-                <Label>URL da Mídia</Label>
-                {mediaUrl && (
-                    <Badge variant="outline" className="text-xs font-normal">
-                    {detectedType === 'image' ? <ImageIcon className="w-3 h-3 mr-1"/> : <Film className="w-3 h-3 mr-1"/>}
-                    {detectedType === 'image' ? 'Imagem' : 'Vídeo'}
-                    </Badge>
-                )}
-             </div>
-             <div className="flex gap-2">
-                <Input 
+              <div className="flex justify-between items-center">
+                 <Label>URL da Mídia</Label>
+                 {mediaUrl && (
+                     <Badge variant="outline" className="text-xs font-normal">
+                     {detectedType === 'image' ? <ImageIcon className="w-3 h-3 mr-1"/> : <Film className="w-3 h-3 mr-1"/>}
+                     {detectedType === 'image' ? 'Imagem' : 'Vídeo'}
+                     </Badge>
+                 )}
+              </div>
+              <div className="flex gap-2">
+                 <Input 
                     placeholder="Cole link ou selecione..." 
                     value={mediaUrl} 
                     onChange={e => setMediaUrl(e.target.value)} 
                     className="flex-1"
-                />
-                <MediaLibrary 
-                  filter="image" 
-                  multiSelect={false}
-                  onSelect={handleLibrarySelect} 
-                  trigger={<Button variant="outline" size="icon"><FolderOpen className="w-4 h-4"/></Button>} 
-                />
-             </div>
+                 />
+                 
+                 {/* BOTÃO DA BIBLIOTECA - IMAGENS */}
+                 <MediaLibrary 
+                   filter="image" 
+                   multiSelect={false}
+                   onSelect={handleLibrarySelect} 
+                   trigger={<Button variant="outline" size="icon" title="Abrir Biblioteca"><FolderOpen className="w-4 h-4"/></Button>} 
+                 />
+              </div>
           </div>
           
           <div className="grid grid-cols-2 gap-2">
@@ -169,7 +166,7 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
            <CardTitle className="flex items-center gap-2 text-xl">
              <Music className="text-accent" /> Bardo
            </CardTitle>
-           <CardDescription>YouTube (Automático) ou Biblioteca.</CardDescription>
+           <CardDescription>Música e Ambiente (Suporta Playlist).</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
            <div className="space-y-2">
@@ -188,11 +185,13 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
                     onChange={e => setMusicUrl(e.target.value)} 
                     className="flex-1"
                 />
+                
+                {/* BOTÃO DA BIBLIOTECA - ÁUDIO */}
                 <MediaLibrary 
                   filter="audio" 
-                  multiSelect={true}
+                  multiSelect={true} // Permite selecionar várias músicas para playlist
                   onSelect={handleLibrarySelect} 
-                  trigger={<Button variant="outline" size="icon"><FolderOpen className="w-4 h-4"/></Button>} 
+                  trigger={<Button variant="outline" size="icon" title="Abrir Biblioteca de Áudio"><FolderOpen className="w-4 h-4"/></Button>} 
                 />
             </div>
           </div>
@@ -206,12 +205,11 @@ export const MasterMediaTab = ({ tableId }: { tableId: string }) => {
                 <Pause className="w-4 h-4 mr-2"/> Pause
              </Button>
              
-             {/* BOTÃO PULAR */}
              <Button onClick={handleSkipTrack} variant="outline" className="flex-1" title="Próxima Faixa">
                 <SkipForward className="w-4 h-4 mr-2"/> Pular
              </Button>
 
-             <Button onClick={handleStopMedia} variant="destructive" size="icon" title="Parar">
+             <Button onClick={handleStopMusic} variant="destructive" size="icon" title="Parar">
                 <Square className="w-4 h-4"/>
              </Button>
           </div>

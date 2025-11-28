@@ -1,217 +1,165 @@
-// src/features/character/CharacterSheet.tsx
-
-import { useState, useEffect, useMemo } from "react";
-import { Database } from "@/integrations/supabase/types";
-import {
-  CharacterSheetProvider,
-  useCharacterSheet,
-} from "./CharacterSheetContext";
-import {
-  CharacterSheetData,
-  characterSheetSchema,
-  getDefaultCharacterSheetData,
-} from "./character.schema";
+import { useState } from "react";
+import { useCharacterSheet } from "./CharacterSheetContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { X, Save } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
+import { 
+  Save, 
+  Share2, 
+  Shield, 
+  Heart, 
+  Swords, 
+  Backpack, 
+  Book, 
+  User, 
+  Sparkles,
+  Loader2 
+} from "lucide-react";
 import { Form } from "@/components/ui/form";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
-// --- IMPORTAÇÃO DAS ABAS ---
+// Importação das Abas
 import { DetailsTab } from "./tabs/DetailsTab";
 import { AttributesTab } from "./tabs/AttributesTab";
-import { CombatEquipmentTab } from "./tabs/CombatEquipmentTab";
 import { AbilitiesTraitsTab } from "./tabs/AbilitiesTraitsTab";
+import { CombatEquipmentTab } from "./tabs/CombatEquipmentTab";
 import { BackpackTab } from "./tabs/BackpackTab";
 import { CharacterJournalTab } from "./tabs/CharacterJournalTab";
+import { ShareDialog } from "@/components/ShareDialog";
 
-type Character = Database["public"]["Tables"]["characters"]["Row"];
+export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean }) => {
+  const context = useCharacterSheet();
+  const { toast } = useToast();
+  const [activeTab, setActiveTab] = useState("details");
 
-interface CharacterSheetProps {
-  initialCharacter: Character;
-  onClose: () => void;
-}
+  // --- CORREÇÃO CRÍTICA: Proteção contra Crash ---
+  // Se o contexto ou o personagem não existirem (ainda a carregar), mostramos um loader.
+  if (!context || !context.character) {
+      return (
+          <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4 text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p>A carregar dados do personagem...</p>
+          </div>
+      );
+  }
 
-const CharacterSheetInner = ({
-  onClose,
-  initialData,
-}: {
-  onClose: () => void;
-  initialData: CharacterSheetData;
-}) => {
-  const { form, isDirty, isSaving, saveSheet, programmaticSave } = useCharacterSheet();
-  const { toast } = useToast(); 
-  const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
+  const { form, character, isDirty, isSaving, saveSheet } = context;
   
-  // --- CORREÇÃO: Estado Controlado da Aba ---
-  const [activeTab, setActiveTab] = useState("details"); 
+  // Valores calculados para o Header
+  const currentXp = form.watch("xp.current") || 0;
+  const nextLevelXp = form.watch("xp.next_level") || 100;
+  const xpPercentage = Math.min(100, Math.max(0, (currentXp / nextLevelXp) * 100));
+  
+  const currentHp = form.watch("toughness.current") || 0;
+  // Cálculo simplificado de HP Máximo para visualização rápida (o cálculo real está no hook ou tab)
+  const vigorous = Number(form.watch("attributes.vigorous.value") || 0);
+  const hpBonus = Number(form.watch("toughness.bonus") || 0);
+  const maxHp = Math.max(10, vigorous) + hpBonus; 
 
-  const [name, race, occupation] = form.watch(["name", "race", "occupation"]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = ""; 
-      return "";
-    };
-    if (isDirty) window.addEventListener("beforeunload", handleBeforeUnload);
-    else window.removeEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty]);
-
-  const handleCloseClick = () => {
-    if (isSaving) {
-      toast({ title: "Aguarde", description: "Salvamento em progresso..." });
-      return; 
-    }
-    if (isDirty) {
-      setIsCloseAlertOpen(true);
-    } else {
-      onClose();
-    }
-  };
-
-  const handleSaveAndClose = async () => {
-    if (isSaving) return;
-    await programmaticSave();
-    setIsCloseAlertOpen(false);
-    onClose();
-  };
-
-  const handleCloseWithoutSaving = () => {
-    form.reset(initialData);
-    setIsCloseAlertOpen(false);
-    onClose();
-  };
+  const name = form.watch("name") || "Sem Nome";
+  const archetype = form.watch("archetype") || "Aventureiro";
+  const occupation = form.watch("occupation") || "Vagabundo";
 
   return (
-    <>
-      <div className="flex flex-col h-full">
-        <div className="p-4 border-b border-border/50 flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold">{name}</h2>
-            <p className="text-sm text-muted-foreground">{race} | {occupation}</p>
-          </div>
+    <Form {...form}>
+      <form onSubmit={(e) => { e.preventDefault(); saveSheet(); }} className="h-full flex flex-col space-y-4">
+        
+        {/* HEADER DA FICHA */}
+        <Card className="p-4 border-l-4 border-l-primary bg-card/50">
+            <div className="flex flex-col md:flex-row gap-4 items-center md:items-start">
+                {/* Avatar */}
+                <Avatar className="w-20 h-20 border-2 border-primary shadow-lg">
+                    <AvatarImage src={(character.data as any)?.image_url} className="object-cover" />
+                    <AvatarFallback className="text-xl font-bold bg-primary/20">
+                        {name.substring(0,2).toUpperCase()}
+                    </AvatarFallback>
+                </Avatar>
 
-          <div className="flex gap-2 items-center">
-            <div className={cn("text-sm transition-opacity duration-300", isDirty ? "text-amber-500" : "text-muted-foreground/70")}>
-              {isSaving ? "Salvando..." : isDirty ? "Não salvo" : "Salvo"}
+                {/* Info Principal */}
+                <div className="flex-1 text-center md:text-left space-y-1 w-full">
+                    <div className="flex flex-col md:flex-row justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-bold tracking-tight text-primary">{name}</h2>
+                            <div className="flex gap-2 justify-center md:justify-start text-sm text-muted-foreground">
+                                <Badge variant="outline">{archetype}</Badge>
+                                <span className="flex items-center gap-1">• {occupation}</span>
+                            </div>
+                        </div>
+                        
+                        {/* Ações (Salvar/Partilhar) */}
+                        <div className="flex gap-2 mt-2 md:mt-0">
+                            {!isReadOnly && (
+                                <>
+                                    <ShareDialog entityId={character.id} entityType="character" entityName={character.name} />
+                                    <Button 
+                                        type="button" 
+                                        onClick={() => saveSheet()} 
+                                        disabled={!isDirty || isSaving}
+                                        variant={isDirty ? "default" : "outline"}
+                                        size="sm"
+                                        className="min-w-[100px]"
+                                    >
+                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>}
+                                        {isDirty ? "Salvar*" : "Salvo"}
+                                    </Button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <Separator className="my-2" />
+
+                    {/* Barras de Estado Rápidas */}
+                    <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div className="space-y-1">
+                            <div className="flex justify-between">
+                                <span className="flex items-center gap-1 font-semibold text-red-400"><Heart className="w-3 h-3 fill-current"/> Vida</span>
+                                <span>{currentHp} / {maxHp}</span>
+                            </div>
+                            <Progress value={(currentHp / maxHp) * 100} className="h-1.5 bg-red-950" />
+                        </div>
+                        <div className="space-y-1">
+                            <div className="flex justify-between">
+                                <span className="flex items-center gap-1 font-semibold text-yellow-400"><Sparkles className="w-3 h-3 fill-current"/> XP</span>
+                                <span>{currentXp} / {nextLevelXp}</span>
+                            </div>
+                            <Progress value={xpPercentage} className="h-1.5 bg-yellow-950" />
+                        </div>
+                    </div>
+                </div>
             </div>
-            <Button size="sm" variant="default" onClick={saveSheet} disabled={!isDirty || isSaving}>
-              <Save className="w-4 h-4 mr-2" /> Salvar
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleCloseClick} disabled={isSaving}>
-              <X className="w-4 h-4 mr-2" /> Fechar
-            </Button>
-          </div>
-        </div>
+        </Card>
 
-        <Form {...form}>
-          <form onSubmit={(e) => e.preventDefault()} className="flex-1 overflow-y-auto">
-            {/* --- CORREÇÃO: Tabs Controladas --- */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="m-4 ml-4 flex flex-wrap h-auto">
-                <TabsTrigger value="details">Detalhes</TabsTrigger>
-                <TabsTrigger value="attributes">Atributos</TabsTrigger>
-                <TabsTrigger value="combat_gear">Combate & Equip.</TabsTrigger>
-                <TabsTrigger value="abilities_traits">Habilidades & Traços</TabsTrigger>
-                <TabsTrigger value="backpack">Mochila</TabsTrigger>
-                <TabsTrigger value="journal">Diário</TabsTrigger>
-              </TabsList>
+        {/* CONTEÚDO (TABS) */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+            <div className="px-1 overflow-x-auto pb-2">
+                <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground w-full justify-start">
+                    <TabsTrigger value="details" className="text-xs"><User className="w-3.5 h-3.5 mr-1.5"/> Detalhes</TabsTrigger>
+                    <TabsTrigger value="attributes" className="text-xs"><Sparkles className="w-3.5 h-3.5 mr-1.5"/> Atributos</TabsTrigger>
+                    <TabsTrigger value="abilities" className="text-xs"><Shield className="w-3.5 h-3.5 mr-1.5"/> Habilidades</TabsTrigger>
+                    <TabsTrigger value="combat" className="text-xs"><Swords className="w-3.5 h-3.5 mr-1.5"/> Combate</TabsTrigger>
+                    <TabsTrigger value="inventory" className="text-xs"><Backpack className="w-3.5 h-3.5 mr-1.5"/> Mochila</TabsTrigger>
+                    <TabsTrigger value="journal" className="text-xs"><Book className="w-3.5 h-3.5 mr-1.5"/> Diário</TabsTrigger>
+                </TabsList>
+            </div>
 
-              <fieldset disabled={isSaving} className="p-4 pt-0 space-y-4">
-                <TabsContent value="details"><DetailsTab /></TabsContent>
-                <TabsContent value="attributes"><AttributesTab /></TabsContent>
-                <TabsContent value="combat_gear"><CombatEquipmentTab /></TabsContent>
-                <TabsContent value="abilities_traits"><AbilitiesTraitsTab /></TabsContent>
-                <TabsContent value="backpack"><BackpackTab /></TabsContent>
-                <TabsContent value="journal"><CharacterJournalTab /></TabsContent>
-              </fieldset>
-            </Tabs>
-          </form>
-        </Form>
-      </div>
+            <div className="flex-1 overflow-y-auto pr-1">
+                <div className={isReadOnly ? "pointer-events-none opacity-90" : ""}>
+                    <TabsContent value="details" className="mt-0"><DetailsTab /></TabsContent>
+                    <TabsContent value="attributes" className="mt-0"><AttributesTab /></TabsContent>
+                    <TabsContent value="abilities" className="mt-0"><AbilitiesTraitsTab /></TabsContent>
+                    <TabsContent value="combat" className="mt-0"><CombatEquipmentTab /></TabsContent>
+                    <TabsContent value="inventory" className="mt-0"><BackpackTab /></TabsContent>
+                    <TabsContent value="journal" className="mt-0"><CharacterJournalTab /></TabsContent>
+                </div>
+            </div>
+        </Tabs>
 
-      <AlertDialog open={isCloseAlertOpen} onOpenChange={setIsCloseAlertOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Sair sem Salvar?</AlertDialogTitle>
-            <AlertDialogDescription>Existem alterações não salvas.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSaving}>Cancelar</AlertDialogCancel>
-            <Button variant="outline" onClick={handleCloseWithoutSaving} disabled={isSaving}>Sair Sem Salvar</Button>
-            <AlertDialogAction className={buttonVariants({ variant: "default" })} onClick={handleSaveAndClose} disabled={isSaving}>
-              {isSaving ? "Salvando..." : "Salvar e Sair"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
-  );
-};
-
-export const CharacterSheet = ({ initialCharacter, onClose }: CharacterSheetProps) => {
-  const queryClient = useQueryClient();
-  
-  // --- CORREÇÃO: Estabilidade dos Dados com useMemo ---
-  const validatedData = useMemo(() => {
-      const defaults = getDefaultCharacterSheetData(initialCharacter.name);
-      const rawData = initialCharacter.data as any;
-
-      const mergedData = { 
-          ...defaults, 
-          ...rawData,
-          attributes: { ...defaults.attributes, ...(rawData?.attributes || {}) },
-          combat: { ...defaults.combat, ...(rawData?.combat || {}) },
-          money: { ...defaults.money, ...(rawData?.money || {}) },
-          experience: { ...defaults.experience, ...(rawData?.experience || {}) },
-          weapons: rawData?.weapons || [],
-          armors: rawData?.armors || [],
-          abilities: rawData?.abilities || [],
-          inventory: rawData?.inventory || [],
-          traits: rawData?.traits || [],
-          projectiles: rawData?.projectiles || [],
-      };
-
-      if(rawData?.name) mergedData.name = rawData.name;
-      else mergedData.name = initialCharacter.name;
-      
-      if(rawData?.race) mergedData.race = rawData.race;
-      if(rawData?.occupation) mergedData.occupation = rawData.occupation;
-
-      const parsed = characterSheetSchema.safeParse(mergedData);
-      return parsed.success ? parsed.data : mergedData;
-  }, [initialCharacter]); 
-  
-  const handleSave = async (data: CharacterSheetData) => {
-    const { error } = await supabase
-      .from("characters")
-      .update({ data: data, name: data.name })
-      .eq("id", initialCharacter.id);
-
-    if (error) throw new Error(error.message);
-    
-    await queryClient.invalidateQueries({ queryKey: ['characters', initialCharacter.table_id] });
-    await queryClient.invalidateQueries({ queryKey: ['character', initialCharacter.id] });
-  };
-
-  return (
-    <CharacterSheetProvider character={initialCharacter} onSave={handleSave}>
-      <CharacterSheetInner onClose={onClose} initialData={validatedData as CharacterSheetData} />
-    </CharacterSheetProvider>
+      </form>
+    </Form>
   );
 };
