@@ -1,3 +1,5 @@
+// supabase/functions/discord-roll-handler/index.ts
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.44.4";
 
 const corsHeaders = {
@@ -11,7 +13,8 @@ const DISCORD_COLORS = {
   SUCCESS: 5763719,   // Verde claro
   FUMBLE: 15158332,   // Vermelho escuro
   FAILURE: 10038562,  // Vermelho
-  INFO: 14981709      // Âmbar
+  INFO: 14981709,     // Âmbar
+  DEFENSE: 3447003    // Azul (Defesa/Proteção)
 };
 
 // --- TIPOS ---
@@ -62,8 +65,14 @@ interface DamageRollData {
   modifier: number;
   totalDamage: number;
 }
+// --- NOVO TIPO ---
+interface ProtectionRollData {
+  rollType: "protection";
+  armorName: string;
+  result: { rolls: number[]; modifier: number; total: number; };
+}
 
-type RollData = ManualRollData | AttributeRollData | AbilityRollData | AttackRollData | DefenseRollData | DamageRollData;
+type RollData = ManualRollData | AttributeRollData | AbilityRollData | AttackRollData | DefenseRollData | DamageRollData | ProtectionRollData;
 
 // --- HELPERS DE FORMATAÇÃO ---
 
@@ -168,6 +177,20 @@ const buildPayload = (rollData: RollData, userName: string) => {
       };
       break;
     }
+    // --- NOVO CASE DE PROTEÇÃO ---
+    case "protection": {
+        const rollsStr = `[${rollData.result.rolls.join(", ")}]`;
+        const modStr = rollData.result.modifier > 0 ? ` + ${rollData.result.modifier}` : "";
+        
+        embed = {
+          author: { name: userName },
+          title: `Proteção: ${rollData.armorName}`,
+          description: `${rollsStr}${modStr}\nAbsorveu = **${rollData.result.total}** Dano`,
+          color: DISCORD_COLORS.DEFENSE,
+          footer: { text: "Symbaroum VTT" }
+        };
+        break;
+    }
   }
 
   return {
@@ -176,6 +199,7 @@ const buildPayload = (rollData: RollData, userName: string) => {
   };
 };
 
+// ... (RESTO DO ARQUIVO IGUAL - formatHtmlFallback e Deno.serve) ...
 function formatHtmlFallback(html: string): string {
   let text = html;
   text = text.replace(/<br\s*\/?>/gi, '\n');
