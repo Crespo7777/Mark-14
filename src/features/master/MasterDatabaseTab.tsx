@@ -1,5 +1,3 @@
-// src/features/master/MasterDatabaseTab.tsx
-
 import { useState, useEffect, Suspense, lazy } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -13,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, Trash2, Sword, Shield, FlaskConical, Backpack, Gem, 
   PawPrint, Zap, Dna, Star, Save, X, Search, 
-  Image as ImageIcon, Castle, Box, CircleDot, Wheat, Coins, 
+  Castle, Box, CircleDot, Wheat, Coins, 
   Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music,
   Loader2 
 } from "lucide-react";
@@ -21,6 +19,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea"; 
+import { QualitySelector } from "@/components/QualitySelector"; // <-- IMPORTADO
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,14 +57,8 @@ const CATEGORIES = [
   { id: 'musical', label: 'Instr. Musicais', icon: Music },
   { id: 'asset', label: 'Proventos', icon: Coins },
   { id: 'material', label: 'Materiais', icon: Gem },
-  // "Serviços" removido daqui
 ];
-
-const WEAPON_SUBCATEGORIES = [
-  "Arma de uma Mão", "Arma Curta", "Arma Longa", "Arma Pesada",
-  "Arma de Arremesso", "Arma de Projétil", "Ataque Desarmado", "Escudo", "Armas de Cerco"
-];
-
+const WEAPON_SUBCATEGORIES = ["Arma de uma Mão", "Arma Curta", "Arma Longa", "Arma Pesada", "Arma de Arremesso", "Arma de Projétil", "Ataque Desarmado", "Escudo", "Armas de Cerco"];
 const ARMOR_SUBCATEGORIES = ["Leve", "Média", "Pesada"];
 const FOOD_SUBCATEGORIES = ["Bebidas", "Carne", "Chás", "Ensopados", "Mingau", "Peixe", "Sobremesas", "Sopas", "Tortas"];
 
@@ -148,7 +141,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const handleSave = async () => {
     if (!newItem.name) return toast({ title: "Nome obrigatório", variant: "destructive" });
     setIsSaving(true);
-
     const payload = {
         table_id: tableId,
         category,
@@ -157,45 +149,26 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         weight: parseFloat(newItem.weight) || 0,
         data: newItem.data
     };
-
     try {
         let savedData;
-        
         if (editingId) {
-            const { data, error } = await supabase
-                .from("item_templates")
-                .update(payload)
-                .eq("id", editingId)
-                .select()
-                .single();
-            
+            const { data, error } = await supabase.from("item_templates").update(payload).eq("id", editingId).select().single();
             if (error) throw error;
             savedData = data;
-
             queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
                 return old ? old.map(i => i.id === editingId ? savedData : i) : [savedData];
             });
-            
             toast({ title: "Item Atualizado!" });
-
         } else {
-            const { data, error } = await supabase
-                .from("item_templates")
-                .insert(payload)
-                .select()
-                .single();
-
+            const { data, error } = await supabase.from("item_templates").insert(payload).select().single();
             if (error) throw error;
             savedData = data;
-
             queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
                 return old ? [...old, savedData].sort((a,b) => a.name.localeCompare(b.name)) : [savedData];
             });
-
             toast({ title: "Item Criado!" });
         }
         cancelEdit();
-
     } catch (error: any) {
         toast({ title: "Erro", description: error.message, variant: "destructive" });
     } finally {
@@ -223,14 +196,11 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const confirmDelete = async () => {
      if (!itemToDelete) return;
-     
      const previousData = queryClient.getQueryData<ItemTemplate[]>(queryKey);
      queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
          return old ? old.filter(i => i.id !== itemToDelete) : [];
      });
-
      const { error } = await supabase.from("item_templates").delete().eq("id", itemToDelete);
-     
      if (error) {
         queryClient.setQueryData(queryKey, previousData);
         toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
@@ -247,10 +217,56 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const renderSpecificFields = () => {
       switch (category) {
-        case 'quality': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Aplicável em (Arma/Armadura...)" value={newItem.data.targetType || ""} onChange={e => updateData('targetType', e.target.value)} className="bg-background col-span-2"/></div>);
+        case 'quality': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Aplicável em (Arma/Armadura...)" value={newItem.data.targetType || ""} onChange={e => updateData('targetType', e.target.value)} className="bg-background col-span-2"/><Input placeholder="Efeito Curto (Ex: Dano +1)" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} className="bg-background col-span-2"/></div>);
         case 'trait': return (<div className="space-y-3"><div className="grid grid-cols-2 gap-3"><Select value={newItem.data.type || "Traço"} onValueChange={v => updateData('type', v)}><SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger><SelectContent><SelectItem value="Traço">Traço</SelectItem><SelectItem value="Dádiva">Dádiva</SelectItem><SelectItem value="Fardo">Fardo</SelectItem><SelectItem value="Monstruoso">Traço de Criatura</SelectItem></SelectContent></Select><Input placeholder="Custo / Pontos" value={newItem.data.cost || ""} onChange={e => updateData('cost', e.target.value)} className="bg-background"/></div><div className="space-y-2 border-t pt-2"><Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label><Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} /><Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} /><Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} /></div></div>);
-        case 'weapon': { const isReloadable = newItem.data.subcategory === "Arma de Projétil" || newItem.data.subcategory === "Arma de Arremesso"; return (<div className="grid grid-cols-2 gap-3"><Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Categoria da Arma" /></SelectTrigger><SelectContent>{WEAPON_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent></Select><Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/><Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="bg-background"/><Input placeholder="Qualidades (ex: Precisa)" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} className="bg-background"/>{isReloadable && (<Input placeholder="Recarga (ex: Ação Livre)" value={newItem.data.reloadAction || ""} onChange={e => updateData('reloadAction', e.target.value)} className="bg-background col-span-2 md:col-span-1 border-accent/50"/>)}<Input placeholder="Preço (ex: 5 Tálers)" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/></div>); }
-        case 'armor': return (<div className="grid grid-cols-2 gap-3"><Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="col-span-2 bg-background"><SelectValue placeholder="Tipo de Armadura" /></SelectTrigger><SelectContent>{ARMOR_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent></Select><Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="bg-background"/><Input placeholder="Penalidade (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="bg-background"/><Input placeholder="Qualidades" className="col-span-2 bg-background" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} /><Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} /></div>);
+        case 'weapon': { 
+            const isReloadable = newItem.data.subcategory === "Arma de Projétil" || newItem.data.subcategory === "Arma de Arremesso"; 
+            return (
+                <div className="grid grid-cols-2 gap-3">
+                    <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
+                        <SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Categoria da Arma" /></SelectTrigger>
+                        <SelectContent>{WEAPON_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
+                    </Select>
+                    <Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/>
+                    <Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="bg-background"/>
+                    
+                    <div className="col-span-2">
+                        <Label className="text-xs">Qualidades</Label>
+                        <QualitySelector 
+                            tableId={tableId} 
+                            value={newItem.data.quality || ""} 
+                            onChange={(val) => updateData('quality', val)}
+                            targetType="weapon" 
+                        />
+                    </div>
+
+                    {isReloadable && (<Input placeholder="Recarga (ex: Ação Livre)" value={newItem.data.reloadAction || ""} onChange={e => updateData('reloadAction', e.target.value)} className="bg-background col-span-2 md:col-span-1 border-accent/50"/>)}
+                    <Input placeholder="Preço (ex: 5 Tálers)" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/>
+                </div>
+            ); 
+        }
+        case 'armor': return (
+            <div className="grid grid-cols-2 gap-3">
+                <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
+                    <SelectTrigger className="col-span-2 bg-background"><SelectValue placeholder="Tipo de Armadura" /></SelectTrigger>
+                    <SelectContent>{ARMOR_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
+                </Select>
+                <Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="bg-background"/>
+                <Input placeholder="Penalidade (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="bg-background"/>
+                
+                <div className="col-span-2">
+                    <Label className="text-xs">Qualidades</Label>
+                    <QualitySelector 
+                        tableId={tableId} 
+                        value={newItem.data.quality || ""} 
+                        onChange={(val) => updateData('quality', val)}
+                        targetType="armor" 
+                    />
+                </div>
+
+                <Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} />
+            </div>
+        );
         case 'ability': return (<div className="space-y-3"><div className="grid grid-cols-2 gap-3"><Select value={newItem.data.type || "Habilidade"} onValueChange={v => updateData('type', v)}><SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger><SelectContent><SelectItem value="Habilidade">Habilidade</SelectItem><SelectItem value="Poder">Poder</SelectItem><SelectItem value="Ritual">Ritual</SelectItem></SelectContent></Select><Input placeholder="Custo Corr." value={newItem.data.corruptionCost || ""} onChange={e => updateData('corruptionCost', e.target.value)} className="bg-background"/><Input placeholder="Atributo Assoc." className="bg-background" value={newItem.data.associatedAttribute || ""} onChange={e => updateData('associatedAttribute', e.target.value)} /><Input placeholder="Tradição" value={newItem.data.tradition || ""} onChange={e => updateData('tradition', e.target.value)} className="bg-background"/></div><div className="space-y-2 border-t pt-2"><Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label><Textarea placeholder="Novato..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.novice || ""} onChange={e => updateData('novice', e.target.value)} /><Textarea placeholder="Adepto..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.adept || ""} onChange={e => updateData('adept', e.target.value)} /><Textarea placeholder="Mestre..." className="h-14 min-h-[3.5rem] bg-background" value={newItem.data.master || ""} onChange={e => updateData('master', e.target.value)} /></div></div>);
         case 'consumable': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="bg-background"/><Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
         case 'food': return (<div className="grid grid-cols-2 gap-3"><Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Tipo de Alimento" /></SelectTrigger><SelectContent>{FOOD_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent></Select><Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
@@ -279,7 +295,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                             <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Nome..." className="bg-background" />
                         </div>
                         
-                        {/* --- ALTERAÇÃO: Serviços removido da lista de exceção de peso pois a categoria foi removida --- */}
                         {category !== 'ability' && category !== 'quality' && category !== 'trait' && category !== 'construction' && (
                             <div className="col-span-4 space-y-2">
                                 <Label>Peso</Label>

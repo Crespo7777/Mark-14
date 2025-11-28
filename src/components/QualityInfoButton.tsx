@@ -1,15 +1,12 @@
-import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { Info } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogDescription,
-} from "@/components/ui/dialog";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Info, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface QualityInfoButtonProps {
@@ -17,88 +14,64 @@ interface QualityInfoButtonProps {
   tableId: string;
 }
 
-export const QualityInfoButton = ({ qualitiesString, tableId }: QualityInfoButtonProps) => {
-  const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [foundQualities, setFoundQualities] = useState<any[]>([]);
+// Nota: A palavra 'export' antes de function é essencial para corrigir o erro
+export function QualityInfoButton({ qualitiesString, tableId }: QualityInfoButtonProps) {
+  const qualities = qualitiesString
+    ? qualitiesString.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
 
-  const handleOpen = async () => {
-    if (!qualitiesString.trim()) return;
-    setOpen(true);
-    setLoading(true);
+  const { data: qualityData } = useQuery({
+    queryKey: ["quality-descriptions", tableId, qualities],
+    queryFn: async () => {
+      if (qualities.length === 0) return [];
+      
+      // Buscar apenas as qualidades listadas
+      const { data } = await supabase
+        .from("item_templates")
+        .select("name, description")
+        .eq("table_id", tableId)
+        .eq("category", "quality")
+        .in("name", qualities); // Filtra pelos nomes
+        
+      return data || [];
+    },
+    enabled: qualities.length > 0, // Só busca se houver qualidades escritas
+  });
 
-    // Separa a string por vírgulas ou espaços (ex: "Longa, Pesada")
-    const terms = qualitiesString.split(/[;,]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
-
-    if (terms.length === 0) {
-        setLoading(false);
-        return;
-    }
-
-    // Busca no banco de dados
-    const { data } = await supabase
-      .from("item_templates")
-      .select("name, description, data")
-      .eq("table_id", tableId)
-      .eq("category", "quality");
-
-    if (data) {
-      // Filtra no cliente para encontrar matches (case insensitive)
-      const matches = data.filter(q => terms.includes(q.name.toLowerCase()));
-      setFoundQualities(matches);
-    }
-    setLoading(false);
-  };
+  if (qualities.length === 0) return null;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button 
-            variant="ghost" 
-            size="icon" 
-            className="h-8 w-8 text-muted-foreground hover:text-accent"
-            onClick={handleOpen}
-            title="Ver regras das qualidades"
-            type="button"
-        >
-          <Info className="w-4 h-4" />
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-6 w-6 ml-1 hover:bg-accent/20" title="Ver regras das qualidades">
+          <Info className="h-3.5 w-3.5 text-blue-400" />
         </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Regras das Qualidades</DialogTitle>
-          <DialogDescription>Detalhes baseados no Database da mesa.</DialogDescription>
-        </DialogHeader>
-        
-        <ScrollArea className="max-h-[300px] mt-2 pr-4">
-            {loading ? (
-                <div className="flex justify-center py-4"><Loader2 className="animate-spin w-6 h-6" /></div>
-            ) : foundQualities.length > 0 ? (
-                <div className="space-y-4">
-                    {foundQualities.map((q, idx) => (
-                        <div key={idx} className="border-b pb-2 last:border-0">
-                            <h4 className="font-bold text-primary flex justify-between">
-                                {q.name}
-                                <span className="text-xs font-normal text-muted-foreground uppercase border px-1 rounded">
-                                    {q.data?.targetType || "Geral"}
-                                </span>
-                            </h4>
-                            <p className="text-sm text-muted-foreground mt-1">{q.description}</p>
-                            {q.data?.effect && (
-                                <p className="text-xs bg-muted/50 p-1 rounded mt-1 font-mono text-accent">
-                                    Efeito: {q.data.effect}
-                                </p>
-                            )}
+      </PopoverTrigger>
+      <PopoverContent className="w-80 border-blue-500/30 bg-black/95 backdrop-blur shadow-xl">
+        <div className="flex items-center gap-2 mb-3 border-b border-white/10 pb-2">
+            <Info className="h-4 w-4 text-blue-400" />
+            <h4 className="font-semibold text-sm text-white">Regras das Qualidades</h4>
+        </div>
+        <ScrollArea className="max-h-[250px] pr-2">
+            <div className="space-y-3">
+            {qualities.map((q) => {
+                // Tenta encontrar a descrição exata (case insensitive)
+                const info = qualityData?.find(d => d.name.toLowerCase() === q.toLowerCase());
+                
+                return (
+                    <div key={q} className="text-xs">
+                        <span className="font-bold text-blue-300 block mb-0.5 capitalize">{q}</span>
+                        <div className="text-muted-foreground leading-relaxed">
+                            {info?.description 
+                                ? info.description.replace(/<[^>]*>?/gm, '') // Remove HTML básico se houver
+                                : "Sem descrição na base de dados."}
                         </div>
-                    ))}
-                </div>
-            ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                    Nenhuma qualidade encontrada com esses nomes no Database.
-                </p>
-            )}
+                    </div>
+                );
+            })}
+            </div>
         </ScrollArea>
-      </DialogContent>
-    </Dialog>
+      </PopoverContent>
+    </Popover>
   );
-};
+}
