@@ -65,7 +65,6 @@ interface DamageRollData {
   modifier: number;
   totalDamage: number;
 }
-// --- NOVO TIPO ---
 interface ProtectionRollData {
   rollType: "protection";
   armorName: string;
@@ -105,7 +104,6 @@ const formatTargetString = (result: AttributeRollResult): string => {
   return `\`${result.target}\`${modStr}`;
 };
 
-// Cria um embed padrão para testes de Atributo
 const buildTestEmbed = (
   title: string, 
   authorName: string, 
@@ -127,7 +125,7 @@ const buildTestEmbed = (
 };
 
 const buildPayload = (rollData: RollData, userName: string) => {
-  let embed = {};
+  let embed: any = {};
 
   switch (rollData.rollType) {
     case "manual": {
@@ -177,10 +175,11 @@ const buildPayload = (rollData: RollData, userName: string) => {
       };
       break;
     }
-    // --- NOVO CASE DE PROTEÇÃO ---
+    // --- CASE DE PROTEÇÃO (Adicionado) ---
     case "protection": {
         const rollsStr = `[${rollData.result.rolls.join(", ")}]`;
-        const modStr = rollData.result.modifier > 0 ? ` + ${rollData.result.modifier}` : "";
+        const mod = rollData.result.modifier;
+        const modStr = mod > 0 ? ` + ${mod}` : (mod < 0 ? ` - ${Math.abs(mod)}` : "");
         
         embed = {
           author: { name: userName },
@@ -191,6 +190,14 @@ const buildPayload = (rollData: RollData, userName: string) => {
         };
         break;
     }
+    default:
+      // Fallback de segurança para evitar erro 500
+      embed = {
+        title: "Rolagem Desconhecida",
+        description: "Ocorreu uma rolagem de um tipo não reconhecido pelo Discord Handler.",
+        color: DISCORD_COLORS.FAILURE
+      };
+      break;
   }
 
   return {
@@ -199,7 +206,6 @@ const buildPayload = (rollData: RollData, userName: string) => {
   };
 };
 
-// ... (RESTO DO ARQUIVO IGUAL - formatHtmlFallback e Deno.serve) ...
 function formatHtmlFallback(html: string): string {
   let text = html;
   text = text.replace(/<br\s*\/?>/gi, '\n');
@@ -286,7 +292,7 @@ Deno.serve(async (req: Request) => {
       status: 200,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Erro na Edge Function:", error.message);
     return new Response(JSON.stringify({ error: error.message }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
