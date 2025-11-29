@@ -23,7 +23,7 @@ import {
 import { Plus, Trash2, Shield, Sword, Heart, Dices, ArrowDownToLine } from "lucide-react";
 import { getDefaultWeapon, getDefaultArmor } from "../character.schema";
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
-import { useEquipmentManager } from "../hooks/useEquipmentManager"; // <--- HOOK IMPORTADO
+import { useEquipmentManager } from "../hooks/useEquipmentManager"; // Hook para desequipar
 import { attributesList } from "../character.constants";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
@@ -68,10 +68,10 @@ const DamageHealControl = ({ label, onApply }: { label: string; onApply: (amount
 
 export const CombatEquipmentTab = () => {
   const { form, character } = useCharacterSheet();
-  const { getValues, setValue } = useFormContext();
+  const { setValue, getValues } = useFormContext();
   const { tableId } = useTableContext();
   const { toughnessMax, painThreshold, activeBerserk, quick, totalDefense } = useCharacterCalculations();
-  const { unequipItem } = useEquipmentManager(); // <--- USANDO O HOOK
+  const { unequipItem } = useEquipmentManager();
   const { toast } = useToast();
   
   const projectiles = form.watch("projectiles");
@@ -96,16 +96,9 @@ export const CombatEquipmentTab = () => {
     form.setValue("toughness.current", newValue, { shouldDirty: true });
   };
 
-  // --- FUNÇÕES SUBSTITUÍDAS PELO HOOK ---
-  const handleUnequipWeapon = (index: number) => {
-      unequipItem(index, 'weapon');
-      // O hook já trata de remover da lista e adicionar à mochila
-  };
-
-  const handleUnequipArmor = (index: number) => {
-      unequipItem(index, 'armor');
-  };
-  // ---------------------------------------
+  // Funções de Desequipar usando o Hook (Mais seguro e limpo)
+  const handleUnequipWeapon = (index: number) => unequipItem(index, 'weapon');
+  const handleUnequipArmor = (index: number) => unequipItem(index, 'armor');
 
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
@@ -141,7 +134,6 @@ export const CombatEquipmentTab = () => {
   return (
     <div className="space-y-6">
       
-      {/* VITALIDADE E CORRUPÇÃO (Mantidos do seu código) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
          <Card>
           <CardHeader>
@@ -264,7 +256,10 @@ export const CombatEquipmentTab = () => {
                                   value={field.value} 
                                   onChange={(val, desc) => {
                                       field.onChange(val);
-                                      if (desc) setValue(`weapons.${index}.quality_desc`, desc, { shouldDirty: true });
+                                      // CORREÇÃO DO BUG: Atualiza mesmo se desc for vazio ""
+                                      if (desc !== undefined) {
+                                          setValue(`weapons.${index}.quality_desc`, desc, { shouldDirty: true });
+                                      }
                                   }}
                                   targetType="weapon"
                               />
@@ -276,7 +271,7 @@ export const CombatEquipmentTab = () => {
                         <FormItem>
                             <FormLabel>Regras das Qualidades</FormLabel>
                             <FormControl>
-                                <Textarea placeholder="Regras..." {...field} className="min-h-[80px] text-sm font-mono bg-muted/30" />
+                                <Textarea placeholder="Regras..." {...field} className="min-h-[100px] text-sm font-mono bg-muted/30" />
                             </FormControl>
                         </FormItem>
                     )}/>
@@ -359,7 +354,10 @@ export const CombatEquipmentTab = () => {
                                 value={field.value} 
                                 onChange={(val, desc) => {
                                     field.onChange(val);
-                                    if (desc) setValue(`armors.${index}.quality_desc`, desc, { shouldDirty: true });
+                                    // CORREÇÃO DO BUG AQUI TAMBÉM
+                                    if (desc !== undefined) {
+                                        setValue(`armors.${index}.quality_desc`, desc, { shouldDirty: true });
+                                    }
                                 }}
                                 targetType="armor" 
                             />
