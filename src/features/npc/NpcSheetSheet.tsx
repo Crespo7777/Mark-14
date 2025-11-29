@@ -1,5 +1,3 @@
-// src/features/npc/NpcSheetSheet.tsx
-
 import { useState } from "react";
 import {
   Sheet,
@@ -10,14 +8,16 @@ import {
 } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
-import { NpcSheet } from "./NpcSheet"; 
+import { AlertCircle, Loader2 } from "lucide-react";
+import { NpcSheet } from "@/features/npc/NpcSheet";
+import { useToast } from "@/hooks/use-toast";
 
 interface NpcSheetSheetProps {
-  children: React.ReactNode;
-  npcId: string;
+  children?: React.ReactNode;
+  npcId: string | null; 
+  open?: boolean; 
+  onOpenChange?: (open: boolean) => void;
 }
 
 const fetchNpc = async (npcId: string) => {
@@ -31,8 +31,18 @@ const fetchNpc = async (npcId: string) => {
   return data;
 };
 
-export const NpcSheetSheet = ({ children, npcId }: NpcSheetSheetProps) => {
-  const [open, setOpen] = useState(false);
+export const NpcSheetSheet = ({ 
+  children, 
+  npcId, 
+  open: externalOpen, 
+  onOpenChange: externalOnOpenChange 
+}: NpcSheetSheetProps) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Controle de estado (interno ou externo)
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen : internalOpen;
+  const setOpen = isControlled ? (externalOnOpenChange || (() => {})) : setInternalOpen;
 
   const {
     data: npc,
@@ -40,36 +50,39 @@ export const NpcSheetSheet = ({ children, npcId }: NpcSheetSheetProps) => {
     error,
   } = useQuery({
     queryKey: ["npc", npcId],
-    queryFn: () => fetchNpc(npcId),
-    enabled: open, 
+    queryFn: () => fetchNpc(npcId!),
+    enabled: open && !!npcId, // Só busca se estiver aberto e com ID
   });
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{children}</SheetTrigger>
+      {children && <SheetTrigger asChild>{children}</SheetTrigger>}
+      
       <SheetContent className="w-full sm:max-w-3xl p-0 bg-background overflow-hidden flex flex-col">
-        <SheetTitle className="sr-only">
-          {npc?.name || "Ficha de NPC"}
-        </SheetTitle>
-        <SheetDescription className="sr-only">
-          Edite ou visualize a ficha do NPC.
-        </SheetDescription>
+        <SheetTitle className="sr-only">Ficha de NPC</SheetTitle>
+        <SheetDescription className="sr-only">Detalhes do NPC</SheetDescription>
 
-        {isLoading && (
-          <div className="p-6 space-y-4">
-            <Skeleton className="h-16 w-1/2" />
-            <Skeleton className="h-10 w-full" />
-            <Skeleton className="h-40 w-full" />
+        {isLoading && !npc && (
+          <div className="p-6 h-full flex items-center justify-center">
+            <Loader2 className="h-10 w-10 animate-spin text-destructive" />
           </div>
         )}
+        
         {error && (
           <Alert variant="destructive" className="m-6">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Erro ao Carregar NPC</AlertTitle>
+            <AlertTitle>Erro ao Carregar</AlertTitle>
             <AlertDescription>{error.message}</AlertDescription>
           </Alert>
         )}
-        {npc && <NpcSheet initialNpc={npc} onClose={() => setOpen(false)} />}
+        
+        {/* CORREÇÃO AQUI: Passamos o NPC diretamente para o componente inteligente */}
+        {npc && (
+           <NpcSheet 
+              initialNpc={npc} 
+              onClose={() => setOpen(false)} 
+           />
+        )}
       </SheetContent>
     </Sheet>
   );

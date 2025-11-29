@@ -1,5 +1,3 @@
-// src/features/npc/NpcSheet.tsx
-
 import { useEffect, useState, useMemo, useRef } from "react";
 import { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -65,11 +63,11 @@ const NpcSheetInner = ({
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("details");
 
-  // --- ESTADOS DE UPLOAD ---
+  // Estados de Upload
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- DADOS DO FORMULÁRIO ---
+  // Leitura de Dados
   const name = form.watch("name");
   const race = form.watch("race");
   const occupation = form.watch("occupation");
@@ -83,7 +81,7 @@ const NpcSheetInner = ({
       form.setValue("data.image_settings", newSettings, { shouldDirty: true });
   };
 
-  // --- LÓGICA DE UPLOAD ---
+  // Upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || isReadOnly) return;
@@ -94,7 +92,6 @@ const NpcSheetInner = ({
       const fileName = `npc-${npc.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `npc-portraits/${fileName}`;
 
-      // Upload para 'images'
       const { error: uploadError } = await supabase.storage
         .from('images') 
         .upload(filePath, file, { upsert: true });
@@ -122,12 +119,9 @@ const NpcSheetInner = ({
   };
 
   const triggerFileInput = () => {
-      if (!isReadOnly && fileInputRef.current) {
-          fileInputRef.current.click();
-      }
+      if (!isReadOnly && fileInputRef.current) fileInputRef.current.click();
   };
 
-  // --- PREVENIR SAÍDA SEM SALVAR ---
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -164,7 +158,7 @@ const NpcSheetInner = ({
   return (
     <>
       <div className="flex flex-col h-full">
-        {/* --- CABEÇALHO REFORMULADO --- */}
+        {/* HEADER NPC REFORMULADO */}
         <Card className="m-4 mb-0 p-4 border-l-4 border-l-destructive bg-card/50 flex flex-col md:flex-row gap-4 items-center md:items-start shrink-0">
              <input 
                 type="file" 
@@ -213,7 +207,7 @@ const NpcSheetInner = ({
                     )}
                 </div>
 
-                {/* Botão de Ajustes */}
+                {/* BOTÃO DE AJUSTES (ZOOM) */}
                 {!isReadOnly && imageUrl && (
                     <Popover>
                         <PopoverTrigger asChild>
@@ -306,7 +300,7 @@ const NpcSheetInner = ({
             </div>
         </Card>
 
-        {/* --- FORMULÁRIO/ABAS --- */}
+        {/* ABAS */}
         <Form {...form}>
           <form onSubmit={(e) => e.preventDefault()} className="flex-1 overflow-y-auto flex flex-col min-h-0">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0">
@@ -336,12 +330,11 @@ const NpcSheetInner = ({
         </Form>
       </div>
 
-      {/* ALERT DIALOG DE SAÍDA */}
       <AlertDialog open={isCloseAlertOpen} onOpenChange={setIsCloseAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Sair sem Salvar?</AlertDialogTitle>
-            <AlertDialogDescription>Existem alterações não salvas. O que queres fazer?</AlertDialogDescription>
+            <AlertDialogDescription>Existem alterações não salvas.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isSaving}>Cancelar</AlertDialogCancel>
@@ -356,22 +349,23 @@ const NpcSheetInner = ({
   );
 };
 
-// --- WRAPPER PRINCIPAL DO NPC SHEET ---
+// --- WRAPPER PRINCIPAL (CORRIGIDO) ---
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const queryClient = useQueryClient();
 
   const validatedData = useMemo(() => {
-      const defaults = getDefaultNpcSheetData(initialNpc.name);
+      // Proteção contra undefined
+      if (!initialNpc) return null;
+
+      const defaults = getDefaultNpcSheetData(initialNpc.name || "Novo NPC");
       const rawData = initialNpc.data as any;
 
       const mergedData = {
         ...defaults,
         ...rawData,
-        // Garante que campos que vem do banco (fora do JSON) sejam priorizados
         name: initialNpc.name,
         image_url: initialNpc.image_url, 
         
-        // Garante que objetos aninhados existam
         attributes: { ...defaults.attributes, ...(rawData?.attributes || {}) },
         combat: { ...defaults.combat, ...(rawData?.combat || {}) },
         armors: rawData?.armors || [],
@@ -381,26 +375,20 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
         traits: rawData?.traits || [],
       };
       
-      const parsedData = npcSheetSchema.safeParse(mergedData);
-      if (!parsedData.success) {
-        console.warn("Aviso ao parsear dados NPC.", parsedData.error.errors);
-        return mergedData;
-      }
-      return parsedData.data;
+      return mergedData;
   }, [initialNpc]); 
   
-  // Atualiza a referência local
+  if (!initialNpc || !validatedData) return null;
+
   initialNpc.data = validatedData;
-  initialNpc.image_url = validatedData.image_url; // Sincroniza imagem
   
-  // --- FUNÇÃO DE SALVAR (AQUI ESTÁ A LÓGICA DO BANCO) ---
   const handleSave = async (data: NpcSheetData) => {
     const { error } = await supabase
       .from("npcs")
       .update({ 
-          name: data.name,           // Salva nome na coluna
-          image_url: data.image_url, // Salva imagem na coluna (IMPORTANTE)
-          data: data                 // Salva o resto no JSON
+          name: data.name,
+          image_url: data.image_url, 
+          data: data 
       })
       .eq("id", initialNpc.id);
 

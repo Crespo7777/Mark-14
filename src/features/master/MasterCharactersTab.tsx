@@ -1,42 +1,10 @@
-// src/features/master/MasterCharactersTab.tsx
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button"; // <--- IMPORT CORRIGIDO
-import {
-  MoreVertical,
-  Copy,
-  Trash2,
-  Archive,
-  ArchiveRestore,
-  FolderOpen,
-  Share2,
-  Plus
-} from "lucide-react";
-import { ShareDialog } from "@/components/ShareDialog";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,19 +15,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 import { useTableContext } from "@/features/table/TableContext";
 import { CreateCharacterDialog } from "@/components/CreateCharacterDialog";
 import { EntityListManager } from "@/components/EntityListManager";
 import { CharacterWithRelations, FolderType } from "@/types/app-types";
-import { CharacterSheetSheet } from "@/components/CharacterSheetSheet"; // Importação direta
-
-const SheetLoadingFallback = () => (
-  <Card className="border-border/50 flex flex-col h-[200px]">
-    <CardHeader><Skeleton className="h-6 w-1/2" /><Skeleton className="h-4 w-1/3" /></CardHeader>
-    <CardContent className="flex-1"><Skeleton className="h-4 w-3/4" /></CardContent>
-  </Card>
-);
+import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
+import { ShareDialog } from "@/components/ShareDialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const fetchCharacters = async (tableId: string) => {
   const { data, error } = await supabase
@@ -82,18 +45,15 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [charSearch, setCharSearch] = useState("");
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
-  const [duplicating, setDuplicating] = useState(false);
-  
-  // ESTADO DA FICHA ABERTA (Controlado Externamente)
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [itemToShare, setItemToShare] = useState<CharacterWithRelations | null>(null);
 
   const { data: characters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId],
     queryFn: () => fetchCharacters(tableId),
-    placeholderData: (previousData) => previousData,
   });
 
   const { data: folders = [] } = useQuery({
@@ -103,6 +63,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
 
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
 
+  // Handlers
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
@@ -115,8 +76,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
     }
   };
 
-  const handleDuplicateCharacter = async (char: CharacterWithRelations) => {
-    setDuplicating(true);
+  const handleDuplicate = async (char: any) => {
     const newData = JSON.parse(JSON.stringify(char.data || {}));
     newData.name = `Cópia de ${char.name}`;
     await supabase.from("characters").insert({
@@ -131,117 +91,105 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
     });
     toast({ title: "Ficha Duplicada!" });
     invalidateCharacters();
-    setDuplicating(false);
   };
 
-  const handleArchiveItem = async (id: string, currentValue: boolean) => {
+  const handleArchive = async (id: string, currentValue: boolean) => {
     await supabase.from("characters").update({ is_archived: !currentValue }).eq("id", id);
     toast({ title: !currentValue ? "Arquivado" : "Restaurado" });
     invalidateCharacters();
   };
 
-  const handleMoveItem = async (id: string, folderId: string | null) => {
+  const handleMove = async (id: string, folderId: string | null) => {
     await supabase.from("characters").update({ folder_id: folderId }).eq("id", id);
     toast({ title: "Movido com sucesso" });
     invalidateCharacters();
   };
 
-  const handleUpdateSharing = async (id: string, players: string[]) => {
+  const handleUpdateSharing = async (ids: string[]) => {
+    if(!itemToShare) return;
     const allPlayerIds = members.filter(m => !m.isMaster).map(p => p.id);
-    const isShared = allPlayerIds.length > 0 && players.length === allPlayerIds.length;
-    await supabase.from("characters").update({ shared_with_players: players, is_shared: isShared }).eq("id", id);
+    const isShared = allPlayerIds.length > 0 && ids.length === allPlayerIds.length;
+    await supabase.from("characters").update({ shared_with_players: ids, is_shared: isShared }).eq("id", itemToShare.id);
     toast({ title: "Partilha atualizada" });
     invalidateCharacters();
+    setItemToShare(null);
   };
 
-  const filteredChars = characters.filter(char => {
-    const matchesSearch = char.name.toLowerCase().includes(charSearch.toLowerCase());
-    const matchesArchive = showArchivedChars ? char.is_archived : !char.is_archived;
-    return matchesSearch && matchesArchive;
-  });
-
-  // RENDERIZADOR APENAS DO CARTÃO (Sem envolver em Sheet)
-  const renderCharacterCard = (char: CharacterWithRelations) => (
-    <Card 
-      key={char.id}
-      className={`border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col ${char.is_archived ? "opacity-60 bg-muted/20" : ""}`}
-      onClick={() => setSelectedCharId(char.id)} // <--- ABRE A FICHA AQUI
-    >
-      <CardHeader>
-        <CardTitle className="flex justify-between items-start text-lg">
-            {char.name}
-            {char.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
-        </CardTitle>
-        <CardDescription>Jogador: {char.player?.display_name}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex-1"><p className="text-sm text-muted-foreground">Clique para editar</p></CardContent>
-      <CardFooter className="flex justify-between items-center pt-0 pb-4 px-4" onClick={e => e.stopPropagation()}>
-          <ShareDialog itemTitle={char.name} currentSharedWith={char.shared_with_players || []} disabled={duplicating} onSave={(ids) => handleUpdateSharing(char.id, ids)}>
-            <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>
-          </ShareDialog>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-              <DropdownMenuItem onClick={() => handleDuplicateCharacter(char)}><Copy className="w-4 h-4 mr-2" /> Duplicar</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleArchiveItem(char.id, !!char.is_archived)}>
-                  {char.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
-                  {char.is_archived ? "Restaurar" : "Arquivar"}
-              </DropdownMenuItem>
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
-                <DropdownMenuSubContent>
-                    <DropdownMenuRadioGroup value={char.folder_id || "none"} onValueChange={val => handleMoveItem(char.id, val === "none" ? null : val)}>
-                        <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
-                        {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
-                    </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-destructive" onClick={() => setCharacterToDelete(char)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-      </CardFooter>
-    </Card>
+  const displayedCharacters = characters.filter(char => 
+    showArchivedChars ? char.is_archived : !char.is_archived
   );
 
-  if (isLoadingChars && characters.length === 0) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
-
   return (
-    <>
-      <EntityListManager
-        items={filteredChars}
-        folders={folders}
-        searchTerm={charSearch}
-        onSearch={setCharSearch}
-        showArchived={showArchivedChars}
-        onToggleArchived={setShowArchivedChars}
-        renderItem={renderCharacterCard}
-        emptyMessage="Nenhum personagem encontrado."
-        actions={
-          <>
+    <div className="flex flex-col h-full space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-4 p-1">
+        <div className="flex items-center gap-2">
             <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Personagens" />
-            <CreateCharacterDialog tableId={tableId} masterId={masterId} members={members} onCharacterCreated={invalidateCharacters}>
-                <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Ficha</Button>
-            </CreateCharacterDialog>
-          </>
-        }
-      />
+            <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
+                <Switch id="show-archived" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
+                <Label htmlFor="show-archived" className="cursor-pointer text-sm font-medium">
+                    {showArchivedChars ? "Ver Ativos" : "Ver Arquivados"}
+                </Label>
+            </div>
+        </div>
+      </div>
 
-      {/* A FICHA VIVE AQUI FORA AGORA */}
+      <div className="flex-1 min-h-0">
+          <EntityListManager
+            title="Personagens"
+            type="character"
+            items={displayedCharacters}
+            folders={folders}
+            isLoading={isLoadingChars}
+            onEdit={(id) => setSelectedCharId(id)}
+            onDelete={(id) => {
+                const char = characters.find(c => c.id === id);
+                if (char) setCharacterToDelete(char);
+            }}
+            onDuplicate={handleDuplicate}
+            onArchive={handleArchive}
+            onMove={handleMove}
+            onShare={(item) => setItemToShare(item)}
+            onCreate={() => setIsCreateOpen(true)}
+          />
+      </div>
+
       <CharacterSheetSheet 
         characterId={selectedCharId} 
         open={!!selectedCharId} 
         onOpenChange={(open) => !open && setSelectedCharId(null)} 
       />
 
+      <CreateCharacterDialog 
+        tableId={tableId} masterId={masterId} members={members} 
+        onCharacterCreated={() => { invalidateCharacters(); setIsCreateOpen(false); }}
+      >
+         <span className="hidden"></span> 
+      </CreateCharacterDialog>
+
+      {itemToShare && (
+          <ShareDialog 
+            itemTitle={itemToShare.name} 
+            currentSharedWith={itemToShare.shared_with_players || []} 
+            onSave={handleUpdateSharing}
+            open={!!itemToShare} 
+            onOpenChange={(open) => !open && setItemToShare(null)}
+          >
+             <span className="hidden"></span>
+          </ShareDialog>
+      )}
+
       <AlertDialog open={!!characterToDelete} onOpenChange={(open) => !open && setCharacterToDelete(null)}>
           <AlertDialogContent>
-              <AlertDialogHeader><AlertDialogTitle>Excluir esta Ficha?</AlertDialogTitle><AlertDialogDescription>Ação irreversível.</AlertDialogDescription></AlertDialogHeader>
-              <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Excluir {characterToDelete?.name}?</AlertDialogTitle>
+                  <AlertDialogDescription>Esta ação é irreversível.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 };

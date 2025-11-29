@@ -1,42 +1,10 @@
-// src/features/master/MasterNpcsTab.tsx
-
 import { useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  MoreVertical,
-  Copy,
-  Trash2,
-  Archive,
-  ArchiveRestore,
-  FolderOpen,
-  Share2,
-  Plus
-} from "lucide-react";
-import { ShareDialog } from "@/components/ShareDialog";
+import { buttonVariants } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,21 +15,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useTableContext } from "@/features/table/TableContext";
 import { CreateNpcDialog } from "@/components/CreateNpcDialog";
 import { EntityListManager } from "@/components/EntityListManager";
 import { NpcWithRelations, FolderType } from "@/types/app-types";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { ShareDialog } from "@/components/ShareDialog";
+import { useTableContext } from "@/features/table/TableContext";
 
+// Lazy load correto da ficha
 const NpcSheetSheet = lazy(() =>
   import("@/features/npc/NpcSheetSheet").then(module => ({ default: module.NpcSheetSheet }))
-);
-
-const SheetLoadingFallback = () => (
-  <Card className="border-border/50 flex flex-col h-[200px]">
-    <CardHeader><Skeleton className="h-6 w-1/2" /><Skeleton className="h-4 w-1/3" /></CardHeader>
-    <CardContent className="flex-1"><Skeleton className="h-4 w-3/4" /></CardContent>
-  </Card>
 );
 
 const fetchNpcs = async (tableId: string) => {
@@ -69,7 +33,7 @@ const fetchNpcs = async (tableId: string) => {
     .from("npcs")
     .select("*, shared_with_players")
     .eq("table_id", tableId)
-    .order("name", { ascending: true }); // <--- GARANTIR ORDEM AQUI TAMBÉM
+    .order("name", { ascending: true });
   if (error) throw error;
   return data as NpcWithRelations[];
 };
@@ -85,10 +49,11 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [npcSearch, setNpcSearch] = useState("");
   const [showArchivedNpcs, setShowArchivedNpcs] = useState(false);
   const [npcToDelete, setNpcToDelete] = useState<NpcWithRelations | null>(null);
-  const [duplicating, setDuplicating] = useState(false);
+  const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [itemToShare, setItemToShare] = useState<NpcWithRelations | null>(null);
 
   const { data: npcs = [], isLoading: isLoadingNpcs } = useQuery({
     queryKey: ['npcs', tableId],
@@ -103,7 +68,7 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
   const invalidateNpcs = () => queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
-  // Handlers
+  // --- HANDLERS ---
   const handleDeleteNpc = async () => {
     if (!npcToDelete) return;
     await supabase.from("journal_entries").update({ npc_id: null }).eq("npc_id", npcToDelete.id);
@@ -114,8 +79,7 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
     setNpcToDelete(null);
   };
 
-  const handleDuplicateNpc = async (npc: NpcWithRelations) => {
-    setDuplicating(true);
+  const handleDuplicate = async (npc: any) => {
     const newData = JSON.parse(JSON.stringify(npc.data || {}));
     newData.name = `Cópia de ${npc.name}`;
     await supabase.from("npcs").insert({
@@ -129,122 +93,119 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
     });
     toast({ title: "NPC Duplicado!" });
     invalidateNpcs();
-    setDuplicating(false);
   };
 
-  const handleArchiveNpc = async (id: string, currentValue: boolean) => {
-    const { error } = await supabase.from("npcs").update({ is_archived: !currentValue }).eq("id", id);
-    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else {
-        toast({ title: !currentValue ? "Arquivado" : "Restaurado" });
-        invalidateNpcs();
-    }
-  };
-
-  const handleMoveNpc = async (npcId: string, folderId: string | null) => {
-    const { error } = await supabase.from("npcs").update({ folder_id: folderId }).eq("id", npcId);
-    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else {
-        toast({ title: "NPC Movido" });
-        invalidateNpcs();
-    }
-  };
-
-  const handleUpdateSharing = async (id: string, players: string[]) => {
-    const allPlayerIds = members.filter(m => !m.isMaster).map(p => p.id);
-    const isShared = allPlayerIds.length > 0 && players.length === allPlayerIds.length;
-    await supabase.from("npcs").update({ shared_with_players: players, is_shared: isShared }).eq("id", id);
-    toast({ title: "Partilha atualizada" });
+  const handleArchive = async (id: string, currentValue: boolean) => {
+    await supabase.from("npcs").update({ is_archived: !currentValue }).eq("id", id);
+    toast({ title: !currentValue ? "Arquivado" : "Restaurado" });
     invalidateNpcs();
   };
 
-  // Filtragem
-  const filteredNpcs = npcs.filter(npc => {
-    const matchesSearch = npc.name.toLowerCase().includes(npcSearch.toLowerCase());
-    const matchesArchive = showArchivedNpcs ? npc.is_archived : !npc.is_archived;
-    return matchesSearch && matchesArchive;
-  });
+  const handleMove = async (id: string, folderId: string | null) => {
+    await supabase.from("npcs").update({ folder_id: folderId }).eq("id", id);
+    toast({ title: "NPC Movido" });
+    invalidateNpcs();
+  };
 
-  const renderNpcCard = (npc: NpcWithRelations) => (
-    <Suspense key={npc.id} fallback={<SheetLoadingFallback />}>
-      <NpcSheetSheet npcId={npc.id}>
-        <Card className={`border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col ${npc.is_archived ? "opacity-60 bg-muted/20" : ""}`}>
-          <CardHeader>
-            <CardTitle className="flex justify-between items-start text-lg">
-                {npc.name}
-                {npc.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
-            </CardTitle>
-            <CardDescription>
-              {npc.is_shared
-                ? "Público"
-                : (npc.shared_with_players || []).length > 0
-                ? `Partilhado (${(npc.shared_with_players || []).length})`
-                : "Privado"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1"><p className="text-sm text-muted-foreground">Clique para editar</p></CardContent>
-          <CardFooter className="flex justify-between items-center pt-0 pb-4 px-4" onClick={e => e.stopPropagation()}>
-             <ShareDialog itemTitle={npc.name} currentSharedWith={npc.shared_with_players || []} disabled={duplicating} onSave={(ids) => handleUpdateSharing(npc.id, ids)}>
-                <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>
-             </ShareDialog>
-             <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                  <DropdownMenuItem onClick={() => handleDuplicateNpc(npc)}><Copy className="w-4 h-4 mr-2" /> Duplicar</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handleArchiveNpc(npc.id, !!npc.is_archived)}>
-                     {npc.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
-                     {npc.is_archived ? "Restaurar" : "Arquivar"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                        <DropdownMenuRadioGroup value={npc.folder_id || "none"} onValueChange={(val) => handleMoveNpc(npc.id, val === "none" ? null : val)}>
-                            <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
-                            {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
-                        </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onClick={() => setNpcToDelete(npc)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
-                </DropdownMenuContent>
-             </DropdownMenu>
-          </CardFooter>
-        </Card>
-      </NpcSheetSheet>
-    </Suspense>
+  const handleUpdateSharing = async (ids: string[]) => {
+    if(!itemToShare) return;
+    const allPlayerIds = members.filter(m => !m.isMaster).map(p => p.id);
+    const isShared = allPlayerIds.length > 0 && ids.length === allPlayerIds.length;
+    await supabase.from("npcs").update({ shared_with_players: ids, is_shared: isShared }).eq("id", itemToShare.id);
+    toast({ title: "Partilha atualizada" });
+    invalidateNpcs();
+    setItemToShare(null);
+  };
+
+  const displayedNpcs = npcs.filter(npc => 
+    showArchivedNpcs ? npc.is_archived : !npc.is_archived
   );
 
-  if (isLoadingNpcs) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
-
   return (
-    <>
-        <EntityListManager
-            items={filteredNpcs}
-            folders={folders}
-            searchTerm={npcSearch}
-            onSearch={setNpcSearch}
-            showArchived={showArchivedNpcs}
-            onToggleArchived={setShowArchivedNpcs}
-            renderItem={renderNpcCard}
-            emptyMessage="Nenhum NPC encontrado."
-            actions={
-                <>
-                    <ManageFoldersDialog tableId={tableId} folders={folders} tableName="npc_folders" title="NPCs" />
-                    <Suspense fallback={<Button size="sm" disabled>...</Button>}>
-                        <CreateNpcDialog tableId={tableId} onNpcCreated={invalidateNpcs}>
-                            <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Novo NPC</Button>
-                        </CreateNpcDialog>
-                    </Suspense>
-                </>
-            }
-        />
+    <div className="flex flex-col h-full space-y-4">
+        {/* BARRA DE TOPO */}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-1">
+            <div className="flex items-center gap-2">
+                <ManageFoldersDialog tableId={tableId} folders={folders} tableName="npc_folders" title="NPCs" />
+                <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
+                    <Switch id="show-archived-npc" checked={showArchivedNpcs} onCheckedChange={setShowArchivedNpcs} />
+                    <Label htmlFor="show-archived-npc" className="cursor-pointer text-sm font-medium">
+                        {showArchivedNpcs ? "Ver Ativos" : "Ver Arquivados"}
+                    </Label>
+                </div>
+            </div>
+        </div>
 
+        {/* LISTA */}
+        <div className="flex-1 min-h-0">
+            <EntityListManager
+                title="NPCs"
+                type="npc"
+                items={displayedNpcs}
+                folders={folders}
+                isLoading={isLoadingNpcs}
+                
+                // CONEXÃO DOS EVENTOS
+                onEdit={(id) => setSelectedNpcId(id)}
+                onDelete={(id) => {
+                    const npc = npcs.find(n => n.id === id);
+                    if (npc) setNpcToDelete(npc);
+                }}
+                onDuplicate={handleDuplicate}
+                onArchive={handleArchive}
+                onMove={handleMove}
+                onShare={(item) => setItemToShare(item)}
+                onCreate={() => setIsCreateOpen(true)}
+            />
+        </div>
+
+        {/* --- MODAIS E FICHAS --- */}
+
+        {/* 1. Ficha de NPC */}
+        {selectedNpcId && (
+            <Suspense fallback={null}>
+                <NpcSheetSheet 
+                    npcId={selectedNpcId} 
+                    // @ts-ignore
+                    open={!!selectedNpcId}
+                    onOpenChange={(open: boolean) => !open && setSelectedNpcId(null)}
+                />
+            </Suspense>
+        )}
+
+        {/* 2. Dialog de Criação */}
+        <Suspense fallback={null}>
+            <CreateNpcDialog tableId={tableId} onNpcCreated={() => { invalidateNpcs(); setIsCreateOpen(false); }}>
+                <span className="hidden"></span>
+            </CreateNpcDialog>
+        </Suspense>
+
+        {/* 3. Dialog de Partilha */}
+        {itemToShare && (
+          <ShareDialog 
+            itemTitle={itemToShare.name} 
+            currentSharedWith={itemToShare.shared_with_players || []} 
+            onSave={handleUpdateSharing}
+            open={!!itemToShare} 
+            onOpenChange={(open) => !open && setItemToShare(null)}
+          >
+             <span className="hidden"></span>
+          </ShareDialog>
+        )}
+
+        {/* 4. Delete Alert */}
         <AlertDialog open={!!npcToDelete} onOpenChange={(open) => !open && setNpcToDelete(null)}>
             <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Excluir este NPC?</AlertDialogTitle><AlertDialogDescription>Ação irreversível.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteNpc} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction></AlertDialogFooter>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir este NPC?</AlertDialogTitle>
+                    <AlertDialogDescription>Ação irreversível.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteNpc} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction>
+                </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
-    </>
+    </div>
   );
 };
