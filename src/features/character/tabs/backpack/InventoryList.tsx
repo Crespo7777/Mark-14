@@ -8,13 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { EditItemDialog } from "./EditItemDialog";
 import { 
-  Package, Plus, Trash2, Sword, Shield, Backpack, Edit, Database 
+  Package, Plus, Trash2, Sword, Shield, Backpack, Edit, Database, 
+  ChevronDown, ChevronUp, Info, Star, Clock 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { getDefaultWeapon, getDefaultArmor } from "../../character.schema";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils"; // Utilitário de classes do Shadcn
 
 // Categorias permitidas
 const INVENTORY_CATEGORIES_SELECTOR = [
@@ -30,10 +32,14 @@ export const InventoryList = () => {
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [equipDialogOpen, setEquipDialogOpen] = useState(false);
   const [itemToEquipIndex, setItemToEquipIndex] = useState<number | null>(null);
+  
+  // Estado para controlar qual item está expandido
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
   const inventory = (form.watch("inventory") || []) as any[];
 
-  // --- CORREÇÃO AQUI ---
+  // --- ACTIONS ---
+
   const handleAddItem = (itemTemplate: any) => {
     const newItem = {
         id: crypto.randomUUID(),
@@ -48,20 +54,13 @@ export const InventoryList = () => {
     const currentInv = form.getValues("inventory") || [];
     const newInventory = [...currentInv, newItem];
     
-    // Atualiza o formulário
     form.setValue("inventory", newInventory, { shouldDirty: true });
     
     if (itemTemplate) {
         toast({ title: "Item Adicionado", description: `${newItem.name} na mochila.` });
     } else {
-        // --- O TRUQUE: setTimeout ---
-        // Esperamos 50ms para garantir que o React renderizou o novo item na lista
-        // antes de tentar abrir o editor para ele.
-        setTimeout(() => {
-            setEditingItemIndex(newInventory.length - 1);
-        }, 50);
-        
-        toast({ title: "Item Criado", description: "Edite os detalhes agora." });
+        setEditingItemIndex(newInventory.length - 1);
+        toast({ title: "Item Criado", description: "Preencha os detalhes do item." });
     }
   };
 
@@ -73,6 +72,7 @@ export const InventoryList = () => {
     const currentInv = form.getValues("inventory");
     const newInv = currentInv.filter((_, i) => i !== index);
     form.setValue("inventory", newInv, { shouldDirty: true });
+    if (expandedIndex === index) setExpandedIndex(null);
   };
 
   const handleSaveEdit = (updatedItem: any) => {
@@ -83,10 +83,13 @@ export const InventoryList = () => {
       form.setValue("inventory", currentInv, { shouldDirty: true });
       toast({ title: "Item Atualizado" });
       
-      // Salvar no backend
       supabase.from("characters").update({
           data: { ...character.data, inventory: currentInv }
       }).eq("id", character.id).then();
+  };
+
+  const toggleExpand = (index: number) => {
+      setExpandedIndex(prev => prev === index ? null : index);
   };
 
   // --- EQUIP LOGIC ---
@@ -116,7 +119,6 @@ export const InventoryList = () => {
           return;
       }
 
-      // Remove da mochila ou reduz quantidade
       const currentQty = Number(item.quantity);
       if (currentQty > 1) {
           form.setValue(`inventory.${index}.quantity`, currentQty - 1, { shouldDirty: true });
@@ -124,9 +126,9 @@ export const InventoryList = () => {
           const currentInv = form.getValues("inventory");
           const newInv = currentInv.filter((_, i) => i !== index);
           form.setValue("inventory", newInv, { shouldDirty: true });
+          if (expandedIndex === index) setExpandedIndex(null);
       }
 
-      // Adiciona na lista equipada
       if (type === 'weapon') {
           const newWeapon = {
               ...getDefaultWeapon(),
@@ -162,6 +164,59 @@ export const InventoryList = () => {
         food: 'Comida', tool: 'Ferramenta', clothing: 'Roupa', musical: 'Instrumento'
     };
     return map[cat] || cat;
+  };
+
+  // --- RENDERIZAR DETALHES ---
+  const renderItemDetails = (item: any) => {
+      const data = item.data || {};
+      const hasDetails = item.description || data.damage || data.protection || data.quality || data.duration;
+
+      if (!hasDetails) return <p className="text-xs text-muted-foreground italic px-2">Sem detalhes adicionais.</p>;
+
+      return (
+          <div className="space-y-3 px-2">
+              {/* Stats Badges */}
+              <div className="flex flex-wrap gap-2">
+                  {data.damage && (
+                      <Badge variant="outline" className="border-red-500/30 text-red-500 bg-red-500/5 gap-1">
+                          <Sword className="w-3 h-3"/> Dano: {data.damage}
+                      </Badge>
+                  )}
+                  {data.attackAttribute && (
+                      <Badge variant="outline" className="border-primary/30 text-primary gap-1">
+                          Atributo: {data.attackAttribute}
+                      </Badge>
+                  )}
+                  {data.protection && (
+                      <Badge variant="outline" className="border-blue-500/30 text-blue-500 bg-blue-500/5 gap-1">
+                          <Shield className="w-3 h-3"/> Prot: {data.protection}
+                      </Badge>
+                  )}
+                  {data.obstructive && (
+                      <Badge variant="outline" className="border-amber-500/30 text-amber-500 bg-amber-500/5">
+                          Penalidade: {data.obstructive}
+                      </Badge>
+                  )}
+                  {data.duration && (
+                      <Badge variant="outline" className="border-purple-500/30 text-purple-500 bg-purple-500/5 gap-1">
+                          <Clock className="w-3 h-3"/> {data.duration}
+                      </Badge>
+                  )}
+                  {data.quality && (
+                      <Badge variant="secondary" className="gap-1 bg-yellow-500/10 text-yellow-600 hover:bg-yellow-500/20 border border-yellow-500/20">
+                          <Star className="w-3 h-3 fill-current"/> {data.quality}
+                      </Badge>
+                  )}
+              </div>
+
+              {/* Descrição em HTML rico ou texto simples */}
+              {item.description && (
+                  <div className="text-xs text-muted-foreground bg-background/50 p-2 rounded border border-border/50">
+                      <div dangerouslySetInnerHTML={{ __html: item.description }} />
+                  </div>
+              )}
+          </div>
+      );
   };
 
   return (
@@ -200,69 +255,100 @@ export const InventoryList = () => {
                               <p className="text-sm">Mochila vazia.</p>
                           </div>
                       ) : (
-                          inventory.map((item: any, index: number) => (
-                              <div key={item.id || index} className="flex items-center justify-between p-3 bg-card border rounded-md hover:border-primary/40 transition-colors group">
-                                  <div className="flex items-center gap-3 overflow-hidden">
-                                      <div className="bg-muted w-9 h-9 rounded-md flex items-center justify-center shrink-0">
-                                          <Package className="w-4 h-4 opacity-50" />
-                                      </div>
-                                      <div className="min-w-0">
-                                          <div className="font-medium flex items-center gap-2 truncate text-sm">
-                                              {item.name}
-                                              <Badge variant="secondary" className="text-[10px] h-5 px-1 font-normal">
-                                                  x{item.quantity}
-                                              </Badge>
-                                          </div>
-                                          <div className="text-xs text-muted-foreground truncate capitalize">
-                                              {getCategoryLabel(item.category || item.data?.category)}
-                                          </div>
-                                      </div>
-                                  </div>
-                                  
-                                  <div className="flex items-center gap-1">
-                                      <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground mr-2">
-                                          {item.weight} peso
-                                      </Badge>
-                                      
-                                      <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                          title="Editar Detalhes"
-                                          onClick={() => setEditingItemIndex(index)}
+                          inventory.map((item: any, index: number) => {
+                              const isExpanded = expandedIndex === index;
+                              
+                              return (
+                                  <div 
+                                    key={item.id || index} 
+                                    className={cn(
+                                        "flex flex-col bg-card border rounded-md transition-all duration-200",
+                                        isExpanded ? "border-primary/50 shadow-md bg-accent/5" : "hover:border-primary/30"
+                                    )}
+                                  >
+                                      {/* LINHA PRINCIPAL (Clicável para expandir) */}
+                                      <div 
+                                        className="flex items-center justify-between p-3 cursor-pointer select-none"
+                                        onClick={() => toggleExpand(index)}
                                       >
-                                          <Edit className="w-4 h-4" />
-                                      </Button>
+                                          <div className="flex items-center gap-3 overflow-hidden">
+                                              {/* Ícone Chevron para indicar expansão */}
+                                              <div className="text-muted-foreground">
+                                                  {isExpanded ? <ChevronUp className="w-4 h-4"/> : <ChevronDown className="w-4 h-4"/>}
+                                              </div>
 
-                                      {(item.category === 'weapon' || item.category === 'armor' || item.data?.category === 'weapon' || item.data?.category === 'armor') && (
-                                          <Button 
-                                              variant="ghost" 
-                                              size="icon" 
-                                              className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                                              title="Equipar (Mover para Combate)"
-                                              onClick={() => handleEquipClick(index)}
-                                          >
-                                              {item.category === 'weapon' || item.data?.category === 'weapon' ? <Sword className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-                                          </Button>
+                                              <div className="bg-muted w-9 h-9 rounded-md flex items-center justify-center shrink-0">
+                                                  <Package className="w-4 h-4 opacity-50" />
+                                              </div>
+                                              <div className="min-w-0">
+                                                  <div className="font-medium flex items-center gap-2 truncate text-sm">
+                                                      {item.name}
+                                                      <Badge variant="secondary" className="text-[10px] h-5 px-1 font-normal">
+                                                          x{item.quantity}
+                                                      </Badge>
+                                                  </div>
+                                                  <div className="text-xs text-muted-foreground truncate capitalize">
+                                                      {getCategoryLabel(item.category || item.data?.category)}
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          
+                                          {/* Ações (StopPropagation para não fechar o accordion) */}
+                                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                              <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground mr-2">
+                                                  {item.weight} peso
+                                              </Badge>
+                                              
+                                              <Button 
+                                                  variant="ghost" 
+                                                  size="icon" 
+                                                  className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                                  title="Editar Detalhes"
+                                                  onClick={() => setEditingItemIndex(index)}
+                                              >
+                                                  <Edit className="w-4 h-4" />
+                                              </Button>
+
+                                              {(item.category === 'weapon' || item.category === 'armor' || item.data?.category === 'weapon' || item.data?.category === 'armor') && (
+                                                  <Button 
+                                                      variant="ghost" 
+                                                      size="icon" 
+                                                      className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                                      title="Equipar"
+                                                      onClick={() => handleEquipClick(index)}
+                                                  >
+                                                      {item.category === 'weapon' || item.data?.category === 'weapon' ? <Sword className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                                  </Button>
+                                              )}
+                                              
+                                              <Button 
+                                                  variant="ghost" 
+                                                  size="icon" 
+                                                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  onClick={() => handleRemoveItem(index)}
+                                              >
+                                                  <Trash2 className="w-4 h-4" />
+                                              </Button>
+                                          </div>
+                                      </div>
+
+                                      {/* CONTEÚDO EXPANDIDO */}
+                                      {isExpanded && (
+                                          <div className="px-3 pb-3 pt-0 animate-in slide-in-from-top-2 duration-200">
+                                              <div className="border-t border-border/50 my-2"></div>
+                                              {renderItemDetails(item)}
+                                          </div>
                                       )}
-                                      
-                                      <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                          onClick={() => handleRemoveItem(index)}
-                                      >
-                                          <Trash2 className="w-4 h-4" />
-                                      </Button>
                                   </div>
-                              </div>
-                          ))
+                              );
+                          })
                       )}
                   </div>
               </ScrollArea>
           </CardContent>
       </Card>
 
+      {/* Dialogs */}
       <Dialog open={equipDialogOpen} onOpenChange={setEquipDialogOpen}>
           <DialogContent>
               <DialogHeader>
@@ -276,6 +362,7 @@ export const InventoryList = () => {
           </DialogContent>
       </Dialog>
 
+      {/* Edit Dialog */}
       {editingItemIndex !== null && inventory[editingItemIndex] && (
           <EditItemDialog 
               open={editingItemIndex !== null} 
