@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button"; // Import necessário caso use o botão padrão
 import { Search, Plus, Ghost } from "lucide-react";
 import { EntityCard } from "./EntityCard";
 import { FolderType } from "@/types/app-types";
@@ -15,15 +15,15 @@ import {
 interface EntityListManagerProps {
   items: any[];
   folders?: FolderType[];
-  // Actions
   onEdit: (id: string) => void;
-  onDelete: (id: string, name: string) => void; // Atualizado assinatura
-  onDuplicate: (item: any) => void;
-  onArchive: (id: string, currentVal: boolean) => void;
-  onMove: (id: string, folderId: string | null) => void;
-  onShare: (item: any) => void;
+  onDelete: (id: string, name: string) => void;
+  // Actions do Card
+  onDuplicate?: (item: any) => void;
+  onArchive?: (id: string, currentVal: boolean) => void;
+  onMove?: (id: string, folderId: string | null) => void;
+  onShare?: (item: any) => void;
   
-  onCreate: () => void;
+  onCreate?: () => void; // <--- AGORA OPCIONAL
   title?: string;
   type: "character" | "npc";
   isLoading?: boolean;
@@ -34,7 +34,7 @@ interface EntityListManagerProps {
 
 export const EntityListManager = ({
   items,
-  folders = [],
+  folders = [], // Blindagem contra undefined
   onEdit,
   onDelete,
   onDuplicate,
@@ -55,14 +55,13 @@ export const EntityListManager = ({
   const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : internalSearchTerm;
   const setSearchTerm = externalOnSearch || setInternalSearchTerm;
 
+  // Lógica de Filtragem Segura
   const filteredItems = items.filter((item) => {
     if (!item) return false;
     
-    // Filtro por Pasta
     if (selectedFolder !== "all" && selectedFolder !== "no_folder" && item.folder_id !== selectedFolder) return false;
     if (selectedFolder === "no_folder" && item.folder_id !== null) return false;
 
-    // Filtro por Texto
     const term = (searchTerm || "").toLowerCase();
     if (!term) return true;
 
@@ -106,15 +105,18 @@ export const EntityListManager = ({
             </Select>
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto items-center">
             {actions} 
-            <Button onClick={onCreate} size="sm" className="h-9 shadow-sm">
-               <Plus className="h-4 w-4 mr-1" /> Novo
-            </Button>
+            {/* Só mostra este botão se onCreate for passado. Caso contrário, usamos o botão dentro de 'actions' */}
+            {onCreate && (
+                <Button onClick={onCreate} size="sm" className="h-9 shadow-sm">
+                   <Plus className="h-4 w-4 mr-1" /> Novo
+                </Button>
+            )}
         </div>
       </div>
 
-      {/* GRID DE CARDS */}
+      {/* GRID DE CONTEÚDO */}
       <div className="flex-1 overflow-y-auto p-0.5 md:p-1 scrollbar-thin scrollbar-thumb-muted">
         {isLoading ? (
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 md:gap-3">
@@ -124,7 +126,6 @@ export const EntityListManager = ({
           </div>
         ) : filteredItems.length > 0 ? (
           
-          // GRID DENSO E COMPACTO
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2 md:gap-3 pb-10">
             {filteredItems.map((item) => (
               <EntityCard
@@ -132,7 +133,6 @@ export const EntityListManager = ({
                 entity={item}
                 folders={folders}
                 type={type}
-                // Passagem de todas as funções
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onDuplicate={onDuplicate}

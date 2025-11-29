@@ -2,7 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Trash2, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -48,7 +48,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [itemToShare, setItemToShare] = useState<CharacterWithRelations | null>(null);
 
   const { data: characters = [], isLoading: isLoadingChars } = useQuery({
@@ -121,18 +120,21 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
 
   return (
     <div className="flex flex-col h-full space-y-4">
+      {/* BARRA DE FILTROS SUPERIOR */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-1">
         <div className="flex items-center gap-2">
             <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Personagens" />
             <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
                 <Switch id="show-archived" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
-                <Label htmlFor="show-archived" className="cursor-pointer text-sm font-medium">
+                <Label htmlFor="show-archived" className="cursor-pointer text-sm font-medium flex items-center gap-2">
+                    {showArchivedChars ? <ArchiveRestore className="w-4 h-4"/> : <Archive className="w-4 h-4"/>}
                     {showArchivedChars ? "Ver Ativos" : "Ver Arquivados"}
                 </Label>
             </div>
         </div>
       </div>
 
+      {/* LISTA */}
       <div className="flex-1 min-h-0">
           <EntityListManager
             title="Personagens"
@@ -140,6 +142,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
             items={displayedCharacters}
             folders={folders}
             isLoading={isLoadingChars}
+            
             onEdit={(id) => setSelectedCharId(id)}
             onDelete={(id) => {
                 const char = characters.find(c => c.id === id);
@@ -149,22 +152,29 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
             onArchive={handleArchive}
             onMove={handleMove}
             onShare={(item) => setItemToShare(item)}
-            onCreate={() => setIsCreateOpen(true)}
+            
+            // --- AQUI ESTÁ A CORREÇÃO DO BOTÃO DE CRIAR ---
+            actions={
+                <CreateCharacterDialog 
+                    tableId={tableId} 
+                    masterId={masterId} 
+                    members={members} 
+                    onCharacterCreated={invalidateCharacters}
+                >
+                    <Button size="sm" className="h-9 shadow-sm">
+                        <Plus className="h-4 w-4 mr-1" /> Novo Personagem
+                    </Button>
+                </CreateCharacterDialog>
+            }
           />
       </div>
 
+      {/* MODAIS */}
       <CharacterSheetSheet 
         characterId={selectedCharId} 
         open={!!selectedCharId} 
         onOpenChange={(open) => !open && setSelectedCharId(null)} 
       />
-
-      <CreateCharacterDialog 
-        tableId={tableId} masterId={masterId} members={members} 
-        onCharacterCreated={() => { invalidateCharacters(); setIsCreateOpen(false); }}
-      >
-         <span className="hidden"></span> 
-      </CreateCharacterDialog>
 
       {itemToShare && (
           <ShareDialog 

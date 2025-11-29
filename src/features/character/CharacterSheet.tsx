@@ -1,5 +1,4 @@
-// src/features/character/CharacterSheet.tsx
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useCharacterSheet } from "./CharacterSheetContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -18,10 +17,10 @@ import {
   Sparkles,
   Loader2,
   Share2,
-  ImagePlus, 
+  ImagePlus,
   Camera,
   Settings2,
-  Move 
+  Move
 } from "lucide-react";
 import { Form } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
@@ -38,15 +37,20 @@ import { AbilitiesTraitsTab } from "./tabs/AbilitiesTraitsTab";
 import { CombatEquipmentTab } from "./tabs/CombatEquipmentTab";
 import { BackpackTab } from "./tabs/BackpackTab";
 import { CharacterJournalTab } from "./tabs/CharacterJournalTab";
+import { useCharacterCalculations } from "./hooks/useCharacterCalculations";
 
 export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean }) => {
   const context = useCharacterSheet();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("details");
   
+  // Estados de Upload
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const calculations = useCharacterCalculations(); 
+
+  // Proteção contra crash
   if (!context || !context.character) {
       return (
           <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4 text-muted-foreground">
@@ -58,6 +62,11 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
 
   const { form, character, isDirty, isSaving, saveSheet } = context;
   
+  // Leitura dos Dados
+  const currentXp = calculations.currentExperience; 
+  const nextLevelXp = 100;
+  const xpPercentage = Math.min(100, Math.max(0, (currentXp / nextLevelXp) * 100));
+  
   const currentHp = form.watch("toughness.current") || 0;
   const vigorous = Number(form.watch("attributes.vigorous.value") || 0);
   const hpBonus = Number(form.watch("toughness.bonus") || 0);
@@ -66,9 +75,10 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
   const name = form.watch("name") || "Sem Nome";
   const archetype = form.watch("archetype") || "Aventureiro";
   const occupation = form.watch("occupation") || "Vagabundo";
-  const imageUrl = form.watch("image_url"); 
-  
-  // Settings de imagem (Zoom/Posição)
+  const imageUrl = form.watch("image_url");
+
+  // Configurações de Imagem (Zoom/Posição)
+  // Nota: Salvamos em data.image_settings para o Card ler depois
   const imageSettings = form.watch("data.image_settings") || { x: 50, y: 50, scale: 100 };
 
   const updateImageSettings = (key: string, value: number[]) => {
@@ -76,6 +86,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
       form.setValue("data.image_settings", newSettings, { shouldDirty: true });
   };
 
+  // Upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || isReadOnly) return;
@@ -86,28 +97,24 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
       const fileName = `${character.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
       const filePath = `character-portraits/${fileName}`;
 
-      // Upload
       const { error: uploadError } = await supabase.storage
         .from('images') 
         .upload(filePath, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
-      // Obter URL Pública
       const { data: { publicUrl } } = supabase.storage
         .from('images')
         .getPublicUrl(filePath);
 
-      // Atualiza o formulário e marca como sujo
       form.setValue("image_url", publicUrl, { shouldDirty: true });
-      
-      toast({ title: "Imagem enviada!", description: "Ajuste o foco e clique em Salvar." });
+      toast({ title: "Imagem atualizada!" });
 
     } catch (error: any) {
       console.error("Erro no upload:", error);
       toast({
         title: "Erro ao enviar",
-        description: error.message || "Verifique se o bucket 'images' existe no Supabase.",
+        description: error.message,
         variant: "destructive",
       });
     } finally {
@@ -117,32 +124,30 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
   };
 
   const triggerFileInput = () => {
-      if (!isReadOnly && fileInputRef.current) {
-          fileInputRef.current.click();
-      }
+      if (!isReadOnly && fileInputRef.current) fileInputRef.current.click();
   };
 
   return (
     <Form {...form}>
       <form onSubmit={(e) => { e.preventDefault(); saveSheet(); }} className="h-full flex flex-col space-y-4">
         
-        <input 
-           type="file" 
-           ref={fileInputRef} 
-           className="hidden" 
-           accept="image/png, image/jpeg, image/gif, image/webp"
-           onChange={handleImageUpload}
-        />
-
-        {/* HEADER */}
+        {/* HEADER DA FICHA (REFORMULADO) */}
         <Card className="p-4 border-l-4 border-l-primary bg-card/50 m-4 mb-0">
             <div className="flex flex-col md:flex-row gap-4 items-center md:items-start">
                 
+                <input 
+                   type="file" 
+                   ref={fileInputRef} 
+                   className="hidden" 
+                   accept="image/png, image/jpeg, image/gif, image/webp"
+                   onChange={handleImageUpload}
+                />
+
                 {/* ÁREA DA IMAGEM */}
-                <div className="relative group">
+                <div className="relative group shrink-0">
                     <div 
                         className={`
-                            w-24 h-24 shrink-0 rounded-lg border-2 border-primary shadow-lg 
+                            w-24 h-24 rounded-lg border-2 border-primary shadow-lg 
                             overflow-hidden bg-muted flex items-center justify-center relative
                         `}
                     >
@@ -167,7 +172,6 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                             </div>
                         )}
                         
-                        {/* Overlay Camera */}
                         {!isReadOnly && imageUrl && (
                             <div 
                                 onClick={triggerFileInput}
@@ -178,7 +182,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                         )}
                     </div>
 
-                    {/* Botão de Ajustes */}
+                    {/* BOTÃO DE AJUSTES (ZOOM) */}
                     {!isReadOnly && imageUrl && (
                         <Popover>
                             <PopoverTrigger asChild>
@@ -246,17 +250,18 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                     )}
                 </div>
 
-                {/* INFO */}
+                {/* INFO PRINCIPAL */}
                 <div className="flex-1 text-center md:text-left space-y-1 w-full">
                     <div className="flex flex-col md:flex-row justify-between items-center">
                         <div>
-                            <h2 className="text-2xl font-bold tracking-tight text-primary truncate">{name}</h2>
+                            <h2 className="text-2xl font-bold tracking-tight text-primary">{name}</h2>
                             <div className="flex gap-2 justify-center md:justify-start text-sm text-muted-foreground">
                                 <Badge variant="outline">{archetype}</Badge>
-                                <span className="flex items-center gap-1 truncate">• {occupation}</span>
+                                <span className="flex items-center gap-1">• {occupation}</span>
                             </div>
                         </div>
                         
+                        {/* Ações */}
                         <div className="flex gap-2 mt-2 md:mt-0">
                             {!isReadOnly && (
                                 <>
@@ -280,23 +285,29 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                     </div>
 
                     <Separator className="my-2" />
-                    
-                    <div className="max-w-md"> 
+
+                    {/* Barras de Estado */}
+                    <div className="grid grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
-                            <div className="flex justify-between text-xs">
-                                <span className="flex items-center gap-1 font-semibold text-red-400">
-                                    <Heart className="w-3 h-3 fill-current"/> Vida
-                                </span>
+                            <div className="flex justify-between">
+                                <span className="flex items-center gap-1 font-semibold text-red-400"><Heart className="w-3 h-3 fill-current"/> Vida</span>
                                 <span>{currentHp} / {maxHp}</span>
                             </div>
-                            <Progress value={(currentHp / maxHp) * 100} className="h-2 bg-red-950/20" />
+                            <Progress value={(currentHp / maxHp) * 100} className="h-1.5 bg-red-950" />
+                        </div>
+                        <div className="space-y-1">
+                            <div className="flex justify-between">
+                                <span className="flex items-center gap-1 font-semibold text-yellow-400"><Sparkles className="w-3 h-3 fill-current"/> XP</span>
+                                <span>{currentXp} / {nextLevelXp}</span>
+                            </div>
+                            <Progress value={xpPercentage} className="h-1.5 bg-yellow-950" />
                         </div>
                     </div>
                 </div>
             </div>
         </Card>
 
-        {/* TABS */}
+        {/* TABS DE CONTEÚDO */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
             <div className="px-4 overflow-x-auto pb-2">
                 <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground w-full justify-start">
@@ -320,6 +331,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                 </div>
             </div>
         </Tabs>
+
       </form>
     </Form>
   );

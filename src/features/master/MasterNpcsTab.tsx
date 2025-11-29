@@ -1,8 +1,8 @@
 import { useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { buttonVariants } from "@/components/ui/button";
-import { Trash2 } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Trash2, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -23,7 +23,6 @@ import { Label } from "@/components/ui/label";
 import { ShareDialog } from "@/components/ShareDialog";
 import { useTableContext } from "@/features/table/TableContext";
 
-// Lazy load correto da ficha
 const NpcSheetSheet = lazy(() =>
   import("@/features/npc/NpcSheetSheet").then(module => ({ default: module.NpcSheetSheet }))
 );
@@ -52,7 +51,6 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
   const [showArchivedNpcs, setShowArchivedNpcs] = useState(false);
   const [npcToDelete, setNpcToDelete] = useState<NpcWithRelations | null>(null);
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [itemToShare, setItemToShare] = useState<NpcWithRelations | null>(null);
 
   const { data: npcs = [], isLoading: isLoadingNpcs } = useQuery({
@@ -68,7 +66,7 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
   const invalidateNpcs = () => queryClient.invalidateQueries({ queryKey: ['npcs', tableId] });
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
-  // --- HANDLERS ---
+  // HANDLERS
   const handleDeleteNpc = async () => {
     if (!npcToDelete) return;
     await supabase.from("journal_entries").update({ npc_id: null }).eq("npc_id", npcToDelete.id);
@@ -145,7 +143,6 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
                 folders={folders}
                 isLoading={isLoadingNpcs}
                 
-                // CONEXÃO DOS EVENTOS
                 onEdit={(id) => setSelectedNpcId(id)}
                 onDelete={(id) => {
                     const npc = npcs.find(n => n.id === id);
@@ -155,13 +152,21 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
                 onArchive={handleArchive}
                 onMove={handleMove}
                 onShare={(item) => setItemToShare(item)}
-                onCreate={() => setIsCreateOpen(true)}
+                
+                // --- CORREÇÃO DO BOTÃO DE CRIAR ---
+                actions={
+                    <Suspense fallback={<Button size="sm" disabled>...</Button>}>
+                        <CreateNpcDialog tableId={tableId} onNpcCreated={invalidateNpcs}>
+                            <Button size="sm" className="h-9 shadow-sm">
+                                <Plus className="h-4 w-4 mr-1" /> Novo NPC
+                            </Button>
+                        </CreateNpcDialog>
+                    </Suspense>
+                }
             />
         </div>
 
-        {/* --- MODAIS E FICHAS --- */}
-
-        {/* 1. Ficha de NPC */}
+        {/* MODAIS */}
         {selectedNpcId && (
             <Suspense fallback={null}>
                 <NpcSheetSheet 
@@ -173,14 +178,6 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
             </Suspense>
         )}
 
-        {/* 2. Dialog de Criação */}
-        <Suspense fallback={null}>
-            <CreateNpcDialog tableId={tableId} onNpcCreated={() => { invalidateNpcs(); setIsCreateOpen(false); }}>
-                <span className="hidden"></span>
-            </CreateNpcDialog>
-        </Suspense>
-
-        {/* 3. Dialog de Partilha */}
         {itemToShare && (
           <ShareDialog 
             itemTitle={itemToShare.name} 
@@ -193,7 +190,6 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
           </ShareDialog>
         )}
 
-        {/* 4. Delete Alert */}
         <AlertDialog open={!!npcToDelete} onOpenChange={(open) => !open && setNpcToDelete(null)}>
             <AlertDialogContent>
                 <AlertDialogHeader>
