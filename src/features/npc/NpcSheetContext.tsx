@@ -45,40 +45,52 @@ export const NpcSheetProvider = ({
   const { toast } = useToast();
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
   
-  // Refs para evitar 'stale state'
   const isSavingRef = useRef(isSaving);
   useEffect(() => {
     isSavingRef.current = isSaving;
   }, [isSaving]);
 
-  // --- VERIFICAÇÃO DE MESTRE ---
   const { isMaster } = useTableContext();
-  
-  // Se for Mestre, NÃO é ReadOnly. Se for Jogador, É ReadOnly.
   const isReadOnly = !isMaster;
+
+  // --- PREPARAÇÃO DOS DADOS INICIAIS ---
+  // Mistura o JSON 'data' com as colunas 'name' e 'image_url' do banco
+  const getInitialValues = (npcRow: Npc): NpcSheetData => {
+    const rawData = npcRow.data as any || {};
+    return {
+        ...rawData,
+        name: npcRow.name,           // Garante que o nome venha da coluna
+        image_url: npcRow.image_url, // Garante que a imagem venha da coluna
+    };
+  };
 
   const form = useForm<NpcSheetData>({
     resolver: zodResolver(npcSheetSchema),
-    defaultValues: npc.data as NpcSheetData,
+    defaultValues: getInitialValues(npc),
   });
 
   const { isDirty } = form.formState;
 
-  // --- CORREÇÃO CRÍTICA: Reset Inteligente ---
+  // Atualiza o formulário se o NPC mudar externamente (ex: Realtime)
+  useEffect(() => {
+      if (npc) {
+        const currentValues = form.getValues();
+        // Só reseta se houver mudança real de ID ou versão para evitar loop
+        if (npc.id !== (currentValues as any).id && !isDirty) {
+            form.reset(getInitialValues(npc));
+        }
+      }
+  }, [npc, form, isDirty]);
+
   const handleSaveSuccess = useCallback((data: NpcSheetData) => {
-    // keepValues: true -> Mantém o que o utilizador escreveu no input
-    // keepDirty: false -> Marca como "limpo" (salvo) para o RHF
     form.reset(data, { 
       keepValues: true, 
       keepDirty: false,
       keepErrors: true,
       keepTouched: true 
     }); 
-    
-    // Toast removido para não spamar no auto-save (opcional)
-    // toast({ title: "Ficha de NPC Salva!" });
     setIsSaving(false);
-  }, [form]); // Sem dependência de 'toast' para evitar re-criação
+  }, [form]);
 
   const handleSaveInvalid = useCallback((errors: any) => {
     console.error("Erros de validação (NPC):", errors);
@@ -100,12 +112,10 @@ export const NpcSheetProvider = ({
     setIsSaving(false);
   }, [toast]);
 
-  // Save Programático (Auto-save)
   const programmaticSave = useCallback(async () => {
-    if (isReadOnly) return; // Jogadores não salvam NPCs
+    if (isReadOnly) return;
     setIsSaving(true);
     try {
-      // Obtém os dados ATUAIS do formulário (incluindo o que acabou de ser digitado)
       const currentData = form.getValues();
       await onSave(currentData);
       handleSaveSuccess(currentData);
@@ -119,7 +129,6 @@ export const NpcSheetProvider = ({
     programmaticSaveRef.current = programmaticSave;
   }, [programmaticSave]);
 
-  // Save Manual
   const saveSheet = useCallback(
     () => form.handleSubmit(async (data) => {
       if (isSavingRef.current || isReadOnly) return;
@@ -127,7 +136,7 @@ export const NpcSheetProvider = ({
       try {
         await onSave(data);
         handleSaveSuccess(data);
-        toast({ title: "Ficha Salva!" }); // Toast apenas no manual
+        toast({ title: "Ficha Salva!" });
       } catch (error) {
         handleSaveError(error);
       }
@@ -140,7 +149,6 @@ export const NpcSheetProvider = ({
     if (isReadOnly) return;
 
     const subscription = form.watch((value, { name, type }) => {
-      // Apenas acionar se for uma mudança de utilizador (ex: 'onChange')
       if (!type) return; 
       
       if (debounceTimer.current) {
@@ -152,7 +160,7 @@ export const NpcSheetProvider = ({
           console.log("Auto-saving NPC sheet...");
           programmaticSaveRef.current(); 
         }
-      }, 3000); // 3 segundos para ser menos agressivo
+      }, 3000);
     });
 
     return () => {

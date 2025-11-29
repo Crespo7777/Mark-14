@@ -1,5 +1,4 @@
 // src/components/CharacterSheetSheet.tsx
-
 import { useState } from "react";
 import {
   Sheet,
@@ -10,7 +9,6 @@ import {
 } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { CharacterSheet } from "@/features/character/CharacterSheet";
@@ -24,7 +22,6 @@ interface CharacterSheetSheetProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-// Faz o fetch na tabela 'characters'
 const fetchCharacter = async (characterId: string) => {
   const { data, error } = await supabase
     .from("characters")
@@ -58,26 +55,29 @@ export const CharacterSheetSheet = ({
     queryKey: ["character", characterId],
     queryFn: () => fetchCharacter(characterId!),
     enabled: open && !!characterId,
-    placeholderData: (previousData) => previousData,
+    placeholderData: (previousData) => previousData, 
   });
 
-  // Função de Salvar necessária para o Provider
+  // --- FUNÇÃO DE SALVAR CORRIGIDA ---
   const handleSave = async (formData: any) => {
     if (!characterId) return;
 
     try {
+      const updatePayload = {
+          name: formData.name,            // Salva nome na coluna
+          image_url: formData.image_url,  // Salva imagem na coluna (O SEGREDO ESTÁ AQUI)
+          data: formData                  // Salva o resto no JSON
+      };
+
       const { error } = await supabase
         .from("characters")
-        .update({ 
-            data: formData,
-            name: formData.name // Atualiza também a coluna nome na tabela
-        })
+        .update(updatePayload)
         .eq("id", characterId);
 
       if (error) throw error;
 
-      // Invalida as caches para atualizar listas e a própria ficha
       await queryClient.invalidateQueries({ queryKey: ["character", characterId] });
+      
       if (character?.table_id) {
           await queryClient.invalidateQueries({ queryKey: ["characters", character.table_id] });
       }
@@ -89,7 +89,7 @@ export const CharacterSheetSheet = ({
         description: err.message,
         variant: "destructive",
       });
-      throw err; // Re-lança para que o Contexto saiba que falhou
+      throw err;
     }
   };
 
@@ -98,29 +98,23 @@ export const CharacterSheetSheet = ({
       {children && <SheetTrigger asChild>{children}</SheetTrigger>}
       
       <SheetContent className="w-full sm:max-w-3xl p-0 bg-background overflow-hidden flex flex-col">
-        <SheetTitle className="sr-only">
-          {character?.name || "Ficha de Personagem"}
-        </SheetTitle>
-        <SheetDescription className="sr-only">
-          Edite ou visualize a ficha do personagem.
-        </SheetDescription>
+        <SheetTitle className="sr-only">Ficha</SheetTitle>
+        <SheetDescription className="sr-only">Detalhes</SheetDescription>
 
         {isLoading && !character && (
-          <div className="p-6 space-y-4 flex flex-col items-center justify-center h-full">
+          <div className="p-6 h-full flex items-center justify-center">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-muted-foreground">A carregar grimório...</p>
           </div>
         )}
         
         {error && (
           <Alert variant="destructive" className="m-6">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Erro ao Carregar Ficha</AlertTitle>
+            <AlertTitle>Erro</AlertTitle>
             <AlertDescription>{error.message}</AlertDescription>
           </Alert>
         )}
         
-        {/* AQUI ESTÁ A CORREÇÃO: Envolver a CharacterSheet no Provider */}
         {character && (
           <CharacterSheetProvider character={character} onSave={handleSave}>
              <CharacterSheet isReadOnly={false} />

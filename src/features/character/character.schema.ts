@@ -1,6 +1,6 @@
-// src/features/character/character.schema.ts
-
 import { z } from "zod";
+
+// --- HELPERS E FUNÇÕES UTILITÁRIAS ---
 
 export const simpleUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -22,6 +22,8 @@ export const numeric = z.union([z.string(), z.number()]).transform((val) => {
   const n = Number(val);
   return isNaN(n) ? 0 : n;
 });
+
+// --- SUB-SCHEMAS ---
 
 export const attributesSchema = z.object({
   cunning: numeric.default(0),
@@ -56,7 +58,7 @@ export const experienceSchema = z.object({
   spent: numeric.default(0),
 });
 
-// --- ARMAS E ARMADURAS (ATUALIZADO) ---
+// --- ARMAS E ARMADURAS ---
 
 export const weaponSchema = z.object({
   id: z.string().default(simpleUUID),
@@ -67,7 +69,7 @@ export const weaponSchema = z.object({
   attribute: z.string().default(""), 
   attackAttribute: z.string().default(""), 
   projectileId: z.string().optional(),
-  weight: numeric.default(1), // <-- NOVO
+  weight: numeric.default(1),
 });
 
 export const armorSchema = z.object({
@@ -78,7 +80,7 @@ export const armorSchema = z.object({
   protection: z.string().default(""), 
   obstructive: numeric.default(0),
   equipped: z.boolean().default(true),
-  weight: numeric.default(0), // <-- NOVO
+  weight: numeric.default(0),
 });
 
 export const abilitySchema = z.object({
@@ -115,6 +117,7 @@ export const projectileSchema = z.object({
   quantity: numeric.default(0),
 });
 
+// --- TIPOS EXPORTADOS ---
 export type Weapon = z.infer<typeof weaponSchema>;
 export type Armor = z.infer<typeof armorSchema>;
 export type Ability = z.infer<typeof abilitySchema>;
@@ -122,12 +125,15 @@ export type Trait = z.infer<typeof traitSchema>;
 export type InventoryItem = z.infer<typeof inventoryItemSchema>;
 export type Projectile = z.infer<typeof projectileSchema>;
 
+// --- HELPERS DE DEFAULT ---
 export const getDefaultWeapon = (): Weapon => weaponSchema.parse({});
 export const getDefaultArmor = (): Armor => armorSchema.parse({});
 export const getDefaultAbility = (): Ability => abilitySchema.parse({});
 export const getDefaultTrait = (): Trait => traitSchema.parse({});
 export const getDefaultInventoryItem = (): InventoryItem => inventoryItemSchema.parse({});
 export const getDefaultProjectile = (): Projectile => projectileSchema.parse({});
+
+// --- SCHEMA PRINCIPAL (CORRIGIDO) ---
 
 export const characterSheetSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").default("Novo Personagem"),
@@ -140,21 +146,31 @@ export const characterSheetSchema = z.object({
   personalGoal: z.string().default(""), 
   importantAllies: z.string().default(""), 
   notes: z.string().default(""), 
+  
   attributes: attributesSchema.default({}),
   toughness: toughnessSchema.default({}),
   corruption: corruptionSchema.default({}),
   painThresholdBonus: numeric.default(0), 
   money: moneySchema.default({}),
   experience: experienceSchema.default({}),
+  
   weapons: z.array(weaponSchema).default([]),
   armors: z.array(armorSchema).default([]),
   abilities: z.array(abilitySchema).default([]),
   traits: z.array(traitSchema).default([]),
   inventory: z.array(inventoryItemSchema).default([]),
   projectiles: z.array(projectileSchema).default([]),
-});
 
+  // --- ADIÇÕES CRÍTICAS PARA A IMAGEM FUNCIONAR ---
+  image_url: z.string().nullable().optional(), // Permite salvar a URL da imagem
+  data: z.any().optional(), // Permite salvar configurações extras (como o zoom da imagem)
+
+}).passthrough(); // '.passthrough()' garante que campos extras não sejam deletados
+
+// Exporta o tipo com o nome correto usado no resto do projeto
 export type CharacterSheetData = z.infer<typeof characterSheetSchema>;
+// Alias para manter compatibilidade caso algum arquivo use CharacterSchema
+export type CharacterSchema = CharacterSheetData;
 
 export const getDefaultCharacterSheetData = (name: string): CharacterSheetData => {
   const defaultData = characterSheetSchema.parse({});

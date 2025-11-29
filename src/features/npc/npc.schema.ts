@@ -6,14 +6,14 @@ import {
   traitSchema,
   inventoryItemSchema,
   simpleUUID,
-  numeric, // <-- IMPORTADO
+  numeric,
 } from "@/features/character/character.schema";
 
 // ---
 // Schema para um item de atributo do NPC
 // ---
 const attributeItemSchema = z.object({
-  value: numeric.default(0), // <-- NUMERIC
+  value: numeric.default(0),
   note: z.string().default(""), 
 });
 
@@ -35,16 +35,16 @@ const npcAttributesSchema = z.object({
 // SCHEMA DE COMBATE
 // ---
 const npcCombatSchema = z.object({
-  toughness_current: numeric.default(0), // <-- NUMERIC
-  toughness_max: numeric.default(0),     // <-- NUMERIC
-  defense: numeric.default(0),           // <-- NUMERIC
-  armor_rd: numeric.default(0),          // <-- NUMERIC
-  pain_threshold: numeric.default(0),    // <-- NUMERIC
-  pain_threshold_bonus: numeric.default(0), // <-- NUMERIC
+  toughness_current: numeric.default(0),
+  toughness_max: numeric.default(0),
+  defense: numeric.default(0),
+  armor_rd: numeric.default(0),
+  pain_threshold: numeric.default(0),
+  pain_threshold_bonus: numeric.default(0),
 });
 
 // ---
-// SCHEMA DE ARMADURA (Simplificado)
+// SCHEMA DE ARMADURA
 // ---
 export const npcArmorSchema = z.object({
   id: z.string().default(simpleUUID),
@@ -54,7 +54,7 @@ export const npcArmorSchema = z.object({
 });
 
 // ---
-// Schema de Arma (Simplificado para o NPC)
+// Schema de Arma
 // ---
 export const npcWeaponSchema = z.object({
   id: z.string().default(simpleUUID),
@@ -73,6 +73,10 @@ export const npcSheetSchema = z.object({
   race: z.string().default("Criatura"),
   occupation: z.string().default("Monstro"),
 
+  // --- NOVOS CAMPOS PARA A IMAGEM ---
+  image_url: z.string().nullable().optional(), // Permite URL da imagem
+  data: z.any().optional(), // Permite configurações extras (zoom, etc)
+
   // Campos da aba Detalhes
   shadow: z.string().default(""), 
   personalGoal: z.string().default(""), 
@@ -85,20 +89,20 @@ export const npcSheetSchema = z.object({
   // Combate
   combat: npcCombatSchema.default({}),
 
-  // --- CORRUPÇÃO ---
+  // Corrupção
   corruption: z.object({
-      temporary: numeric.default(0), // <-- NUMERIC
-      permanent: numeric.default(0), // <-- NUMERIC
+      temporary: numeric.default(0),
+      permanent: numeric.default(0),
       stigma: z.string().default(""),
   }).default({}),
 
-  // Reutiliza os schemas
+  // Listas
   weapons: z.array(npcWeaponSchema).default([]), 
   abilities: z.array(abilitySchema).default([]),
   traits: z.array(traitSchema).default([]),
   armors: z.array(npcArmorSchema).default([]),
   inventory: z.array(inventoryItemSchema).default([]),
-});
+}).passthrough();
 
 // Tipos e Valores Padrão
 export type NpcSheetData = z.infer<typeof npcSheetSchema>;

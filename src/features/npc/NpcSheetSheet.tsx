@@ -1,3 +1,5 @@
+// src/features/npc/NpcSheetSheet.tsx
+
 import { useState } from "react";
 import {
   Sheet,
@@ -11,14 +13,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import { NpcSheet } from "./NpcSheet"; // Importa a Ficha de NPC
+import { NpcSheet } from "./NpcSheet"; 
 
 interface NpcSheetSheetProps {
   children: React.ReactNode;
   npcId: string;
 }
 
-// Faz o fetch na tabela 'npcs'
 const fetchNpc = async (npcId: string) => {
   const { data, error } = await supabase
     .from("npcs")
@@ -33,21 +34,20 @@ const fetchNpc = async (npcId: string) => {
 export const NpcSheetSheet = ({ children, npcId }: NpcSheetSheetProps) => {
   const [open, setOpen] = useState(false);
 
-  // Usa React Query para carregar o NPC SÓ quando o sheet for aberto
   const {
     data: npc,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["npc", npcId], // Chave de query diferente
+    queryKey: ["npc", npcId],
     queryFn: () => fetchNpc(npcId),
-    enabled: open, // Só faz o fetch quando 'open' é true
+    enabled: open, 
   });
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>{children}</SheetTrigger>
-      <SheetContent className="w-full sm:max-w-3xl p-0">
+      <SheetContent className="w-full sm:max-w-3xl p-0 bg-background overflow-hidden flex flex-col">
         <SheetTitle className="sr-only">
           {npc?.name || "Ficha de NPC"}
         </SheetTitle>

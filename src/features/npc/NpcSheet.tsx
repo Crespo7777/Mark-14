@@ -1,15 +1,23 @@
 // src/features/npc/NpcSheet.tsx
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { X, Save } from "lucide-react";
+import { 
+    X, Save, Loader2, ImagePlus, Camera, Settings2, Move 
+} from "lucide-react";
 import { Form } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Slider } from "@/components/ui/slider";
+import { Label } from "@/components/ui/label";
 
 import {
   AlertDialog,
@@ -29,7 +37,7 @@ import {
 } from "./npc.schema";
 import { NpcSheetProvider, useNpcSheet } from "./NpcSheetContext";
 
-// Abas Atualizadas
+// Abas
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcCombatEquipmentTab } from "./tabs/NpcCombatEquipmentTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
@@ -52,15 +60,74 @@ const NpcSheetInner = ({
   onSave: (data: NpcSheetData) => Promise<void>;
   initialData: NpcSheetData;
 }) => {
-  const { form, isReadOnly, isDirty, isSaving, saveSheet, programmaticSave } = useNpcSheet();
+  const { form, isReadOnly, isDirty, isSaving, saveSheet, programmaticSave, npc } = useNpcSheet();
   const { toast } = useToast();
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
-  
-  // --- CORREÇÃO 2: Estado Controlado da Aba ---
   const [activeTab, setActiveTab] = useState("details");
 
-  const [name, race, occupation] = form.watch(["name", "race", "occupation"]);
+  // --- ESTADOS DE UPLOAD ---
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // --- DADOS DO FORMULÁRIO ---
+  const name = form.watch("name");
+  const race = form.watch("race");
+  const occupation = form.watch("occupation");
+  const imageUrl = form.watch("image_url");
+
+  // Configurações de Imagem (Zoom/Posição)
+  const imageSettings = form.watch("data.image_settings") || { x: 50, y: 50, scale: 100 };
+
+  const updateImageSettings = (key: string, value: number[]) => {
+      const newSettings = { ...imageSettings, [key]: value[0] };
+      form.setValue("data.image_settings", newSettings, { shouldDirty: true });
+  };
+
+  // --- LÓGICA DE UPLOAD ---
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || isReadOnly) return;
+
+    setIsUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `npc-${npc.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `npc-portraits/${fileName}`;
+
+      // Upload para 'images'
+      const { error: uploadError } = await supabase.storage
+        .from('images') 
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
+
+      form.setValue("image_url", publicUrl, { shouldDirty: true });
+      toast({ title: "Imagem atualizada!" });
+
+    } catch (error: any) {
+      console.error("Erro no upload:", error);
+      toast({
+        title: "Erro ao enviar imagem",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const triggerFileInput = () => {
+      if (!isReadOnly && fileInputRef.current) {
+          fileInputRef.current.click();
+      }
+  };
+
+  // --- PREVENIR SAÍDA SEM SALVAR ---
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -97,57 +164,179 @@ const NpcSheetInner = ({
   return (
     <>
       <div className="flex flex-col h-full">
-        <div className="p-4 border-b border-border/50 flex justify-between items-center">
-          <div>
-            <h2 className="text-2xl font-bold">{name}</h2>
-            <p className="text-sm text-muted-foreground">{race} | {occupation}</p>
-          </div>
+        {/* --- CABEÇALHO REFORMULADO --- */}
+        <Card className="m-4 mb-0 p-4 border-l-4 border-l-destructive bg-card/50 flex flex-col md:flex-row gap-4 items-center md:items-start shrink-0">
+             <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/png, image/jpeg, image/gif, image/webp"
+                onChange={handleImageUpload}
+             />
 
-          <div className="flex gap-2 items-center">
-            {!isReadOnly && (
-              <div className={cn("text-sm transition-opacity duration-300", isDirty ? "text-amber-500" : "text-muted-foreground/70")}>
-                {isSaving ? "Salvando..." : isDirty ? "Alterações não salvas" : "Salvo"}
-              </div>
-            )}
-            {!isReadOnly && (
-              <Button size="sm" variant="default" onClick={saveSheet} disabled={!isDirty || isSaving}>
-                <Save className="w-4 h-4 mr-2" /> Salvar
-              </Button>
-            )}
-            <Button size="sm" variant="outline" onClick={handleCloseClick} disabled={isSaving}>
-              <X className="w-4 h-4 mr-2" /> Fechar
-            </Button>
-          </div>
-        </div>
+             {/* ÁREA DA IMAGEM */}
+             <div className="relative group shrink-0">
+                <div 
+                    className={`
+                        w-24 h-24 rounded-lg border-2 border-destructive shadow-lg 
+                        overflow-hidden bg-muted flex items-center justify-center relative
+                    `}
+                >
+                    {isUploading ? (
+                        <Loader2 className="w-8 h-8 animate-spin text-destructive" />
+                    ) : imageUrl ? (
+                        <img 
+                            src={imageUrl} 
+                            alt={name} 
+                            className="w-full h-full object-cover transition-all duration-200"
+                            style={{
+                                objectPosition: `${imageSettings.x}% ${imageSettings.y}%`,
+                                transform: `scale(${imageSettings.scale / 100})`
+                            }}
+                        />
+                    ) : (
+                        <div 
+                            onClick={triggerFileInput}
+                            className="flex flex-col items-center justify-center text-muted-foreground p-2 text-center cursor-pointer w-full h-full hover:bg-muted/80 transition-colors"
+                        >
+                            <ImagePlus className="w-8 h-8 mb-1 opacity-50" />
+                        </div>
+                    )}
+                    
+                    {!isReadOnly && imageUrl && (
+                        <div 
+                            onClick={triggerFileInput}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex items-center justify-center z-10"
+                        >
+                            <Camera className="w-6 h-6 text-white/90" />
+                        </div>
+                    )}
+                </div>
 
+                {/* Botão de Ajustes */}
+                {!isReadOnly && imageUrl && (
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button 
+                                size="icon" 
+                                variant="secondary" 
+                                className="absolute -bottom-2 -right-2 h-7 w-7 rounded-full shadow-md z-20 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <Settings2 className="w-3.5 h-3.5" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-4" align="start">
+                            <div className="space-y-4">
+                                <h4 className="font-medium leading-none flex items-center gap-2">
+                                    <Move className="w-4 h-4"/> Enquadramento
+                                </h4>
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <Label>Zoom</Label>
+                                        <span>{imageSettings.scale}%</span>
+                                    </div>
+                                    <Slider 
+                                        value={[imageSettings.scale]} 
+                                        min={100} max={300} step={5}
+                                        onValueChange={(val) => updateImageSettings("scale", val)} 
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <Label>Horizontal (X)</Label>
+                                        <span>{imageSettings.x}%</span>
+                                    </div>
+                                    <Slider 
+                                        value={[imageSettings.x]} 
+                                        min={0} max={100} step={1}
+                                        onValueChange={(val) => updateImageSettings("x", val)} 
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <div className="flex justify-between text-xs text-muted-foreground">
+                                        <Label>Vertical (Y)</Label>
+                                        <span>{imageSettings.y}%</span>
+                                    </div>
+                                    <Slider 
+                                        value={[imageSettings.y]} 
+                                        min={0} max={100} step={1}
+                                        onValueChange={(val) => updateImageSettings("y", val)} 
+                                    />
+                                </div>
+                                <Button 
+                                    variant="outline" size="sm" className="w-full text-xs h-7"
+                                    onClick={() => form.setValue("data.image_settings", { x: 50, y: 50, scale: 100 }, { shouldDirty: true })}
+                                >
+                                    Resetar
+                                </Button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                )}
+            </div>
+
+            {/* INFO DO NPC */}
+            <div className="flex-1 w-full">
+                <div className="flex justify-between items-start">
+                    <div>
+                        <h2 className="text-2xl font-bold text-destructive">{name}</h2>
+                        <div className="flex gap-2 items-center text-sm text-muted-foreground mt-1">
+                            <Badge variant="outline">{race}</Badge>
+                            <span>• {occupation}</span>
+                        </div>
+                    </div>
+                    
+                    <div className="flex gap-2 items-center">
+                        {!isReadOnly && (
+                            <div className={cn("text-xs transition-opacity duration-300 mr-2", isDirty ? "text-amber-500" : "text-muted-foreground/50")}>
+                              {isSaving ? "Salvando..." : isDirty ? "Não Salvo" : "Salvo"}
+                            </div>
+                        )}
+                        {!isReadOnly && (
+                          <Button size="sm" variant={isDirty ? "default" : "outline"} onClick={saveSheet} disabled={!isDirty || isSaving}>
+                            <Save className="w-4 h-4 mr-2" /> Salvar
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" onClick={handleCloseClick} disabled={isSaving}>
+                          <X className="w-4 h-4" />
+                        </Button>
+                    </div>
+                </div>
+                <Separator className="my-3" />
+            </div>
+        </Card>
+
+        {/* --- FORMULÁRIO/ABAS --- */}
         <Form {...form}>
-          <form onSubmit={(e) => e.preventDefault()} className="flex-1 overflow-y-auto">
-            {/* --- CORREÇÃO 2: Tabs com value/onValueChange --- */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="m-4 ml-4 flex flex-wrap h-auto">
-                <TabsTrigger value="details">Detalhes</TabsTrigger>
-                <TabsTrigger value="attributes">Atributos</TabsTrigger>
-                <TabsTrigger value="combat_equip">Combate & Equip.</TabsTrigger>
-                <TabsTrigger value="abilities_traits">Habilidades & Traços</TabsTrigger>
-                <TabsTrigger value="backpack">Mochila</TabsTrigger>
-                <TabsTrigger value="journal">Diário</TabsTrigger>
-              </TabsList>
+          <form onSubmit={(e) => e.preventDefault()} className="flex-1 overflow-y-auto flex flex-col min-h-0">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0">
+              <div className="px-4 pt-2 shrink-0">
+                  <TabsList className="flex flex-wrap h-auto w-full justify-start">
+                    <TabsTrigger value="details">Detalhes</TabsTrigger>
+                    <TabsTrigger value="attributes">Atributos</TabsTrigger>
+                    <TabsTrigger value="combat_equip">Combate & Equip.</TabsTrigger>
+                    <TabsTrigger value="abilities_traits">Habilidades</TabsTrigger>
+                    <TabsTrigger value="backpack">Mochila</TabsTrigger>
+                    <TabsTrigger value="journal">Diário</TabsTrigger>
+                  </TabsList>
+              </div>
 
-              <fieldset disabled={isSaving} className="p-4 pt-0 space-y-4">
-                <TabsContent value="details"><NpcDetailsTab /></TabsContent>
-                <TabsContent value="attributes"><NpcAttributesTab /></TabsContent>
-                <TabsContent value="combat_equip"><NpcCombatEquipmentTab /></TabsContent>
-                <TabsContent value="abilities_traits"><NpcAbilitiesTraitsTab /></TabsContent>
-                <TabsContent value="backpack">
-                    <SharedInventoryList control={form.control} name="inventory" isReadOnly={isReadOnly} />
-                </TabsContent>
-                <TabsContent value="journal"><NpcJournalTab /></TabsContent>
-              </fieldset>
+              <div className="flex-1 overflow-y-auto p-4 pt-2">
+                 <TabsContent value="details" className="mt-0"><NpcDetailsTab /></TabsContent>
+                 <TabsContent value="attributes" className="mt-0"><NpcAttributesTab /></TabsContent>
+                 <TabsContent value="combat_equip" className="mt-0"><NpcCombatEquipmentTab /></TabsContent>
+                 <TabsContent value="abilities_traits" className="mt-0"><NpcAbilitiesTraitsTab /></TabsContent>
+                 <TabsContent value="backpack" className="mt-0">
+                     <SharedInventoryList control={form.control} name="inventory" isReadOnly={isReadOnly} />
+                 </TabsContent>
+                 <TabsContent value="journal" className="mt-0"><NpcJournalTab /></TabsContent>
+              </div>
             </Tabs>
           </form>
         </Form>
       </div>
 
+      {/* ALERT DIALOG DE SAÍDA */}
       <AlertDialog open={isCloseAlertOpen} onOpenChange={setIsCloseAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -167,10 +356,10 @@ const NpcSheetInner = ({
   );
 };
 
+// --- WRAPPER PRINCIPAL DO NPC SHEET ---
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const queryClient = useQueryClient();
 
-  // --- CORREÇÃO 3: Estabilização dos Dados com useMemo ---
   const validatedData = useMemo(() => {
       const defaults = getDefaultNpcSheetData(initialNpc.name);
       const rawData = initialNpc.data as any;
@@ -178,6 +367,10 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
       const mergedData = {
         ...defaults,
         ...rawData,
+        // Garante que campos que vem do banco (fora do JSON) sejam priorizados
+        name: initialNpc.name,
+        image_url: initialNpc.image_url, 
+        
         // Garante que objetos aninhados existam
         attributes: { ...defaults.attributes, ...(rawData?.attributes || {}) },
         combat: { ...defaults.combat, ...(rawData?.combat || {}) },
@@ -188,29 +381,27 @@ export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
         traits: rawData?.traits || [],
       };
       
-      // Atualiza campos raiz se existirem
-      if(rawData?.name) mergedData.name = rawData.name;
-      else mergedData.name = initialNpc.name;
-      
-      if(rawData?.race) mergedData.race = rawData.race;
-      if(rawData?.occupation) mergedData.occupation = rawData.occupation;
-
-      // Validação silenciosa
       const parsedData = npcSheetSchema.safeParse(mergedData);
       if (!parsedData.success) {
         console.warn("Aviso ao parsear dados NPC.", parsedData.error.errors);
         return mergedData;
       }
       return parsedData.data;
-  }, [initialNpc]); // Só recalcula se initialNpc mudar (vindo do React Query)
+  }, [initialNpc]); 
   
-  // Atualiza a referência local para consistência
+  // Atualiza a referência local
   initialNpc.data = validatedData;
+  initialNpc.image_url = validatedData.image_url; // Sincroniza imagem
   
+  // --- FUNÇÃO DE SALVAR (AQUI ESTÁ A LÓGICA DO BANCO) ---
   const handleSave = async (data: NpcSheetData) => {
     const { error } = await supabase
       .from("npcs")
-      .update({ data: data, name: data.name })
+      .update({ 
+          name: data.name,           // Salva nome na coluna
+          image_url: data.image_url, // Salva imagem na coluna (IMPORTANTE)
+          data: data                 // Salva o resto no JSON
+      })
       .eq("id", initialNpc.id);
 
     if (error) throw new Error(error.message);
