@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription, // <-- IMPORTADO
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +36,6 @@ export const ManageFoldersDialog = ({ tableId, folders, tableName, title }: Mana
   const queryClient = useQueryClient();
 
   const getQueryKey = () => {
-    // Retorna a chave correta baseada no nome da tabela para invalidar o cache
     return [tableName, tableId];
   };
 
@@ -53,7 +53,6 @@ export const ManageFoldersDialog = ({ tableId, folders, tableName, title }: Mana
 
       setNewFolderName("");
       toast({ title: "Pasta criada com sucesso!" });
-      // Invalida o cache para que a lista de pastas atualize imediatamente
       await queryClient.invalidateQueries({ queryKey: getQueryKey() });
       
     } catch (error: any) {
@@ -73,8 +72,6 @@ export const ManageFoldersDialog = ({ tableId, folders, tableName, title }: Mana
       toast({ title: "Pasta removida" });
       await queryClient.invalidateQueries({ queryKey: getQueryKey() });
       
-      // Opcional: Invalidar também a lista de itens (personagens/NPCs) para que eles percam a referência visual da pasta
-      // Mas o banco de dados já faz "Set Null" on delete, então basta atualizar a lista.
       if (tableName === "character_folders") queryClient.invalidateQueries({ queryKey: ["characters", tableId] });
       if (tableName === "npc_folders") queryClient.invalidateQueries({ queryKey: ["npcs", tableId] });
       if (tableName === "journal_folders") queryClient.invalidateQueries({ queryKey: ["journal", tableId] });
@@ -96,6 +93,10 @@ export const ManageFoldersDialog = ({ tableId, folders, tableName, title }: Mana
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Gerenciar Pastas de {title}</DialogTitle>
+          {/* ADICIONADO DESCRIÇÃO */}
+          <DialogDescription>
+             Crie e organize pastas para seus {title.toLowerCase()}. Excluir uma pasta não apaga os itens dentro dela.
+          </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex gap-2 items-end">

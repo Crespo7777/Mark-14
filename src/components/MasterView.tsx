@@ -1,3 +1,5 @@
+// src/components/MasterView.tsx
+
 import { useState, useEffect, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -26,7 +28,7 @@ import { PriosPanel } from "@/features/vtt/PriosPanel";
 import { MasterInGamePanel } from "@/features/vtt/MasterInGamePanel"; 
 import { QuickAccessPanel } from "@/features/vtt/QuickAccessPanel"; 
 import { SheetViewer } from "@/features/vtt/SheetViewer"; 
-import { ImmersiveOverlay } from "@/components/ImmersiveOverlay"; // <--- ESSENCIAL PARA O ÁUDIO
+import { ImmersiveOverlay } from "@/components/ImmersiveOverlay"; 
 
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,10 +99,16 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
   }, [mode, tableId]);
 
   useEffect(() => {
-      // 1. Sincronizar Cena Ativa
+      // 1. Sincronizar Cena Ativa (CORREÇÃO: usa maybeSingle e insert se necessário)
       const fetchState = async () => {
-          const { data } = await supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).single();
-          if (data) setActiveSceneId(data.current_scene_id);
+          const { data, error } = await supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).maybeSingle();
+          
+          if (data) {
+              setActiveSceneId(data.current_scene_id);
+          } else if (!error) {
+              // Se não houver estado (primeira vez), cria um
+              await supabase.from("game_states").insert({ table_id: tableId });
+          }
       };
       fetchState();
 
@@ -166,7 +174,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
     <div className="fixed inset-0 bg-black overflow-hidden font-sans text-foreground">
         
         {/* COMPONENTE DE ÁUDIO/VÍDEO (Invisível mas Funcional) */}
-        {/* Isto garante que o Mestre ouve a música e vê as cutscenes */}
         <ImmersiveOverlay tableId={tableId} isMaster={true} />
 
         {/* MAPA */}
@@ -258,7 +265,10 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
 
         {/* Definições */}
         <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-            <DialogContent className="bg-black/90 border-white/20 backdrop-blur-xl"><DialogHeader><DialogTitle>Definições da Mesa</DialogTitle></DialogHeader><div className="py-4"><DiscordSettingsDialog /></div></DialogContent>
+            <DialogContent className="bg-black/90 border-white/20 backdrop-blur-xl">
+                <DialogHeader><DialogTitle>Definições da Mesa</DialogTitle></DialogHeader>
+                <div className="py-4"><DiscordSettingsDialog /></div>
+            </DialogContent>
         </Dialog>
 
     </div>

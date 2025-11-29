@@ -24,7 +24,7 @@ import { PlayerCharactersTab } from "@/features/player/PlayerCharactersTab";
 import { PlayerNpcsTab } from "@/features/player/PlayerNpcsTab";
 import { PlayerJournalTab } from "@/features/player/PlayerJournalTab";
 import { PlayerShopsTab } from "@/features/shops/PlayerShopsTab";
-import { PlayerRulesTab } from "@/features/player/PlayerRulesTab"; // <--- NOVO IMPORT
+import { PlayerRulesTab } from "@/features/player/PlayerRulesTab"; 
 import { SceneBoard } from "@/features/map/SceneBoard";
 import { ChatPanel } from "@/components/ChatPanel";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
@@ -60,10 +60,11 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
 
   // 1. Setup Inicial e Listeners
   useEffect(() => {
-    supabase.from("tables").select("shops_open").eq("id", tableId).single()
+    // CORREÇÃO: Usar maybeSingle() para evitar erro 406
+    supabase.from("tables").select("shops_open").eq("id", tableId).maybeSingle()
       .then(({ data }) => { if(data) setShopsOpen(!!data.shops_open); });
 
-    supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).single()
+    supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).maybeSingle()
       .then(({ data }) => { if(data) setActiveSceneId(data.current_scene_id); });
 
     if(userId) {
@@ -119,7 +120,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
         <div className="bg-card border rounded-xl shadow-sm min-h-[600px] overflow-hidden p-4">
             <Tabs defaultValue="characters" className="w-full h-full flex flex-col">
                 <div className="px-4 pt-2 border-b border-border/40 bg-muted/20 mb-4 rounded-t-lg">
-                    {/* ADICIONADA COLUNA PARA REGRAS */}
                     <TabsList className={`grid w-full h-auto p-1 gap-1 bg-transparent ${shopsOpen ? "grid-cols-5" : "grid-cols-4"}`}>
                         <TabsTrigger value="characters" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><UserSquare className="w-4 h-4 mr-2" /> Fichas</TabsTrigger>
                         <TabsTrigger value="npcs" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4 mr-2" /> NPCs</TabsTrigger>
@@ -133,7 +133,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                     <TabsContent value="characters" className="mt-0">{userId && <PlayerCharactersTab tableId={tableId} userId={userId} />}</TabsContent>
                     <TabsContent value="npcs" className="mt-0"><PlayerNpcsTab tableId={tableId} /></TabsContent>
                     <TabsContent value="journal" className="mt-0">{userId && <PlayerJournalTab tableId={tableId} userId={userId} />}</TabsContent>
-                    {/* ADICIONADO CONTEÚDO DAS REGRAS */}
                     <TabsContent value="rules" className="mt-0"><PlayerRulesTab tableId={tableId} /></TabsContent>
                     {shopsOpen && <TabsContent value="shops" className="mt-0">{userId && <PlayerShopsTab tableId={tableId} userId={userId} />}</TabsContent>}
                 </div>
@@ -223,7 +222,6 @@ export const PlayerView = ({ tableId }: PlayerViewProps) => {
                             <div className="p-6 pb-2 border-b border-border/50">
                                 <h2 className="text-2xl font-bold">Diário & Referências</h2>
                             </div>
-                            {/* ADICIONADA ABA DE REGRAS NO MODO IMERSIVO */}
                             <Tabs defaultValue="rules" className="flex-1 flex flex-col">
                                 <div className="px-6 pt-4">
                                     <TabsList className="grid w-full grid-cols-4">

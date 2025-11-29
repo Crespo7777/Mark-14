@@ -7,11 +7,12 @@ import { Scene } from "@/types/map-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+// CORREÇÃO: Importar DialogDescription
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Plus, Map as MapIcon, Play, Trash2, UserPlus, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { MediaLibrary } from "@/components/MediaLibrary"; // <-- Já existente
+import { MediaLibrary } from "@/components/MediaLibrary"; 
 import { SceneBoard } from "@/features/map/SceneBoard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
@@ -29,7 +30,7 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
   const [newSceneName, setNewSceneName] = useState("");
   const [newSceneImage, setNewSceneImage] = useState("");
   
-  const [activeSceneId, setActiveSceneId] = useState<string | null>(null); // Visualização local (Editor)
+  const [activeSceneId, setActiveSceneId] = useState<string | null>(null); 
   const [tokenToAdd, setTokenToAdd] = useState<{ type: 'character'|'npc', id: string } | null>(null);
 
   // Queries
@@ -63,7 +64,6 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
     }
   };
 
-  // Ativar Cena para Jogadores (Global)
   const handleActivateGlobal = async (sceneId: string) => {
      await supabase.from("game_states").update({ current_scene_id: sceneId }).eq("table_id", tableId);
      toast({ title: "Cena Ativada!", description: "Jogadores agora veem este mapa." });
@@ -74,7 +74,6 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
      toast({ title: "Cena Oculta", description: "Jogadores veem o teatro da mente." });
   };
 
-  // Adicionar Token à Cena Ativa (Editor)
   const handleAddToken = async () => {
      if (!activeSceneId || !tokenToAdd) return;
      
@@ -108,7 +107,13 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
                    <Button><Plus className="w-4 h-4 mr-2"/> Nova Cena</Button>
                </DialogTrigger>
                <DialogContent>
-                   <DialogHeader><DialogTitle>Criar Cena</DialogTitle></DialogHeader>
+                   <DialogHeader>
+                       <DialogTitle>Criar Cena</DialogTitle>
+                       {/* ADICIONADO DESCRIÇÃO */}
+                       <DialogDescription>
+                           Configure o nome e a imagem de fundo do seu novo mapa tático ou cenário.
+                       </DialogDescription>
+                   </DialogHeader>
                    <div className="space-y-4 py-4">
                        <div className="space-y-2">
                            <Label>Nome</Label>
@@ -118,7 +123,6 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
                        <div className="space-y-2">
                            <Label>Imagem de Fundo (Mapa)</Label>
                            
-                           {/* PREVIEW SE JÁ TIVER IMAGEM */}
                            {newSceneImage && (
                                <div className="relative aspect-video rounded border overflow-hidden mb-2 group">
                                    <img src={newSceneImage} className="w-full h-full object-cover" />
@@ -128,7 +132,6 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
                                </div>
                            )}
 
-                           {/* SELETOR DA BIBLIOTECA */}
                            <div className="flex gap-2">
                                <Input 
                                    value={newSceneImage} 
@@ -153,7 +156,7 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
        </div>
 
        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
-           {/* Lista de Cenas (Sidebar) */}
+           {/* Lista de Cenas */}
            <Card className="col-span-1 flex flex-col">
                <CardHeader><CardTitle className="text-sm">Biblioteca de Cenas</CardTitle></CardHeader>
                <CardContent className="flex-1 overflow-y-auto space-y-2 p-2">
@@ -188,7 +191,7 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
                </CardContent>
            </Card>
 
-           {/* Editor de Cena Ativa (Preview) */}
+           {/* Editor de Cena */}
            <Card className="col-span-1 lg:col-span-2 flex flex-col bg-muted/5 border-dashed">
                {activeSceneId ? (
                    <>
@@ -213,7 +216,6 @@ export const MasterScenesTab = ({ tableId }: { tableId: string }) => {
                          </div>
                      </div>
                      <div className="flex-1 relative overflow-hidden p-2 bg-black/50">
-                         {/* Passamos isMaster=true para permitir editar tokens aqui */}
                          <SceneBoard sceneId={activeSceneId} isMaster={true} className="rounded border border-white/10" />
                      </div>
                    </>
