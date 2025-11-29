@@ -21,8 +21,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Trash2, Shield, Sword, Heart, Dices, ArrowDownToLine } from "lucide-react";
-import { getDefaultWeapon, getDefaultArmor, getDefaultInventoryItem } from "../character.schema";
+import { getDefaultWeapon, getDefaultArmor } from "../character.schema";
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
+import { useEquipmentManager } from "../hooks/useEquipmentManager"; // <--- HOOK IMPORTADO
 import { attributesList } from "../character.constants";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,7 +42,7 @@ import { Badge } from "@/components/ui/badge";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { useTableContext } from "@/features/table/TableContext";
 import { QualityInfoButton } from "@/components/QualityInfoButton";
-import { QualitySelector } from "@/components/QualitySelector"; // IMPORTANTE: Este componente faltava
+import { QualitySelector } from "@/components/QualitySelector";
 
 type AttackRollData = {
   weaponName: string;
@@ -70,6 +71,7 @@ export const CombatEquipmentTab = () => {
   const { getValues, setValue } = useFormContext();
   const { tableId } = useTableContext();
   const { toughnessMax, painThreshold, activeBerserk, quick, totalDefense } = useCharacterCalculations();
+  const { unequipItem } = useEquipmentManager(); // <--- USANDO O HOOK
   const { toast } = useToast();
   
   const projectiles = form.watch("projectiles");
@@ -94,37 +96,16 @@ export const CombatEquipmentTab = () => {
     form.setValue("toughness.current", newValue, { shouldDirty: true });
   };
 
+  // --- FUNÇÕES SUBSTITUÍDAS PELO HOOK ---
   const handleUnequipWeapon = (index: number) => {
-      const weapon = form.getValues(`weapons.${index}`);
-      const currentInv = form.getValues("inventory") || [];
-      const newItem = {
-          ...getDefaultInventoryItem(),
-          name: weapon.name,
-          description: weapon.quality_desc, 
-          quantity: 1,
-          weight: Number(weapon.weight) || 1, 
-          data: { category: 'weapon', damage: weapon.damage, attackAttribute: weapon.attackAttribute, quality: weapon.quality, price: 0 }
-      };
-      form.setValue("inventory", [...currentInv, newItem], { shouldDirty: true });
-      removeWeapon(index);
-      toast({ title: "Desequipado", description: `${weapon.name} voltou para a mochila.` });
+      unequipItem(index, 'weapon');
+      // O hook já trata de remover da lista e adicionar à mochila
   };
 
   const handleUnequipArmor = (index: number) => {
-      const armor = form.getValues(`armors.${index}`);
-      const currentInv = form.getValues("inventory") || [];
-      const newItem = {
-          ...getDefaultInventoryItem(),
-          name: armor.name,
-          description: armor.quality_desc,
-          quantity: 1,
-          weight: Number(armor.weight) || 0,
-          data: { category: 'armor', protection: armor.protection, obstructive: armor.obstructive, quality: armor.quality, price: 0 }
-      };
-      form.setValue("inventory", [...currentInv, newItem], { shouldDirty: true });
-      removeArmor(index);
-      toast({ title: "Desequipado", description: `${armor.name} voltou para a mochila.` });
+      unequipItem(index, 'armor');
   };
+  // ---------------------------------------
 
   const handleAttackClick = (index: number) => {
     const weapon = form.getValues(`weapons.${index}`);
@@ -159,6 +140,8 @@ export const CombatEquipmentTab = () => {
 
   return (
     <div className="space-y-6">
+      
+      {/* VITALIDADE E CORRUPÇÃO (Mantidos do seu código) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
          <Card>
           <CardHeader>
@@ -262,42 +245,38 @@ export const CombatEquipmentTab = () => {
                         )}/>
                       <FormField control={form.control} name={`weapons.${index}.damage`} render={({ field }) => (<FormItem><FormLabel>Dano</FormLabel><FormControl><Input placeholder="1d8" {...field} /></FormControl></FormItem>)}/>
                     </div>
-                    <FormField control={form.control} name={`weapons.${index}.projectileId`} render={({ field }) => (
-                        <FormItem><FormLabel>Gasta Projétil (Opcional)</FormLabel><Select onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} value={field.value || "none"}><FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Nenhum</SelectItem>{projectiles.length > 0 && <Separator />}{projectiles.map((proj) => (<SelectItem key={proj.id} value={proj.id}>{proj.name} (Qtd: {proj.quantity})</SelectItem>))}</SelectContent></Select></FormItem>
-                      )}/>
                     <div className="grid grid-cols-2 gap-4">
-                      <FormField control={form.control} name={`weapons.${index}.attribute`} render={({ field }) => (<FormItem><FormLabel>Atributo de Dano</FormLabel><FormControl><Input placeholder="Vigoroso" {...field} /></FormControl></FormItem>)}/>
-                      
-                      {/* AQUI ESTAVA O PROBLEMA - AGORA USA O SELECTOR */}
-                      <FormField control={form.control} name={`weapons.${index}.quality`} render={({ field }) => (
-                          <FormItem>
-                             <div className="flex items-center justify-between">
-                                <FormLabel>Qualidades</FormLabel>
-                                <QualityInfoButton qualitiesString={field.value} tableId={tableId} />
-                             </div>
-                             <FormControl>
-                                <QualitySelector 
-                                    tableId={tableId} 
-                                    value={field.value} 
-                                    onChange={(val, desc) => {
-                                        field.onChange(val);
-                                        // Auto-preenche a descrição combinada das qualidades
-                                        if (desc) {
-                                            setValue(`weapons.${index}.quality_desc`, desc, { shouldDirty: true });
-                                        }
-                                    }}
-                                    targetType="weapon"
-                                />
-                             </FormControl>
-                          </FormItem>
+                        <FormField control={form.control} name={`weapons.${index}.projectileId`} render={({ field }) => (
+                            <FormItem><FormLabel>Projétil (Opcional)</FormLabel><Select onValueChange={(value) => field.onChange(value === "none" ? undefined : value)} value={field.value || "none"}><FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl><SelectContent><SelectItem value="none">Nenhum</SelectItem>{projectiles.length > 0 && <Separator />}{projectiles.map((proj) => (<SelectItem key={proj.id} value={proj.id}>{proj.name} (Qtd: {proj.quantity})</SelectItem>))}</SelectContent></Select></FormItem>
                         )}/>
+                        <FormField control={form.control} name={`weapons.${index}.attribute`} render={({ field }) => (<FormItem><FormLabel>Atributo de Dano</FormLabel><FormControl><Input placeholder="Vigoroso" {...field} /></FormControl></FormItem>)}/>
                     </div>
+                    
+                    <FormField control={form.control} name={`weapons.${index}.quality`} render={({ field }) => (
+                        <FormItem>
+                           <div className="flex items-center justify-between">
+                              <FormLabel>Qualidades</FormLabel>
+                              <QualityInfoButton qualitiesString={field.value} tableId={tableId} />
+                           </div>
+                           <FormControl>
+                              <QualitySelector 
+                                  tableId={tableId} 
+                                  value={field.value} 
+                                  onChange={(val, desc) => {
+                                      field.onChange(val);
+                                      if (desc) setValue(`weapons.${index}.quality_desc`, desc, { shouldDirty: true });
+                                  }}
+                                  targetType="weapon"
+                              />
+                           </FormControl>
+                        </FormItem>
+                    )}/>
                     
                     <FormField control={form.control} name={`weapons.${index}.quality_desc`} render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Regras & Descrições das Qualidades</FormLabel>
+                            <FormLabel>Regras das Qualidades</FormLabel>
                             <FormControl>
-                                <Textarea placeholder="As regras das qualidades aparecerão aqui..." {...field} className="min-h-[100px] text-sm font-mono bg-muted/30" />
+                                <Textarea placeholder="Regras..." {...field} className="min-h-[80px] text-sm font-mono bg-muted/30" />
                             </FormControl>
                         </FormItem>
                     )}/>
@@ -368,7 +347,6 @@ export const CombatEquipmentTab = () => {
                       <FormField control={form.control} name={`armors.${index}.obstructive`} render={({ field }) => (<FormItem><FormLabel>Obstrutiva</FormLabel><FormControl><Input type="number" placeholder="-2" {...field} onChange={(e) => field.onChange(e.target.value)} /></FormControl></FormItem>)}/>
                     </div>
                     
-                    {/* SELETOR DE QUALIDADES PARA ARMADURA */}
                     <FormField control={form.control} name={`armors.${index}.quality`} render={({ field }) => (
                         <FormItem>
                           <div className="flex items-center justify-between">
@@ -381,11 +359,9 @@ export const CombatEquipmentTab = () => {
                                 value={field.value} 
                                 onChange={(val, desc) => {
                                     field.onChange(val);
-                                    if (desc) {
-                                        setValue(`armors.${index}.quality_desc`, desc, { shouldDirty: true });
-                                    }
+                                    if (desc) setValue(`armors.${index}.quality_desc`, desc, { shouldDirty: true });
                                 }}
-                                targetType="armor"
+                                targetType="armor" 
                             />
                           </FormControl>
                         </FormItem>
