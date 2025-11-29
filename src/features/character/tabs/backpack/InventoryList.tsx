@@ -1,0 +1,290 @@
+import { useState } from "react";
+import { useCharacterSheet } from "../../CharacterSheetContext";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
+import { EditItemDialog } from "./EditItemDialog";
+import { 
+  Package, Plus, Trash2, Sword, Shield, Backpack, Edit, Database 
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { getDefaultWeapon, getDefaultArmor } from "../../character.schema";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
+} from "@/components/ui/dialog";
+
+// Categorias permitidas
+const INVENTORY_CATEGORIES_SELECTOR = [
+  'general', 'consumable', 'container', 'ammunition', 'tool', 'spec_tool', 
+  'clothing', 'food', 'mount', 'animal', 'construction', 'trap', 'artifact', 
+  'musical', 'asset', 'material', 'weapon', 'armor'
+];
+
+export const InventoryList = () => {
+  const { form, character } = useCharacterSheet();
+  const { toast } = useToast();
+  
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [equipDialogOpen, setEquipDialogOpen] = useState(false);
+  const [itemToEquipIndex, setItemToEquipIndex] = useState<number | null>(null);
+
+  const inventory = (form.watch("inventory") || []) as any[];
+
+  // --- CORREÇÃO AQUI ---
+  const handleAddItem = (itemTemplate: any) => {
+    const newItem = {
+        id: crypto.randomUUID(),
+        name: itemTemplate ? itemTemplate.name : "Novo Item",
+        category: itemTemplate ? itemTemplate.category : "general",
+        weight: itemTemplate ? (Number(itemTemplate.weight) || 0) : 0,
+        quantity: 1,
+        data: itemTemplate ? (itemTemplate.data || {}) : {},
+        description: itemTemplate ? itemTemplate.description : ""
+    };
+
+    const currentInv = form.getValues("inventory") || [];
+    const newInventory = [...currentInv, newItem];
+    
+    // Atualiza o formulário
+    form.setValue("inventory", newInventory, { shouldDirty: true });
+    
+    if (itemTemplate) {
+        toast({ title: "Item Adicionado", description: `${newItem.name} na mochila.` });
+    } else {
+        // --- O TRUQUE: setTimeout ---
+        // Esperamos 50ms para garantir que o React renderizou o novo item na lista
+        // antes de tentar abrir o editor para ele.
+        setTimeout(() => {
+            setEditingItemIndex(newInventory.length - 1);
+        }, 50);
+        
+        toast({ title: "Item Criado", description: "Edite os detalhes agora." });
+    }
+  };
+
+  const handleAddManual = () => {
+      handleAddItem(null);
+  };
+
+  const handleRemoveItem = (index: number) => {
+    const currentInv = form.getValues("inventory");
+    const newInv = currentInv.filter((_, i) => i !== index);
+    form.setValue("inventory", newInv, { shouldDirty: true });
+  };
+
+  const handleSaveEdit = (updatedItem: any) => {
+      if (editingItemIndex === null) return;
+      const currentInv = [...inventory];
+      currentInv[editingItemIndex] = updatedItem;
+      
+      form.setValue("inventory", currentInv, { shouldDirty: true });
+      toast({ title: "Item Atualizado" });
+      
+      // Salvar no backend
+      supabase.from("characters").update({
+          data: { ...character.data, inventory: currentInv }
+      }).eq("id", character.id).then();
+  };
+
+  // --- EQUIP LOGIC ---
+
+  const handleEquipClick = (index: number) => {
+      const item = inventory[index];
+      const category = item.category || item.data?.category;
+
+      if (category === 'weapon') {
+          performEquip(index, 'weapon');
+      } else if (category === 'armor') {
+          performEquip(index, 'armor');
+      } else {
+          setItemToEquipIndex(index);
+          setEquipDialogOpen(true);
+      }
+  };
+
+  const performEquip = (index: number, type: 'weapon' | 'armor') => {
+      const item = inventory[index];
+      const currentWeapons = form.getValues("weapons") || [];
+      const currentArmors = form.getValues("armors") || [];
+      
+      if (type === 'weapon' && currentWeapons.length >= 2) {
+          toast({ title: "Limite Atingido", description: "Você já tem 2 armas equipadas.", variant: "destructive" });
+          setEquipDialogOpen(false);
+          return;
+      }
+
+      // Remove da mochila ou reduz quantidade
+      const currentQty = Number(item.quantity);
+      if (currentQty > 1) {
+          form.setValue(`inventory.${index}.quantity`, currentQty - 1, { shouldDirty: true });
+      } else {
+          const currentInv = form.getValues("inventory");
+          const newInv = currentInv.filter((_, i) => i !== index);
+          form.setValue("inventory", newInv, { shouldDirty: true });
+      }
+
+      // Adiciona na lista equipada
+      if (type === 'weapon') {
+          const newWeapon = {
+              ...getDefaultWeapon(),
+              name: item.name,
+              damage: item.data?.damage || "",
+              attribute: item.data?.attackAttribute || item.data?.attribute || "",
+              quality: item.data?.quality || "",
+              quality_desc: item.description || "",
+              weight: Number(item.weight) || 1, 
+          };
+          form.setValue("weapons", [...currentWeapons, newWeapon], { shouldDirty: true });
+          toast({ title: "Arma Equipada!", description: `${item.name} movida para Combate.` });
+      } else {
+          const newArmor = {
+              ...getDefaultArmor(),
+              name: item.name,
+              protection: item.data?.protection || "",
+              obstructive: Number(item.data?.obstructive) || 0,
+              quality: item.data?.quality || "",
+              quality_desc: item.description || "",
+              equipped: true,
+              weight: Number(item.weight) || 0,
+          };
+          form.setValue("armors", [...currentArmors, newArmor], { shouldDirty: true });
+          toast({ title: "Armadura Equipada!", description: `${item.name} movida para Combate.` });
+      }
+      setEquipDialogOpen(false);
+  };
+
+  const getCategoryLabel = (cat: string) => {
+    const map: Record<string, string> = {
+        weapon: 'Arma', armor: 'Armadura', general: 'Geral', consumable: 'Elixir',
+        food: 'Comida', tool: 'Ferramenta', clothing: 'Roupa', musical: 'Instrumento'
+    };
+    return map[cat] || cat;
+  };
+
+  return (
+    <>
+      <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">
+                  <Backpack className="w-5 h-5" /> 
+                  Mochila & Equipamento
+              </CardTitle>
+              
+              <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={handleAddManual} title="Criar Item Manualmente">
+                      <Plus className="w-4 h-4" />
+                  </Button>
+
+                  <ItemSelectorDialog 
+                      tableId={character.table_id} 
+                      categories={INVENTORY_CATEGORIES_SELECTOR} 
+                      title="Adicionar à Mochila"
+                      onSelect={handleAddItem}
+                  >
+                      <Button size="sm" variant="outline" className="border-dashed gap-2">
+                          <Database className="w-4 h-4" /> Buscar
+                      </Button>
+                  </ItemSelectorDialog>
+              </div>
+          </CardHeader>
+          
+          <CardContent className="p-0">
+              <ScrollArea className="h-[400px] px-4">
+                  <div className="space-y-2 pb-4">
+                      {inventory.length === 0 ? (
+                          <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-md m-2">
+                              <Package className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                              <p className="text-sm">Mochila vazia.</p>
+                          </div>
+                      ) : (
+                          inventory.map((item: any, index: number) => (
+                              <div key={item.id || index} className="flex items-center justify-between p-3 bg-card border rounded-md hover:border-primary/40 transition-colors group">
+                                  <div className="flex items-center gap-3 overflow-hidden">
+                                      <div className="bg-muted w-9 h-9 rounded-md flex items-center justify-center shrink-0">
+                                          <Package className="w-4 h-4 opacity-50" />
+                                      </div>
+                                      <div className="min-w-0">
+                                          <div className="font-medium flex items-center gap-2 truncate text-sm">
+                                              {item.name}
+                                              <Badge variant="secondary" className="text-[10px] h-5 px-1 font-normal">
+                                                  x{item.quantity}
+                                              </Badge>
+                                          </div>
+                                          <div className="text-xs text-muted-foreground truncate capitalize">
+                                              {getCategoryLabel(item.category || item.data?.category)}
+                                          </div>
+                                      </div>
+                                  </div>
+                                  
+                                  <div className="flex items-center gap-1">
+                                      <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground mr-2">
+                                          {item.weight} peso
+                                      </Badge>
+                                      
+                                      <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                          title="Editar Detalhes"
+                                          onClick={() => setEditingItemIndex(index)}
+                                      >
+                                          <Edit className="w-4 h-4" />
+                                      </Button>
+
+                                      {(item.category === 'weapon' || item.category === 'armor' || item.data?.category === 'weapon' || item.data?.category === 'armor') && (
+                                          <Button 
+                                              variant="ghost" 
+                                              size="icon" 
+                                              className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                              title="Equipar (Mover para Combate)"
+                                              onClick={() => handleEquipClick(index)}
+                                          >
+                                              {item.category === 'weapon' || item.data?.category === 'weapon' ? <Sword className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                          </Button>
+                                      )}
+                                      
+                                      <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={() => handleRemoveItem(index)}
+                                      >
+                                          <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                  </div>
+                              </div>
+                          ))
+                      )}
+                  </div>
+              </ScrollArea>
+          </CardContent>
+      </Card>
+
+      <Dialog open={equipDialogOpen} onOpenChange={setEquipDialogOpen}>
+          <DialogContent>
+              <DialogHeader>
+                  <DialogTitle>Equipar Item</DialogTitle>
+                  <DialogDescription>Como deseja equipar este item?</DialogDescription>
+              </DialogHeader>
+              <DialogFooter className="flex gap-2 justify-end">
+                  <Button variant="secondary" onClick={() => itemToEquipIndex !== null && performEquip(itemToEquipIndex, 'armor')}>Como Armadura</Button>
+                  <Button onClick={() => itemToEquipIndex !== null && performEquip(itemToEquipIndex, 'weapon')}>Como Arma</Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
+
+      {editingItemIndex !== null && inventory[editingItemIndex] && (
+          <EditItemDialog 
+              open={editingItemIndex !== null} 
+              onClose={() => setEditingItemIndex(null)} 
+              item={inventory[editingItemIndex]} 
+              tableId={character.table_id}
+              onSave={handleSaveEdit}
+          />
+      )}
+    </>
+  );
+};
