@@ -1,6 +1,8 @@
+// src/components/EntityListManager.tsx
+
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button"; // Import necessário caso use o botão padrão
 import { Search, Plus, Ghost } from "lucide-react";
 import { EntityCard } from "./EntityCard";
 import { FolderType } from "@/types/app-types";
@@ -14,7 +16,7 @@ import {
 
 interface EntityListManagerProps {
   items: any[];
-  folders?: FolderType[];
+  folders?: FolderType[]; // Lista de pastas
   onEdit: (id: string) => void;
   onDelete: (id: string, name: string) => void;
   // Actions do Card
@@ -23,7 +25,7 @@ interface EntityListManagerProps {
   onMove?: (id: string, folderId: string | null) => void;
   onShare?: (item: any) => void;
   
-  onCreate?: () => void; // <--- AGORA OPCIONAL
+  onCreate?: () => void;
   title?: string;
   type: "character" | "npc";
   isLoading?: boolean;
@@ -34,7 +36,7 @@ interface EntityListManagerProps {
 
 export const EntityListManager = ({
   items,
-  folders = [], // Blindagem contra undefined
+  folders = [], // Default vazio para não quebrar
   onEdit,
   onDelete,
   onDuplicate,
@@ -55,13 +57,15 @@ export const EntityListManager = ({
   const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : internalSearchTerm;
   const setSearchTerm = externalOnSearch || setInternalSearchTerm;
 
-  // Lógica de Filtragem Segura
+  // Lógica de Filtragem (incluindo pastas)
   const filteredItems = items.filter((item) => {
     if (!item) return false;
     
+    // Filtro por Pasta
     if (selectedFolder !== "all" && selectedFolder !== "no_folder" && item.folder_id !== selectedFolder) return false;
     if (selectedFolder === "no_folder" && item.folder_id !== null) return false;
 
+    // Filtro por Texto
     const term = (searchTerm || "").toLowerCase();
     if (!term) return true;
 
@@ -91,6 +95,7 @@ export const EntityListManager = ({
                 />
             </div>
             
+            {/* SELETOR DE PASTAS (BLINDADO) */}
             <Select value={selectedFolder} onValueChange={setSelectedFolder}>
                 <SelectTrigger className="w-[130px] h-9 text-sm bg-background/50">
                     <SelectValue placeholder="Pastas" />
@@ -107,7 +112,6 @@ export const EntityListManager = ({
 
         <div className="flex gap-2 w-full sm:w-auto items-center">
             {actions} 
-            {/* Só mostra este botão se onCreate for passado. Caso contrário, usamos o botão dentro de 'actions' */}
             {onCreate && (
                 <Button onClick={onCreate} size="sm" className="h-9 shadow-sm">
                    <Plus className="h-4 w-4 mr-1" /> Novo
@@ -131,7 +135,7 @@ export const EntityListManager = ({
               <EntityCard
                 key={item.id}
                 entity={item}
-                folders={folders}
+                folders={folders} // <--- CRÍTICO: ASSEGURA QUE AS PASTAS CHEGAM AO CARD
                 type={type}
                 onEdit={onEdit}
                 onDelete={onDelete}
