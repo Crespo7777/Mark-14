@@ -1,7 +1,7 @@
 // src/components/ManageFoldersDialog.tsx
 
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query"; // <-- IMPORTANTE
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -34,8 +34,8 @@ export const ManageFoldersDialog = ({ tableId, folders, tableName, title }: Mana
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Helper para saber qual cache invalidar baseado na tabela
   const getQueryKey = () => {
+    // Retorna a chave correta baseada no nome da tabela para invalidar o cache
     return [tableName, tableId];
   };
 
@@ -43,32 +43,45 @@ export const ManageFoldersDialog = ({ tableId, folders, tableName, title }: Mana
     if (!newFolderName.trim()) return;
     setLoading(true);
     
-    const { error } = await supabase.from(tableName as any).insert({
-      table_id: tableId,
-      name: newFolderName.trim(),
-    });
+    try {
+      const { error } = await supabase.from(tableName as any).insert({
+        table_id: tableId,
+        name: newFolderName.trim(),
+      });
 
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+      if (error) throw error;
+
       setNewFolderName("");
-      toast({ title: "Pasta criada" });
-      // ATUALIZAÇÃO IMEDIATA: Invalida o cache logo após o sucesso
-      queryClient.invalidateQueries({ queryKey: getQueryKey() });
+      toast({ title: "Pasta criada com sucesso!" });
+      // Invalida o cache para que a lista de pastas atualize imediatamente
+      await queryClient.invalidateQueries({ queryKey: getQueryKey() });
+      
+    } catch (error: any) {
+      console.error("Erro ao criar pasta:", error);
+      toast({ title: "Erro ao criar pasta", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleDelete = async (id: string) => {
-    // Optimistic UI: Poderíamos remover visualmente antes, mas dado que é rápido, 
-    // apenas mostramos loading no botão (se fosse complexo) ou invalidamos logo.
-    const { error } = await supabase.from(tableName as any).delete().eq("id", id);
-    
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    try {
+      const { error } = await supabase.from(tableName as any).delete().eq("id", id);
+      
+      if (error) throw error;
+
       toast({ title: "Pasta removida" });
-      queryClient.invalidateQueries({ queryKey: getQueryKey() });
+      await queryClient.invalidateQueries({ queryKey: getQueryKey() });
+      
+      // Opcional: Invalidar também a lista de itens (personagens/NPCs) para que eles percam a referência visual da pasta
+      // Mas o banco de dados já faz "Set Null" on delete, então basta atualizar a lista.
+      if (tableName === "character_folders") queryClient.invalidateQueries({ queryKey: ["characters", tableId] });
+      if (tableName === "npc_folders") queryClient.invalidateQueries({ queryKey: ["npcs", tableId] });
+      if (tableName === "journal_folders") queryClient.invalidateQueries({ queryKey: ["journal", tableId] });
+
+    } catch (error: any) {
+      console.error("Erro ao deletar pasta:", error);
+      toast({ title: "Erro ao deletar", description: error.message, variant: "destructive" });
     }
   };
 
@@ -94,7 +107,7 @@ export const ManageFoldersDialog = ({ tableId, folders, tableName, title }: Mana
                 value={newFolderName}
                 onChange={(e) => setNewFolderName(e.target.value)}
                 disabled={loading}
-                onKeyPress={(e) => e.key === 'Enter' && handleCreate()}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
               />
             </div>
             <Button onClick={handleCreate} disabled={loading}>
