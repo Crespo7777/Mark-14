@@ -1,21 +1,9 @@
-// src/features/player/PlayerCharactersTab.tsx
-
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Plus,
-  MoreVertical,
-  Copy,
   Trash2,
   Archive,
   ArchiveRestore,
@@ -23,18 +11,6 @@ import {
 } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,18 +21,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 import { CreatePlayerCharacterDialog } from "@/components/CreatePlayerCharacterDialog";
 import { EntityListManager } from "@/components/EntityListManager";
 import { CharacterWithRelations, FolderType } from "@/types/app-types";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
-
-const SheetLoadingFallback = () => (
-  <Card className="border-border/50 flex flex-col h-[200px]">
-    <CardHeader><Skeleton className="h-6 w-1/2" /><Skeleton className="h-4 w-1/3" /></CardHeader>
-    <CardContent className="flex-1"><Skeleton className="h-4 w-3/4" /></CardContent>
-  </Card>
-);
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 const fetchPlayerCharacters = async (tableId: string) => {
   const { data, error } = await supabase
@@ -78,19 +48,17 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [charSearch, setCharSearch] = useState("");
+  // Estados
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
-  const [duplicating, setDuplicating] = useState(false);
   
-  // NOVO ESTADO
+  // Estado da Ficha Aberta
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
 
   const { data: allCharacters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId],
     queryFn: () => fetchPlayerCharacters(tableId),
     enabled: !!userId,
-    placeholderData: (previousData) => previousData, 
   });
 
   const { data: folders = [] } = useQuery({
@@ -104,6 +72,7 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
+  // --- HANDLERS ---
   const handleArchiveItem = async (id: string, currentValue: boolean) => {
     const { error } = await supabase.from("characters").update({ is_archived: !currentValue }).eq("id", id);
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -135,14 +104,12 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
     setCharacterToDelete(null);
   };
 
-  const handleDuplicateCharacter = async (charToDuplicate: CharacterWithRelations) => {
-    setDuplicating(true);
+  const handleDuplicateCharacter = async (charToDuplicate: any) => {
     const newName = `Cópia de ${charToDuplicate.name}`;
     const { data: fullCharData } = await supabase.from("characters").select("data").eq("id", charToDuplicate.id).single();
 
     if (!fullCharData) {
       toast({ title: "Erro", description: "Ficha não encontrada.", variant: "destructive" });
-      setDuplicating(false);
       return;
     }
 
@@ -165,84 +132,59 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
       toast({ title: "Ficha Duplicada!" });
       invalidateCharacters();
     }
-    setDuplicating(false);
   };
 
-  const filteredChars = myCharacters.filter(char => {
-    const matchesSearch = char.name.toLowerCase().includes(charSearch.toLowerCase());
-    const matchesArchive = showArchivedChars ? char.is_archived : !char.is_archived;
-    return matchesSearch && matchesArchive;
-  });
-
-  const renderCharacterCard = (char: CharacterWithRelations) => (
-    <Card 
-      key={char.id} 
-      className={`border-border/50 flex flex-col justify-between h-full hover:shadow-glow transition-shadow cursor-pointer ${char.is_archived ? "opacity-60 bg-muted/20" : ""}`}
-      onClick={() => setSelectedCharId(char.id)}
-    >
-      <CardHeader>
-          <CardTitle className="flex justify-between items-start">
-            {char.name}
-            {char.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded">Arquivado</span>}
-          </CardTitle>
-          <CardDescription>Sua Ficha</CardDescription>
-      </CardHeader>
-      <CardContent className="flex-1"><p className="text-sm text-muted-foreground">Clique para editar</p></CardContent>
-      <CardFooter className="flex justify-end items-center pt-0 pb-4 px-4" onClick={e => e.stopPropagation()}>
-          <div className="flex gap-1">
-            <Button variant="outline" size="sm" disabled={duplicating} onClick={() => handleDuplicateCharacter(char)}>
-              <Copy className="w-4 h-4 mr-2" /> Duplicar
-            </Button>
-
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end" onClick={e => e.stopPropagation()}>
-                  <DropdownMenuItem onClick={() => handleArchiveItem(char.id, !!char.is_archived)}>
-                      {char.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
-                      {char.is_archived ? "Restaurar" : "Arquivar"}
-                  </DropdownMenuItem>
-                  <DropdownMenuSub>
-                    <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
-                    <DropdownMenuSubContent>
-                        <DropdownMenuRadioGroup value={char.folder_id || "none"} onValueChange={val => handleMoveItem(char.id, val === "none" ? null : val)}>
-                            <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
-                            {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
-                        </DropdownMenuRadioGroup>
-                    </DropdownMenuSubContent>
-                  </DropdownMenuSub>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onClick={() => setCharacterToDelete(char)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-          </div>
-      </CardFooter>
-    </Card>
+  const displayedChars = myCharacters.filter(char => 
+    showArchivedChars ? char.is_archived : !char.is_archived
   );
 
-  if (isLoadingChars && allCharacters.length === 0) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
-
   return (
-    <>
-        <EntityListManager
-            items={filteredChars}
-            folders={folders}
-            searchTerm={charSearch}
-            onSearch={setCharSearch}
-            showArchived={showArchivedChars}
-            onToggleArchived={setShowArchivedChars}
-            renderItem={renderCharacterCard}
-            emptyMessage="Nenhuma ficha encontrada."
-            actions={
-               <>
-                   <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Minhas Pastas" />
-                   <CreatePlayerCharacterDialog tableId={tableId} onCharacterCreated={invalidateCharacters}>
-                       <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Ficha</Button>
+    <div className="flex flex-col h-full space-y-4">
+        {/* BARRA DE FILTROS */}
+        <div className="flex flex-wrap items-center justify-between gap-4 p-1">
+            <div className="flex items-center gap-2">
+                <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Minhas Pastas" />
+                <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
+                    <Switch id="show-archived-p" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
+                    <Label htmlFor="show-archived-p" className="cursor-pointer text-sm font-medium flex items-center gap-2">
+                        {showArchivedChars ? <ArchiveRestore className="w-4 h-4"/> : <Archive className="w-4 h-4"/>}
+                        {showArchivedChars ? "Ver Ativos" : "Ver Arquivados"}
+                    </Label>
+                </div>
+            </div>
+        </div>
+
+        {/* LISTA */}
+        <div className="flex-1 min-h-0">
+            <EntityListManager
+                title="Minhas Fichas"
+                type="character"
+                items={displayedChars}
+                folders={folders}
+                isLoading={isLoadingChars}
+                
+                // Conecta os eventos para evitar o erro 'is not a function'
+                onEdit={(id) => setSelectedCharId(id)}
+                onDelete={(id) => {
+                    const char = myCharacters.find(c => c.id === id);
+                    if (char) setCharacterToDelete(char);
+                }}
+                onDuplicate={handleDuplicateCharacter}
+                onArchive={handleArchiveItem}
+                onMove={handleMoveItem}
+                
+                // Ação de criar
+                actions={
+                    <CreatePlayerCharacterDialog tableId={tableId} onCharacterCreated={invalidateCharacters}>
+                       <Button size="sm" className="h-9 shadow-sm">
+                           <Plus className="w-4 h-4 mr-2" /> Nova Ficha
+                       </Button>
                    </CreatePlayerCharacterDialog>
-               </>
-            }
-        />
+                }
+            />
+        </div>
         
-        {/* FICHA FORA DO LOOP */}
+        {/* FICHA */}
         <CharacterSheetSheet 
           characterId={selectedCharId} 
           open={!!selectedCharId} 
@@ -251,10 +193,16 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
 
         <AlertDialog open={!!characterToDelete} onOpenChange={(open) => !open && setCharacterToDelete(null)}>
             <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Excluir esta Ficha?</AlertDialogTitle><AlertDialogDescription>Ação irreversível.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction></AlertDialogFooter>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir esta Ficha?</AlertDialogTitle>
+                    <AlertDialogDescription>Ação irreversível.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction>
+                </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
-    </>
+    </div>
   );
 };

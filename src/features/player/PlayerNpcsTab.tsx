@@ -1,28 +1,18 @@
-// src/features/player/PlayerNpcsTab.tsx
-
 import { useState, lazy, Suspense, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users } from "lucide-react";
-import { Skeleton } from "@/components/ui/skeleton";
 import { EntityListManager } from "@/components/EntityListManager";
 import { NpcWithRelations } from "@/types/app-types";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Archive, ArchiveRestore } from "lucide-react";
 
+// Lazy load da ficha
 const NpcSheetSheet = lazy(() =>
   import("@/features/npc/NpcSheetSheet").then(module => ({ default: module.NpcSheetSheet }))
 );
 
-const NpcLoadingFallback = () => (
-  <Card className="border-border/50 flex flex-col h-[200px]">
-    <CardHeader><Skeleton className="h-6 w-1/2" /><Skeleton className="h-4 w-1/3" /></CardHeader>
-    <CardContent className="flex-1"><Skeleton className="h-4 w-3/4" /></CardContent>
-  </Card>
-);
-
 const fetchSharedNpcs = async (tableId: string) => {
-  // A RLS (Row Level Security) no banco de dados JÁ FILTRA 
-  // apenas os NPCs que são públicos ou partilhados com este utilizador.
   const { data, error } = await supabase
     .from("npcs")
     .select("*, shared_with_players")
@@ -34,60 +24,71 @@ const fetchSharedNpcs = async (tableId: string) => {
 };
 
 export const PlayerNpcsTab = ({ tableId }: { tableId: string }) => {
-  const [npcSearch, setNpcSearch] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  
+  // Estado para controlar qual ficha está aberta
+  const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
 
   const { data: sharedNpcs = [], isLoading: isLoadingNpcs } = useQuery({
     queryKey: ['npcs', tableId],
     queryFn: () => fetchSharedNpcs(tableId),
   });
 
-  // --- FILTRAGEM DE PESQUISA ---
-  const filteredNpcs = sharedNpcs.filter(npc => 
-      npc.name.toLowerCase().includes(npcSearch.toLowerCase()) &&
-      (showArchived ? true : !npc.is_archived)
+  const displayedNpcs = sharedNpcs.filter(npc => 
+      showArchived ? true : !npc.is_archived
   );
 
-  // --- ACHATAMENTO DA LISTA (FLAT LIST) ---
-  // O Mestre organiza em pastas, mas o Jogador deve ver apenas uma lista limpa.
-  // Forçamos folder_id a null para que o EntityListManager não os tente agrupar.
+  // Achatamento da lista para o jogador (remove pastas visualmente)
   const flatNpcs = useMemo(() => {
-      return filteredNpcs.map(npc => ({
+      return displayedNpcs.map(npc => ({
           ...npc,
-          folder_id: null // Remove a associação à pasta visualmente
+          folder_id: null 
       }));
-  }, [filteredNpcs]);
-
-  const renderNpcCard = (npc: NpcWithRelations) => (
-    <Suspense key={npc.id} fallback={<NpcLoadingFallback />}>
-      <NpcSheetSheet npcId={npc.id}>
-        <Card className="border-border/50 hover:shadow-glow transition-shadow cursor-pointer flex flex-col h-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-                <Users className="w-5 h-5 text-primary" /> 
-                {npc.name}
-            </CardTitle>
-            <CardDescription>NPC</CardDescription>
-          </CardHeader>
-          <CardContent><p className="text-xs text-muted-foreground">Clique para ver ficha</p></CardContent>
-        </Card>
-      </NpcSheetSheet>
-    </Suspense>
-  );
-
-  if (isLoadingNpcs) return <div className="grid gap-4 md:grid-cols-2"><NpcLoadingFallback /><NpcLoadingFallback /></div>;
+  }, [displayedNpcs]);
 
   return (
-    <EntityListManager
-        items={flatNpcs}      // Passamos os NPCs "sem pasta"
-        folders={[]}          // Passamos lista de pastas vazia para não mostrar categorias
-        searchTerm={npcSearch}
-        onSearch={setNpcSearch}
-        showArchived={showArchived}
-        onToggleArchived={setShowArchived}
-        renderItem={renderNpcCard}
-        emptyMessage="Nenhum NPC partilhado encontrado."
-        actions={<div />} // Sem ações para o jogador
-    />
+    <div className="flex flex-col h-full space-y-4">
+        {/* BARRA DE FILTROS */}
+        <div className="flex justify-end p-1">
+            <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
+                <Switch id="show-archived-npc-p" checked={showArchived} onCheckedChange={setShowArchived} />
+                <Label htmlFor="show-archived-npc-p" className="cursor-pointer text-sm font-medium flex items-center gap-2">
+                    {showArchived ? <ArchiveRestore className="w-4 h-4"/> : <Archive className="w-4 h-4"/>}
+                    {showArchived ? "Mostrar Arquivados" : "Ocultar Arquivados"}
+                </Label>
+            </div>
+        </div>
+
+        {/* LISTA */}
+        <div className="flex-1 min-h-0">
+            <EntityListManager
+                title="NPCs Partilhados"
+                type="npc"
+                items={flatNpcs}      
+                folders={[]}          
+                isLoading={isLoadingNpcs}
+                
+                // CORREÇÃO: Passar onEdit para abrir a ficha ao clicar
+                onEdit={(id) => setSelectedNpcId(id)}
+                
+                // Jogadores geralmente não apagam NPCs partilhados, passamos função vazia para não quebrar
+                onDelete={() => {}} 
+                
+                emptyMessage="Nenhum NPC partilhado encontrado."
+            />
+        </div>
+
+        {/* FICHA DE NPC (Carregada sob demanda) */}
+        {selectedNpcId && (
+            <Suspense fallback={null}>
+                <NpcSheetSheet 
+                    npcId={selectedNpcId} 
+                    // @ts-ignore
+                    open={!!selectedNpcId} 
+                    onOpenChange={(open: boolean) => !open && setSelectedNpcId(null)}
+                />
+            </Suspense>
+        )}
+    </div>
   );
 };
