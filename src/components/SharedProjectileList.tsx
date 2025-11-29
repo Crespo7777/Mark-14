@@ -1,184 +1,127 @@
-// src/components/SharedProjectileList.tsx
-
-import { useState } from "react";
-import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { useFieldArray, Control } from "react-hook-form";
 import { Button } from "@/components/ui/button";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Crosshair } from "lucide-react";
-import { getDefaultProjectile } from "@/features/character/character.schema";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTableContext } from "@/features/table/TableContext";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { CircleDot, Plus, Trash2, Database, Crosshair } from "lucide-react";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-
-const ProjectileItem = ({ 
-  index, 
-  fieldId, 
-  control, 
-  name, 
-  remove, 
-  isReadOnly 
-}: { 
-  index: number; 
-  fieldId: string; 
-  control: Control<any>; 
-  name: string; 
-  remove: (index: number) => void; 
-  isReadOnly: boolean; 
-}) => {
-  const itemName = useWatch({ control, name: `${name}.${index}.name` });
-  const itemQtd = useWatch({ control, name: `${name}.${index}.quantity` });
-
-  return (
-    <AccordionItem value={fieldId} className="p-3 rounded-md border bg-muted/20">
-      <div className="flex justify-between items-center w-full p-0">
-        <AccordionTrigger className="p-0 hover:no-underline flex-1">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
-            <h4 className="font-semibold text-base text-primary-foreground truncate">
-               {itemName || "Novo Projétil"}
-            </h4>
-            <Badge variant={itemQtd > 0 ? "secondary" : "destructive"} className="px-1.5 py-0.5">
-               Qtd: {itemQtd || 0}
-            </Badge>
-          </div>
-        </AccordionTrigger>
-
-        <div className="flex pl-2 flex-shrink-0 items-center gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="text-destructive hover:text-destructive"
-            onClick={() => remove(index)}
-            disabled={isReadOnly}
-          >
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
-
-      <AccordionContent className="pt-4 mt-3 border-t border-border/50">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <FormField
-            control={control}
-            name={`${name}.${index}.name`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Nome da Munição</FormLabel>
-                <FormControl>
-                  <Input placeholder="Flechas" {...field} readOnly={isReadOnly} />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name={`${name}.${index}.quantity`}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Quantidade</FormLabel>
-                <FormControl>
-                   {/* CORREÇÃO: Input direto sem parseInt */}
-                    <Input
-                      type="number"
-                      className="text-center font-bold"
-                      {...field}
-                      onChange={(e) => field.onChange(e.target.value)}
-                      readOnly={isReadOnly}
-                    />
-                </FormControl>
-              </FormItem>
-            )}
-          />
-        </div>
-      </AccordionContent>
-    </AccordionItem>
-  );
-};
+import { useToast } from "@/hooks/use-toast";
 
 interface SharedProjectileListProps {
   control: Control<any>;
-  name: string; 
-  isReadOnly?: boolean;
+  name: string;
+  tableId?: string;
 }
 
-export const SharedProjectileList = ({ control, name, isReadOnly = false }: SharedProjectileListProps) => {
-  const [openItems, setOpenItems] = useState<string[]>([]);
+export const SharedProjectileList = ({ control, name, tableId }: SharedProjectileListProps) => {
   const { fields, append, remove } = useFieldArray({
     control,
     name,
   });
-  
-  const { getValues } = useFormContext();
-  const { tableId } = useTableContext();
+  const { toast } = useToast();
+
+  // Adicionar item vindo do Database
+  const handleAddFromDatabase = (itemTemplate: any) => {
+    if (!itemTemplate) return;
+    
+    append({
+        name: itemTemplate.name,
+        amount: 20, // Quantidade padrão
+        damage: itemTemplate.data?.damage || "1d6",
+        used: false
+    });
+    
+    toast({ title: "Munição Adicionada", description: itemTemplate.name });
+  };
+
+  // Adicionar linha vazia manual
+  const handleAddManual = () => {
+    append({
+        name: "Nova Munição",
+        amount: 20,
+        damage: "1d6",
+        used: false
+    });
+  };
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Crosshair /> Munição (Projéteis)
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <CircleDot className="w-5 h-5" /> Munição (Projéteis)
         </CardTitle>
         
-        <ItemSelectorDialog 
-            tableId={tableId} 
-            categories={['item', 'general', 'consumable']} // Permite itens gerais como munição
-            title="Adicionar Munição"
-            onSelect={(template) => {
-                if (template) {
-                    append({
-                        ...getDefaultProjectile(),
-                        name: template.name,
-                    });
-                } else {
-                    append(getDefaultProjectile());
-                }
-            }}
-        >
-            <Button type="button" size="sm" disabled={isReadOnly}>
-                <Plus className="w-4 h-4 mr-2" /> Adicionar
+        <div className="flex gap-2">
+            {/* Botão Manual */}
+            <Button size="sm" variant="ghost" onClick={handleAddManual} title="Adicionar Manualmente">
+                <Plus className="w-4 h-4" />
             </Button>
-        </ItemSelectorDialog>
+
+            {/* Botão Database (Só aparece se tiver tableId) */}
+            {tableId && (
+                <ItemSelectorDialog
+                    tableId={tableId}
+                    categories={['ammunition']} // <--- O FILTRO SIMPLES
+                    title="Buscar Munição"
+                    onSelect={handleAddFromDatabase}
+                >
+                    <Button size="sm" variant="outline" className="gap-2">
+                        <Database className="w-4 h-4" /> Buscar
+                    </Button>
+                </ItemSelectorDialog>
+            )}
+        </div>
       </CardHeader>
-      <CardContent>
+      
+      <CardContent className="space-y-2">
         {fields.length === 0 && (
-          <p className="text-muted-foreground text-center py-4 text-sm">
-            Sem munição.
-          </p>
+            <div className="text-center py-6 text-muted-foreground border-2 border-dashed rounded-md bg-muted/10">
+                <Crosshair className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">Nenhuma munição equipada.</p>
+            </div>
         )}
 
-        <Accordion
-          type="multiple"
-          className="space-y-3"
-          value={openItems}
-          onValueChange={setOpenItems}
-        >
-          {fields.map((field, index) => {
-            const stableId = getValues(`${name}.${index}.id`) || field.id;
-            return (
-              <ProjectileItem
-                key={stableId}
-                fieldId={stableId}
-                index={index}
-                control={control}
-                name={name}
-                remove={remove}
-                isReadOnly={isReadOnly}
-              />
-            );
-          })}
-        </Accordion>
+        {fields.map((field, index) => (
+          <div key={field.id} className="flex items-center gap-2 p-2 bg-card border rounded-md group">
+            {/* Nome */}
+            <div className="flex-1">
+                <Input
+                    {...control.register(`${name}.${index}.name`)}
+                    placeholder="Nome (ex: Flechas)"
+                    className="h-8 text-sm font-medium border-transparent focus:border-input bg-transparent px-2"
+                />
+            </div>
+
+            {/* Dano */}
+            <div className="w-24">
+                <Input
+                    {...control.register(`${name}.${index}.damage`)}
+                    placeholder="Dano"
+                    className="h-8 text-xs text-center bg-muted/50"
+                    title="Dano da Munição"
+                />
+            </div>
+
+            {/* Quantidade */}
+            <div className="flex items-center gap-1 bg-muted rounded-md px-2 h-8">
+                <span className="text-[10px] text-muted-foreground">Qtd:</span>
+                <Input
+                    type="number"
+                    {...control.register(`${name}.${index}.amount`)}
+                    className="w-12 h-6 text-sm text-center border-none bg-transparent focus-visible:ring-0 p-0"
+                />
+            </div>
+
+            {/* Remover */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => remove(index)}
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );

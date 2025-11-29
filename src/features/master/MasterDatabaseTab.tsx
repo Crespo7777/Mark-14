@@ -1,3 +1,5 @@
+// src/features/master/MasterDatabaseTab.tsx
+
 import { useState, useEffect, Suspense, lazy } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,7 +21,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea"; 
-import { QualitySelector } from "@/components/QualitySelector"; // <-- IMPORTADO
+import { QualitySelector } from "@/components/QualitySelector"; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,16 +32,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { validateItemData } from "./database.schemas"; // IMPORTADO
 
 const RichTextEditor = lazy(() => 
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
 );
 
+// --- ATUALIZAÇÃO DOS NOMES DAS CATEGORIAS ---
 const CATEGORIES = [
   { id: 'quality', label: 'Qualidades', icon: Star },
-  { id: 'weapon', label: 'Armamentos', icon: Sword },
-  { id: 'armor', label: 'Proteção', icon: Shield },
-  { id: 'ability', label: 'Habilidades & Poderes', icon: Zap },
+  { id: 'weapon', label: 'Armas', icon: Sword },           // Mudado de 'Armamentos'
+  { id: 'armor', label: 'Armaduras', icon: Shield },       // Mudado de 'Proteção'
+  { id: 'ability', label: 'Habilidades', icon: Zap },      // Mudado de 'Habilidades & Poderes'
   { id: 'trait', label: 'Traços & Dádivas', icon: Dna },
   { id: 'consumable', label: 'Elixires Alquímicos', icon: FlaskConical },
   { id: 'general', label: 'Equipamentos', icon: Backpack },
@@ -58,6 +62,7 @@ const CATEGORIES = [
   { id: 'asset', label: 'Proventos', icon: Coins },
   { id: 'material', label: 'Materiais', icon: Gem },
 ];
+
 const WEAPON_SUBCATEGORIES = ["Arma de uma Mão", "Arma Curta", "Arma Longa", "Arma Pesada", "Arma de Arremesso", "Arma de Projétil", "Ataque Desarmado", "Escudo", "Armas de Cerco"];
 const ARMOR_SUBCATEGORIES = ["Leve", "Média", "Pesada"];
 const FOOD_SUBCATEGORIES = ["Bebidas", "Carne", "Chás", "Ensopados", "Mingau", "Peixe", "Sobremesas", "Sopas", "Tortas"];
@@ -139,7 +144,16 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   });
 
   const handleSave = async () => {
-    if (!newItem.name) return toast({ title: "Nome obrigatório", variant: "destructive" });
+    if (!newItem.name) return toast({ title: "Erro", description: "O nome é obrigatório.", variant: "destructive" });
+    
+    // --- VALIDAÇÃO ZOD ---
+    const validation = validateItemData(category, newItem.data);
+    if (!validation.success) {
+        const errorMsg = validation.error.errors[0]?.message || "Dados inválidos.";
+        return toast({ title: "Erro de Validação", description: errorMsg, variant: "destructive" });
+    }
+    // ---------------------
+
     setIsSaving(true);
     const payload = {
         table_id: tableId,

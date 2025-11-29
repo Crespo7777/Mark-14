@@ -1,6 +1,4 @@
-// src/features/character/tabs/BackpackTab.tsx
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
 import { Button } from "@/components/ui/button";
@@ -12,10 +10,10 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import {
-  FormControl,
   FormField,
   FormItem,
   FormLabel,
+  FormControl,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,10 +23,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Coins, Gem, TrendingUp, Weight } from "lucide-react";
+import { 
+  Coins, Gem, TrendingUp, Weight, 
+  Package, Plus, Trash2, Sword, Shield, Backpack, Edit, Save 
+} from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { SharedInventoryList } from "@/components/SharedInventoryList";
 import { SharedProjectileList } from "@/components/SharedProjectileList";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -43,7 +43,228 @@ import {
   DialogDescription,
   DialogFooter
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { supabase } from "@/integrations/supabase/client";
+import { QualitySelector } from "@/components/QualitySelector";
 
+// --- LISTA COMPLETA DE CATEGORIAS ---
+const INVENTORY_CATEGORIES = [
+  { id: 'general', label: 'Geral' },
+  { id: 'weapon', label: 'Arma' },
+  { id: 'armor', label: 'Armadura' },
+  { id: 'consumable', label: 'Elixir/Consumível' },
+  { id: 'container', label: 'Recipiente' },
+  { id: 'ammunition', label: 'Munição' },
+  { id: 'tool', label: 'Ferramenta' },
+  { id: 'spec_tool', label: 'Ferramenta Esp.' },
+  { id: 'clothing', label: 'Roupa' },
+  { id: 'food', label: 'Comida' },
+  { id: 'mount', label: 'Montaria' },
+  { id: 'animal', label: 'Animal' },
+  { id: 'construction', label: 'Construção' },
+  { id: 'trap', label: 'Armadilha' },
+  { id: 'artifact', label: 'Artefato' },
+  { id: 'musical', label: 'Musical' },
+  { id: 'asset', label: 'Provento/Tesouro' },
+  { id: 'material', label: 'Material' },
+];
+
+// --- COMPONENTE DE EDIÇÃO DE ITEM ---
+const EditItemDialog = ({ open, onClose, item, onSave, tableId }: any) => {
+    const [editedItem, setEditedItem] = useState<any>(item);
+
+    useEffect(() => {
+        if (item) {
+            setEditedItem({ ...item, data: item.data || {} });
+        }
+    }, [item]);
+
+    if (!editedItem) return null;
+
+    const handleSave = () => {
+        onSave(editedItem);
+        onClose();
+    };
+
+    const updateData = (field: string, value: string) => {
+        setEditedItem((prev: any) => ({
+            ...prev,
+            data: { ...prev.data, [field]: value }
+        }));
+    };
+
+    const renderCategorySpecificFields = () => {
+        const cat = editedItem.category;
+
+        if (cat === 'weapon') {
+            return (
+                <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right text-xs uppercase text-muted-foreground">Dano</Label>
+                        <Input 
+                            placeholder="Ex: 1d8"
+                            value={editedItem.data?.damage || ""} 
+                            onChange={(e) => updateData('damage', e.target.value)} 
+                            className="col-span-3 h-8" 
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right text-xs uppercase text-muted-foreground">Atributo</Label>
+                        <Input 
+                            placeholder="Ex: Vigoroso"
+                            value={editedItem.data?.attackAttribute || ""} 
+                            onChange={(e) => updateData('attackAttribute', e.target.value)} 
+                            className="col-span-3 h-8" 
+                        />
+                    </div>
+                    {/* SELETOR DE QUALIDADES (ARMA) */}
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right text-xs uppercase text-muted-foreground">Qualidade</Label>
+                        <div className="col-span-3">
+                            <QualitySelector 
+                                tableId={tableId}
+                                targetType="weapon"
+                                value={editedItem.data?.quality || ""}
+                                onChange={(val) => updateData('quality', val)}
+                            />
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
+        if (cat === 'armor') {
+            return (
+                <>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right text-xs uppercase text-muted-foreground">Proteção</Label>
+                        <Input 
+                            placeholder="Ex: 1d4"
+                            value={editedItem.data?.protection || ""} 
+                            onChange={(e) => updateData('protection', e.target.value)} 
+                            className="col-span-3 h-8" 
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right text-xs uppercase text-muted-foreground">Penalidade</Label>
+                        <Input 
+                            type="number"
+                            placeholder="Ex: 2"
+                            value={editedItem.data?.obstructive || ""} 
+                            onChange={(e) => updateData('obstructive', e.target.value)} 
+                            className="col-span-3 h-8" 
+                        />
+                    </div>
+                    {/* SELETOR DE QUALIDADES (ARMADURA) */}
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right text-xs uppercase text-muted-foreground">Qualidade</Label>
+                        <div className="col-span-3">
+                            <QualitySelector 
+                                tableId={tableId}
+                                targetType="armor"
+                                value={editedItem.data?.quality || ""}
+                                onChange={(val) => updateData('quality', val)}
+                            />
+                        </div>
+                    </div>
+                </>
+            );
+        }
+
+        if (cat === 'consumable') {
+            return (
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right text-xs uppercase text-muted-foreground">Duração</Label>
+                    <Input 
+                        placeholder="Ex: 1 Cena"
+                        value={editedItem.data?.duration || ""} 
+                        onChange={(e) => updateData('duration', e.target.value)} 
+                        className="col-span-3 h-8" 
+                    />
+                </div>
+            );
+        }
+
+        return null;
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onClose}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle>Editar Item</DialogTitle>
+                    <DialogDescription>Modifique os detalhes deste item.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-2">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Nome</Label>
+                        <Input 
+                            value={editedItem.name} 
+                            onChange={(e) => setEditedItem({...editedItem, name: e.target.value})} 
+                            className="col-span-3" 
+                        />
+                    </div>
+                    
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Categoria</Label>
+                        <Select 
+                            value={editedItem.category || "general"} 
+                            onValueChange={(val) => setEditedItem({...editedItem, category: val})}
+                        >
+                            <SelectTrigger className="col-span-3 h-9">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[200px]">
+                                {INVENTORY_CATEGORIES.map(cat => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {renderCategorySpecificFields()}
+
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Qtd.</Label>
+                        <Input 
+                            type="number" 
+                            value={editedItem.quantity} 
+                            onChange={(e) => setEditedItem({...editedItem, quantity: Number(e.target.value)})} 
+                            className="col-span-3" 
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Peso</Label>
+                        <Input 
+                            type="number" 
+                            value={editedItem.weight} 
+                            onChange={(e) => setEditedItem({...editedItem, weight: Number(e.target.value)})} 
+                            className="col-span-3" 
+                        />
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Descrição</Label>
+                        <Textarea 
+                            value={editedItem.description || ""} 
+                            onChange={(e) => setEditedItem({...editedItem, description: e.target.value})} 
+                            className="col-span-3 min-h-[80px]" 
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button onClick={handleSave}><Save className="w-4 h-4 mr-2"/> Salvar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+// --- GESTOR DE DINHEIRO ---
 const MoneyManager = () => {
   const { form: { setValue, getValues } } = useCharacterSheet();
   const [amount, setAmount] = useState("1");
@@ -92,8 +313,9 @@ const MoneyManager = () => {
   );
 };
 
+// --- COMPONENTE PRINCIPAL DA ABA MOCHILA ---
 export const BackpackTab = () => {
-  const { form } = useCharacterSheet();
+  const { form, character } = useCharacterSheet();
   const {
     currentWeight,
     encumbranceThreshold,
@@ -105,6 +327,18 @@ export const BackpackTab = () => {
 
   const [equipDialogOpen, setEquipDialogOpen] = useState(false);
   const [itemToEquipIndex, setItemToEquipIndex] = useState<number | null>(null);
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+
+  if (!character) {
+      return (
+        <div className="space-y-4 p-1">
+            <div className="grid grid-cols-3 gap-4">
+                <Skeleton className="h-32" /><Skeleton className="h-32" /><Skeleton className="h-32" />
+            </div>
+            <Skeleton className="h-64 w-full" />
+        </div>
+      );
+  }
 
   const [taler, shekel, ortega] = form.watch(["money.taler", "money.shekel", "money.ortega"]);
   const totalOrtegas = (Number(taler)||0) * 100 + (Number(shekel)||0) * 10 + (Number(ortega)||0);
@@ -112,9 +346,60 @@ export const BackpackTab = () => {
   const weightPercentage = Math.min(100, (currentWeight / (maxEncumbrance || 1)) * 100);
   const weightBarClass = currentWeight >= maxEncumbrance ? "bg-destructive" : (currentWeight > encumbranceThreshold ? "bg-amber-500" : "bg-primary");
 
+  const inventory = (form.watch("inventory") || []) as any[];
+
+  // --- ADICIONAR ITEM ---
+  const handleAddItem = (itemTemplate: any) => {
+    const newItem = {
+        id: crypto.randomUUID(),
+        name: itemTemplate ? itemTemplate.name : "Novo Item",
+        category: itemTemplate ? itemTemplate.category : "general",
+        weight: itemTemplate ? (Number(itemTemplate.weight) || 0) : 0,
+        quantity: 1,
+        data: itemTemplate ? (itemTemplate.data || {}) : {},
+        description: itemTemplate ? itemTemplate.description : ""
+    };
+
+    const currentInv = form.getValues("inventory") || [];
+    const newInventory = [...currentInv, newItem];
+    
+    form.setValue("inventory", newInventory, { shouldDirty: true });
+    
+    if (itemTemplate) {
+        toast({ title: "Item Adicionado", description: `${newItem.name} na mochila.` });
+    } else {
+        // Abre o editor imediatamente para itens manuais
+        setEditingItemIndex(newInventory.length - 1);
+        toast({ title: "Item Criado", description: "Edite os detalhes agora." });
+    }
+  };
+
+  // --- REMOVER ITEM ---
+  const handleRemoveItem = (index: number) => {
+    const currentInv = form.getValues("inventory");
+    const newInv = currentInv.filter((_, i) => i !== index);
+    form.setValue("inventory", newInv, { shouldDirty: true });
+  };
+
+  // --- SALVAR EDIÇÃO ---
+  const handleSaveEdit = (updatedItem: any) => {
+      if (editingItemIndex === null) return;
+      const currentInv = [...inventory];
+      currentInv[editingItemIndex] = updatedItem;
+      
+      form.setValue("inventory", currentInv, { shouldDirty: true });
+      toast({ title: "Item Atualizado" });
+      
+      // Persistir no Supabase
+      supabase.from("characters").update({
+          data: { ...character.data, inventory: currentInv }
+      }).eq("id", character.id).then();
+  };
+
+  // --- EQUIPAR ITEM ---
   const handleEquipClick = (index: number) => {
-      const item = form.getValues(`inventory.${index}`);
-      const category = item.data?.category;
+      const item = inventory[index];
+      const category = item.category || item.data?.category;
 
       if (category === 'weapon') {
           performEquip(index, 'weapon');
@@ -127,11 +412,11 @@ export const BackpackTab = () => {
   };
 
   const performEquip = (index: number, type: 'weapon' | 'armor') => {
-      const item = form.getValues(`inventory.${index}`);
+      const item = inventory[index];
       const currentWeapons = form.getValues("weapons") || [];
       
       if (type === 'weapon' && currentWeapons.length >= 2) {
-          toast({ title: "Limite Atingido", description: "Você já tem 2 armas equipadas. Desequipe uma primeiro.", variant: "destructive" });
+          toast({ title: "Limite Atingido", description: "Você já tem 2 armas equipadas.", variant: "destructive" });
           setEquipDialogOpen(false);
           return;
       }
@@ -150,14 +435,12 @@ export const BackpackTab = () => {
               ...getDefaultWeapon(),
               name: item.name,
               damage: item.data?.damage || "",
-              attribute: item.data?.attribute || "",
-              attackAttribute: item.data?.attackAttribute || "",
+              attribute: item.data?.attackAttribute || item.data?.attribute || "",
               quality: item.data?.quality || "",
               quality_desc: item.description || "",
               weight: Number(item.weight) || 1, 
           };
-          const newWeapons = [...currentWeapons, newWeapon];
-          form.setValue("weapons", newWeapons, { shouldDirty: true });
+          form.setValue("weapons", [...currentWeapons, newWeapon], { shouldDirty: true });
           toast({ title: "Arma Equipada!", description: `${item.name} movida para Combate.` });
       } else {
           const currentArmors = form.getValues("armors") || [];
@@ -171,16 +454,23 @@ export const BackpackTab = () => {
               equipped: true,
               weight: Number(item.weight) || 0,
           };
-          const newArmors = [...currentArmors, newArmor];
-          form.setValue("armors", newArmors, { shouldDirty: true });
+          form.setValue("armors", [...currentArmors, newArmor], { shouldDirty: true });
           toast({ title: "Armadura Equipada!", description: `${item.name} movida para Combate.` });
       }
       
       setEquipDialogOpen(false);
   };
 
+  const getCategoryLabel = (cat: string) => {
+    const found = INVENTORY_CATEGORIES.find(c => c.id === cat);
+    return found ? found.label : cat;
+  };
+
+  // IDs para o seletor principal (sem serviços, etc se quisermos filtrar mais no futuro)
+  const selectorCategories = INVENTORY_CATEGORIES.map(c => c.id);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-300">
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -244,14 +534,100 @@ export const BackpackTab = () => {
       </div>
 
       <div className="space-y-6">
-        <SharedProjectileList control={form.control} name="projectiles" />
-        
-        <SharedInventoryList 
+        <SharedProjectileList 
             control={form.control} 
-            name="inventory" 
-            title="Mochila & Equipamento" 
-            onEquipItem={handleEquipClick}
+            name="projectiles" 
+            tableId={character.table_id} 
         />
+        
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-lg flex items-center gap-2">
+                    <Backpack className="w-5 h-5" /> 
+                    Mochila & Equipamento
+                </CardTitle>
+                <ItemSelectorDialog 
+                    tableId={character.table_id} 
+                    categories={selectorCategories} 
+                    title="Adicionar à Mochila"
+                    onSelect={handleAddItem}
+                >
+                    <Button size="sm" variant="outline" className="border-dashed">
+                        <Plus className="w-4 h-4 mr-2" /> Adicionar Item
+                    </Button>
+                </ItemSelectorDialog>
+            </CardHeader>
+            <CardContent className="p-0">
+                <ScrollArea className="h-[400px] px-4">
+                    <div className="space-y-2 pb-4">
+                        {inventory.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground border-2 border-dashed rounded-md m-2">
+                                <Package className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                                <p className="text-sm">Mochila vazia.</p>
+                            </div>
+                        ) : (
+                            inventory.map((item: any, index: number) => (
+                                <div key={item.id || index} className="flex items-center justify-between p-3 bg-card border rounded-md hover:border-primary/40 transition-colors group">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="bg-muted w-9 h-9 rounded-md flex items-center justify-center shrink-0">
+                                            <Package className="w-4 h-4 opacity-50" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="font-medium flex items-center gap-2 truncate text-sm">
+                                                {item.name}
+                                                <Badge variant="secondary" className="text-[10px] h-5 px-1 font-normal">
+                                                    x{item.quantity}
+                                                </Badge>
+                                            </div>
+                                            <div className="text-xs text-muted-foreground truncate capitalize">
+                                                {getCategoryLabel(item.category || item.data?.category)}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-1">
+                                        <Badge variant="outline" className="text-[10px] font-normal text-muted-foreground mr-2">
+                                            {item.weight} peso
+                                        </Badge>
+                                        
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                            title="Editar Detalhes"
+                                            onClick={() => setEditingItemIndex(index)}
+                                        >
+                                            <Edit className="w-4 h-4" />
+                                        </Button>
+
+                                        {(item.category === 'weapon' || item.category === 'armor' || item.data?.category === 'weapon' || item.data?.category === 'armor') && (
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                                                title="Equipar (Mover para Combate)"
+                                                onClick={() => handleEquipClick(index)}
+                                            >
+                                                {item.category === 'weapon' || item.data?.category === 'weapon' ? <Sword className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
+                                            </Button>
+                                        )}
+                                        
+                                        <Button 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={() => handleRemoveItem(index)}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </ScrollArea>
+            </CardContent>
+        </Card>
       </div>
 
       <Dialog open={equipDialogOpen} onOpenChange={setEquipDialogOpen}>
@@ -261,11 +637,22 @@ export const BackpackTab = () => {
                   <DialogDescription>Como deseja equipar este item?</DialogDescription>
               </DialogHeader>
               <DialogFooter className="flex gap-2 justify-end">
-                  <Button variant="secondary" onClick={() => performEquip(itemToEquipIndex!, 'armor')}>Como Armadura</Button>
-                  <Button onClick={() => performEquip(itemToEquipIndex!, 'weapon')}>Como Arma</Button>
+                  <Button variant="secondary" onClick={() => itemToEquipIndex !== null && performEquip(itemToEquipIndex, 'armor')}>Como Armadura</Button>
+                  <Button onClick={() => itemToEquipIndex !== null && performEquip(itemToEquipIndex, 'weapon')}>Como Arma</Button>
               </DialogFooter>
           </DialogContent>
       </Dialog>
+
+      {/* DIALOG DE EDIÇÃO (Passando tableId para o QualitySelector) */}
+      {editingItemIndex !== null && (
+          <EditItemDialog 
+              open={editingItemIndex !== null} 
+              onClose={() => setEditingItemIndex(null)} 
+              item={inventory[editingItemIndex]} 
+              tableId={character.table_id}
+              onSave={handleSaveEdit}
+          />
+      )}
 
     </div>
   );

@@ -6,7 +6,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Plus, Package, Shield, Sword, Zap, FlaskConical, Gem, Sparkles, PawPrint, HandCoins, Dna } from "lucide-react";
+import { 
+  Search, Plus, Package, Shield, Sword, Zap, FlaskConical, Gem, Sparkles, 
+  PawPrint, HandCoins, Dna, Box, CircleDot, Hammer, Wrench, Shirt, 
+  Utensils, Castle, Skull, Music, Coins, Star
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ItemTemplate } from "@/types/app-types";
 import { Badge } from "@/components/ui/badge";
@@ -62,34 +66,61 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
     setOpen(false);
   };
 
+  // Ícones completos para todas as categorias
   const getIcon = (cat: string) => {
     switch(cat) {
+        case 'quality': return <Star className="w-4 h-4"/>;
         case 'weapon': return <Sword className="w-4 h-4"/>;
         case 'armor': return <Shield className="w-4 h-4"/>;
         case 'ability': return <Zap className="w-4 h-4"/>;
         case 'trait': return <Dna className="w-4 h-4"/>;
         case 'consumable': return <FlaskConical className="w-4 h-4"/>;
-        case 'material': return <Gem className="w-4 h-4"/>;
-        case 'mystic': return <Sparkles className="w-4 h-4"/>;
+        case 'general': return <Package className="w-4 h-4"/>;
+        case 'container': return <Box className="w-4 h-4"/>;
+        case 'ammunition': return <CircleDot className="w-4 h-4"/>;
+        case 'tool': return <Hammer className="w-4 h-4"/>;
+        case 'spec_tool': return <Wrench className="w-4 h-4"/>;
+        case 'clothing': return <Shirt className="w-4 h-4"/>;
+        case 'food': return <Utensils className="w-4 h-4"/>;
         case 'mount': return <PawPrint className="w-4 h-4"/>;
+        case 'animal': return <PawPrint className="w-4 h-4"/>;
+        case 'construction': return <Castle className="w-4 h-4"/>;
+        case 'trap': return <Skull className="w-4 h-4"/>;
+        case 'artifact': return <Sparkles className="w-4 h-4"/>;
+        case 'musical': return <Music className="w-4 h-4"/>;
+        case 'asset': return <Coins className="w-4 h-4"/>;
+        case 'material': return <Gem className="w-4 h-4"/>;
         case 'service': return <HandCoins className="w-4 h-4"/>;
         default: return <Package className="w-4 h-4"/>;
     }
   };
 
+  // Nomes completos e traduzidos para todas as categorias
   const getLabel = (cat: string) => {
       switch(cat) {
+          case 'quality': return "Qualidades";
           case 'weapon': return "Armas";
           case 'armor': return "Armaduras";
           case 'ability': return "Habilidades";
           case 'trait': return "Traços";
-          case 'consumable': return "Consumíveis";
-          case 'general': return "Geral";
+          case 'consumable': return "Elixires";
+          case 'general': return "Equipamento";
+          case 'container': return "Recipientes";
+          case 'ammunition': return "Munição";
+          case 'tool': return "Ferramenta";
+          case 'spec_tool': return "Especiais";
+          case 'clothing': return "Roupas";
+          case 'food': return "Comida";
+          case 'mount': return "Montaria";
+          case 'animal': return "Animal";
+          case 'construction': return "Construção";
+          case 'trap': return "Armadilha";
+          case 'artifact': return "Artefato";
+          case 'musical': return "Musical";
+          case 'asset': return "Proventos";
           case 'material': return "Materiais";
-          case 'mystic': return "Místicos";
-          case 'mount': return "Montarias";
           case 'service': return "Serviços";
-          default: return "Itens";
+          default: return "Outros";
       }
   };
 
