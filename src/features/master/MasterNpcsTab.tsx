@@ -143,6 +143,7 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
                 folders={folders}
                 isLoading={isLoadingNpcs}
                 
+                // --- AQUI ESTÁ A CORREÇÃO: onEdit e botão customizado ---
                 onEdit={(id) => setSelectedNpcId(id)}
                 onDelete={(id) => {
                     const npc = npcs.find(n => n.id === id);
@@ -153,7 +154,7 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
                 onMove={handleMove}
                 onShare={(item) => setItemToShare(item)}
                 
-                // --- CORREÇÃO DO BOTÃO DE CRIAR ---
+                // Botão de Criar customizado
                 actions={
                     <Suspense fallback={<Button size="sm" disabled>...</Button>}>
                         <CreateNpcDialog tableId={tableId} onNpcCreated={invalidateNpcs}>

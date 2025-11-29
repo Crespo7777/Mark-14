@@ -62,7 +62,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
 
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
 
-  // Handlers
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
@@ -143,6 +142,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
             folders={folders}
             isLoading={isLoadingChars}
             
+            // --- AQUI ESTÁ A CORREÇÃO: Passando onEdit em vez de renderItem ---
             onEdit={(id) => setSelectedCharId(id)}
             onDelete={(id) => {
                 const char = characters.find(c => c.id === id);
@@ -153,7 +153,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
             onMove={handleMove}
             onShare={(item) => setItemToShare(item)}
             
-            // --- AQUI ESTÁ A CORREÇÃO DO BOTÃO DE CRIAR ---
+            // Botão de Criar customizado para abrir o Dialog corretamente
             actions={
                 <CreateCharacterDialog 
                     tableId={tableId} 
