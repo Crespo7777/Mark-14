@@ -1,11 +1,10 @@
-// src/components/EntityListManager.tsx
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, Ghost, Folder, ChevronDown, ChevronRight } from "lucide-react";
 import { EntityCard } from "./EntityCard";
 import { FolderType } from "@/types/app-types";
+import { cn } from "@/lib/utils";
 import {
     Select,
     SelectContent,
@@ -18,19 +17,24 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 interface EntityListManagerProps {
   items: any[];
   folders?: FolderType[];
-  onEdit: (id: string) => void;
-  onDelete: (id: string, name: string) => void;
+  onEdit?: (id: string) => void;
+  onDelete?: (id: string, name: string) => void;
   onDuplicate?: (item: any) => void;
   onArchive?: (id: string, currentVal: boolean) => void;
   onMove?: (id: string, folderId: string | null) => void;
   onShare?: (item: any) => void;
   onCreate?: () => void;
   title?: string;
-  type: "character" | "npc";
+  type?: "character" | "npc";
   isLoading?: boolean;
   actions?: React.ReactNode;
   searchTerm?: string;
   onSearch?: (term: string) => void;
+  renderItem?: (item: any) => React.ReactNode;
+  showArchived?: boolean;
+  onToggleArchived?: (val: boolean) => void;
+  emptyMessage?: string;
+  gridClassName?: string; // <--- NOVA PROPRIEDADE
 }
 
 export const EntityListManager = ({
@@ -48,31 +52,29 @@ export const EntityListManager = ({
   isLoading = false,
   actions,
   searchTerm: externalSearchTerm,
-  onSearch: externalOnSearch
+  onSearch: externalOnSearch,
+  renderItem,
+  emptyMessage = "Nenhum encontrado.",
+  gridClassName // <--- RECEBIDA AQUI
 }: EntityListManagerProps) => {
   const [internalSearchTerm, setInternalSearchTerm] = useState("");
   const [selectedFolder, setSelectedFolder] = useState<string>("all");
   
-  // Controle de pastas abertas na visualização agrupada
-  // Iniciamos com todas as IDs de pastas para que venham abertas por padrão
   const [openFolders, setOpenFolders] = useState<string[]>(folders.map(f => f.id));
 
   const searchTerm = externalSearchTerm !== undefined ? externalSearchTerm : internalSearchTerm;
   const setSearchTerm = externalOnSearch || setInternalSearchTerm;
 
-  // Lógica de Filtragem Base
   const filteredItems = items.filter((item) => {
     if (!item) return false;
     
-    // Se selecionou uma pasta específica (que não seja "all" ou "no_folder"), filtra por ela
     if (selectedFolder !== "all" && selectedFolder !== "no_folder" && item.folder_id !== selectedFolder) return false;
     if (selectedFolder === "no_folder" && item.folder_id !== null) return false;
 
-    // Filtro por Texto
     const term = (searchTerm || "").toLowerCase();
     if (!term) return true;
 
-    const name = String(item.name || "").toLowerCase();
+    const name = String(item.name || item.title || "").toLowerCase();
     const raceRaw = item.race || item.data?.race;
     const race = String(raceRaw || "").toLowerCase();
     const occupationRaw = item.occupation || item.data?.occupation;
@@ -89,18 +91,41 @@ export const EntityListManager = ({
       );
   };
 
-  // --- RENDERIZAÇÃO INTELIGENTE ---
+  const renderEntityOrCustom = (item: any) => {
+      if (renderItem) {
+          return renderItem(item);
+      }
+      if (!onEdit || !onDelete || !type) return null;
+      
+      return (
+          <EntityCard 
+            key={item.id} 
+            entity={item} 
+            folders={folders} 
+            type={type} 
+            onEdit={onEdit} 
+            onDelete={onDelete} 
+            onDuplicate={onDuplicate} 
+            onArchive={onArchive} 
+            onMove={onMove} 
+            onShare={onShare} 
+          />
+      );
+  };
+
   const renderContent = () => {
+      // Define o grid padrão (denso) ou usa o customizado (largo)
+      const currentGridClass = gridClassName || "grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10";
+
       if (isLoading) {
           return (
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 md:gap-3">
+            <div className={cn("grid gap-2 md:gap-3", currentGridClass)}>
                 {[1,2,3,4,5,6,7,8,9,10].map(i => <div key={i} className="aspect-square rounded-md bg-muted animate-pulse" />)}
             </div>
           );
       }
 
-      // 1. MODO "VISTA AGRUPADA" (Estilo Foundry)
-      // Ativado se "Todas" estiver selecionado e NÃO houver busca de texto (para não fragmentar resultados)
+      // 1. MODO "VISTA AGRUPADA"
       if (selectedFolder === "all" && !searchTerm) {
           const folderGroups: Record<string, any[]> = {};
           const noFolderItems: any[] = [];
@@ -116,13 +141,13 @@ export const EntityListManager = ({
 
           return (
               <div className="space-y-4 pb-10">
-                  {/* Itens Sem Pasta (Soltos no topo ou fundo, aqui no topo para visibilidade) */}
+                  {/* Itens Sem Pasta */}
                   {noFolderItems.length > 0 && (
                       <div className="space-y-2">
                           <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider ml-1">Soltos</h4>
-                          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
+                          <div className={cn("grid gap-2 md:gap-3", currentGridClass)}>
                               {noFolderItems.map(item => (
-                                  <EntityCard key={item.id} entity={item} folders={folders} type={type} onEdit={onEdit} onDelete={onDelete} onDuplicate={onDuplicate} onArchive={onArchive} onMove={onMove} onShare={onShare} />
+                                  <div key={item.id}>{renderEntityOrCustom(item)}</div>
                               ))}
                           </div>
                       </div>
@@ -143,10 +168,10 @@ export const EntityListManager = ({
                               </CollapsibleTrigger>
                               
                               <CollapsibleContent className="p-2 pt-0 border-t bg-muted/10">
-                                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 pt-2">
+                                  <div className={cn("grid gap-2 pt-2", currentGridClass)}>
                                       {folderItems.length > 0 ? (
                                           folderItems.map(item => (
-                                              <EntityCard key={item.id} entity={item} folders={folders} type={type} onEdit={onEdit} onDelete={onDelete} onDuplicate={onDuplicate} onArchive={onArchive} onMove={onMove} onShare={onShare} />
+                                              <div key={item.id}>{renderEntityOrCustom(item)}</div>
                                           ))
                                       ) : (
                                           <p className="text-xs text-muted-foreground col-span-full py-2 italic text-center">Pasta vazia. Arraste itens para cá.</p>
@@ -160,31 +185,20 @@ export const EntityListManager = ({
           );
       }
 
-      // 2. MODO LISTA PLANA (Quando filtrado ou buscando)
+      // 2. MODO LISTA PLANA
       if (filteredItems.length === 0) {
           return (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground border-2 border-dashed rounded-md bg-muted/30 m-2">
                 <Ghost className="h-8 w-8 mb-2 opacity-20" />
-                <p className="text-sm font-medium opacity-50">Nenhum encontrado.</p>
+                <p className="text-sm font-medium opacity-50">{emptyMessage}</p>
             </div>
           );
       }
 
       return (
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2 md:gap-3 pb-10">
+        <div className={cn("grid gap-2 md:gap-3 pb-10", currentGridClass)}>
             {filteredItems.map((item) => (
-              <EntityCard
-                key={item.id}
-                entity={item}
-                folders={folders}
-                type={type}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                onDuplicate={onDuplicate}
-                onArchive={onArchive}
-                onMove={onMove}
-                onShare={onShare}
-              />
+               <div key={item.id}>{renderEntityOrCustom(item)}</div>
             ))}
         </div>
       );
@@ -192,7 +206,6 @@ export const EntityListManager = ({
 
   return (
     <div className="h-full flex flex-col space-y-3">
-      {/* BARRA DE FERRAMENTAS */}
       <div className="flex flex-col sm:flex-row gap-2 items-center justify-between bg-card p-2 rounded-md border shadow-sm">
         <div className="flex gap-2 w-full sm:w-auto flex-1">
             <div className="relative flex-1">
@@ -223,13 +236,12 @@ export const EntityListManager = ({
             {actions} 
             {onCreate && (
                 <Button onClick={onCreate} size="sm" className="h-9 shadow-sm">
-                   <Plus className="h-4 w-4 mr-1" /> Novo
+                   <Plus className="w-4 h-4 mr-1" /> Novo
                 </Button>
             )}
         </div>
       </div>
 
-      {/* GRID DE CONTEÚDO */}
       <div className="flex-1 overflow-y-auto p-0.5 md:p-1 scrollbar-thin scrollbar-thumb-muted">
          {renderContent()}
       </div>
