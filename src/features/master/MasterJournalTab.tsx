@@ -1,5 +1,3 @@
-// src/features/master/MasterJournalTab.tsx
-
 import { useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -53,7 +51,7 @@ import { JournalRenderer } from "@/components/JournalRenderer";
 import { EntityListManager } from "@/components/EntityListManager";
 import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
 import { JournalReadDialog } from "@/components/JournalReadDialog";
-import { useTableContext } from "@/features/table/TableContext"; // <-- IMPORTADO
+import { useTableContext } from "@/features/table/TableContext";
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -220,6 +218,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
             onToggleArchived={setShowArchivedJournal}
             renderItem={renderJournalCard}
             emptyMessage="Nenhuma anotação encontrada."
+            gridClassName="grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" // <--- CORREÇÃO DO LAYOUT AQUI
             actions={
                 <>
                     <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Diário" />
