@@ -1,41 +1,24 @@
-// src/features/character/tabs/AbilitiesTraitsTab.tsx
-
 import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useFieldArray, useFormContext } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-} from "@/components/ui/form";
+import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Zap, Dices, Scroll, Hand } from "lucide-react";
 import { getDefaultAbility } from "../character.schema";
 import { attributesList } from "../character.constants";
 import { AbilityRollDialog } from "@/components/AbilityRollDialog";
 import { Separator } from "@/components/ui/separator";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { SharedTraitList } from "@/components/SharedTraitList";
 import { useTableContext } from "@/features/table/TableContext";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { JournalRenderer } from "@/components/JournalRenderer";
+import { useToast } from "@/hooks/use-toast";
 
 type AbilityRollData = {
   abilityName: string;
@@ -48,8 +31,9 @@ export const AbilitiesTraitsTab = () => {
   const { form, isReadOnly } = useCharacterSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const [openAbilityItems, setOpenAbilityItems] = useState<string[]>([]);
-  const { getValues } = useFormContext();
+  const { getValues, setValue } = useFormContext();
   const { tableId } = useTableContext();
+  const { toast } = useToast();
 
   const {
     fields: abilityFields,
@@ -77,6 +61,19 @@ export const AbilitiesTraitsTab = () => {
     });
   };
 
+  // Callback para aplicar corrupção vinda do Dialog
+  const handleApplyCorruption = (amount: number) => {
+      if (amount > 0) {
+          const currentTemp = Number(getValues("corruption.temporary")) || 0;
+          setValue("corruption.temporary", currentTemp + amount, { shouldDirty: true });
+          toast({
+              title: "Corrupção Aplicada",
+              description: `+${amount} de corrupção temporária adicionada.`,
+              variant: "destructive"
+          });
+      }
+  };
+
   const characterName = form.watch("name");
 
   return (
@@ -97,13 +94,11 @@ export const AbilitiesTraitsTab = () => {
                 title="Adicionar Habilidade"
                 onSelect={(template) => {
                     if (template) {
-                        // Lógica de formatação melhorada
                         let desc = "";
                         if(template.description && template.description !== "<p></p>") {
                              desc += template.description;
                         }
                         
-                        // Adiciona todos os níveis como lista bonita
                         desc += `<hr/><p><strong>EFEITOS:</strong></p><ul>`;
                         if (template.data.novice) desc += `<li><strong>Novato:</strong> ${template.data.novice}</li>`;
                         if (template.data.adept)  desc += `<li><strong>Adepto:</strong> ${template.data.adept}</li>`;
@@ -252,7 +247,7 @@ export const AbilitiesTraitsTab = () => {
                         name={`abilities.${index}.associatedAttribute`}
                         render={({ field }) => (
                           <FormItem className="md:col-span-2">
-                            <FormLabel>Atributo Associado (para rolagem)</FormLabel>
+                            <FormLabel>Atributo Associado</FormLabel>
                             <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
                               <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                               <SelectContent>
@@ -334,6 +329,7 @@ export const AbilitiesTraitsTab = () => {
           characterName={characterName}
           tableId={(form.getValues() as any).table_id || ""} 
           {...selectedAbilityRoll}
+          onApplyCorruption={handleApplyCorruption} 
         />
       )}
     </div>

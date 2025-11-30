@@ -95,10 +95,12 @@ export const abilitySchema = z.object({
   isActive: z.boolean().default(false),
 });
 
+// --- ATUALIZAÇÃO AQUI ---
 export const traitSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default(""),
-  type: z.string().default(""), 
+  type: z.string().default(""),
+  level: z.string().default(""), // Novo campo de nível
   description: z.string().default(""),
 });
 
@@ -114,7 +116,13 @@ export const inventoryItemSchema = z.object({
 export const projectileSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default(""), 
-  quantity: numeric.default(0),
+  quantity: numeric.default(1),
+  weight: numeric.default(0),
+  damage: z.string().default(""),
+  attack_modifier: z.string().default(""),
+  quality: z.string().default(""),
+  quality_desc: z.string().default(""),
+  description: z.string().default(""),
 });
 
 // --- TIPOS EXPORTADOS ---
@@ -133,7 +141,7 @@ export const getDefaultTrait = (): Trait => traitSchema.parse({});
 export const getDefaultInventoryItem = (): InventoryItem => inventoryItemSchema.parse({});
 export const getDefaultProjectile = (): Projectile => projectileSchema.parse({});
 
-// --- SCHEMA PRINCIPAL (CORRIGIDO) ---
+// --- SCHEMA PRINCIPAL ---
 
 export const characterSheetSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").default("Novo Personagem"),
@@ -161,15 +169,12 @@ export const characterSheetSchema = z.object({
   inventory: z.array(inventoryItemSchema).default([]),
   projectiles: z.array(projectileSchema).default([]),
 
-  // --- ADIÇÕES CRÍTICAS PARA A IMAGEM FUNCIONAR ---
-  image_url: z.string().nullable().optional(), // Permite salvar a URL da imagem
-  data: z.any().optional(), // Permite salvar configurações extras (como o zoom da imagem)
+  image_url: z.string().nullable().optional(), 
+  data: z.any().optional(), 
 
-}).passthrough(); // '.passthrough()' garante que campos extras não sejam deletados
+}).passthrough(); 
 
-// Exporta o tipo com o nome correto usado no resto do projeto
 export type CharacterSheetData = z.infer<typeof characterSheetSchema>;
-// Alias para manter compatibilidade caso algum arquivo use CharacterSchema
 export type CharacterSchema = CharacterSheetData;
 
 export const getDefaultCharacterSheetData = (name: string): CharacterSheetData => {
@@ -177,3 +182,5 @@ export const getDefaultCharacterSheetData = (name: string): CharacterSheetData =
   defaultData.name = name;
   return defaultData;
 };
+
+export const defaultCharacterData = characterSheetSchema.parse({});

@@ -1,130 +1,172 @@
-// src/components/WeaponAttackDialog.tsx
-
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { rollAttributeTest, formatAttackRoll } from "@/lib/dice-parser";
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Crosshair } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
-import { useTableContext } from "@/features/table/TableContext";
-import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
-import { BaseRollDialog } from "@/components/BaseRollDialog";
+import { parseDiceRoll, formatAttributeRoll } from "@/lib/dice-parser";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Dices } from "lucide-react";
 
 interface WeaponAttackDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  characterName: string;
+  tableId?: string;
   weaponName: string;
   attributeName: string;
   attributeValue: number;
-  characterName: string;
-  tableId: string;
   projectileId?: string;
+  onConfirm?: () => void; // <--- NOVA PROP PARA CONSUMO
 }
 
 export const WeaponAttackDialog = ({
   open,
   onOpenChange,
+  characterName,
+  tableId,
   weaponName,
   attributeName,
   attributeValue,
-  characterName,
-  tableId,
-  projectileId,
+  onConfirm
 }: WeaponAttackDialogProps) => {
-  const [withAdvantage, setWithAdvantage] = useState(false);
-  // CORREÇÃO: Estado string
-  const [modifier, setModifier] = useState("");
-  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { isMaster, masterId, tableId: contextTableId } = useTableContext();
-  const [isHidden, setIsHidden] = useState(false);
-  const { form, programmaticSave, isSaving } = useCharacterSheet();
-
-  useEffect(() => {
-      if (open) setModifier("");
-  }, [open]);
+  const [modifier, setModifier] = useState("0");
+  const [advantage, setAdvantage] = useState(false);
+  const [disadvantage, setDisadvantage] = useState(false);
+  const [isRolling, setIsRolling] = useState(false);
 
   const handleRoll = async () => {
-    if (projectileId && form) {
-      const projectiles = form.getValues("projectiles");
-      const pIndex = projectiles.findIndex((p) => p.id === projectileId);
-      if (pIndex === -1) {
-        toast({ title: "Erro", description: "Munição não encontrada.", variant: "destructive" });
-        return;
-      }
-      if (projectiles[pIndex].quantity <= 0) {
-        toast({ title: "Sem Munição!", variant: "destructive" });
-        return;
-      }
-      form.setValue(`projectiles.${pIndex}.quantity`, projectiles[pIndex].quantity - 1, { shouldDirty: true });
-      toast({ description: <div className="flex items-center gap-2"><Crosshair className="w-4 h-4"/> {projectiles[pIndex].name}: -1</div> });
-      await programmaticSave();
+    setIsRolling(true);
+    
+    // 1. Consumir Munição (se houver callback)
+    if (onConfirm) {
+        onConfirm();
     }
 
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) { setLoading(false); return; }
-
-    // CORREÇÃO: Conversão
+    // 2. Lógica de Rolagem
     const modValue = parseInt(modifier) || 0;
+    const targetValue = attributeValue + modValue;
+    
+    // Fórmula base: 1d20 vs Atributo Modificado
+    // Em Symbaroum, sucesso é rolar MENOS ou IGUAL ao atributo modificado.
+    
+    const diceString = advantage ? "2d20kl1" : disadvantage ? "2d20kh1" : "1d20";
+    const rollResult = parseDiceRoll(diceString);
 
-    const result = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage });
+    if (rollResult) {
+      const isSuccess = rollResult.total <= targetValue;
+      const criticalSuccess = rollResult.total === 1;
+      const criticalFailure = rollResult.total === 20;
 
-    if (!isHidden || isMaster) {
+      // Feedback Local
       toast({
-        title: `Ataque com ${weaponName}`,
-        description: `Rolagem: ${result.totalRoll} (Alvo: ${result.target})`,
+        title: isSuccess ? "Sucesso!" : "Falha!",
+        description: `Rolou ${rollResult.total} vs ${targetValue} (${attributeName})`,
+        variant: isSuccess ? "default" : "destructive",
       });
+
+      // Enviar para Chat/Discord
+      if (tableId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            // Salvar no Chat do Banco
+            await supabase.from("chat_messages").insert({
+                table_id: tableId,
+                user_id: user.id,
+                message: formatAttributeRoll(characterName, attributeName, rollResult, targetValue, weaponName),
+                message_type: "roll"
+            });
+
+            // Enviar para Discord
+            const discordData = {
+                rollType: "attack",
+                weaponName,
+                attributeName,
+                targetValue,
+                result: rollResult,
+                isSuccess,
+                isCrit: criticalSuccess,
+                isFumble: criticalFailure
+            };
+
+            supabase.functions.invoke('discord-roll-handler', {
+                body: { 
+                    tableId, 
+                    rollData: discordData, 
+                    userName: characterName 
+                }
+            }).catch(console.error);
+        }
+      }
     }
 
-    const chatMessage = formatAttackRoll(characterName, weaponName, attributeName, result);
-    const discordRollData = { rollType: "attack", weaponName, attributeName, result };
-
-    if (isHidden && isMaster) {
-        await supabase.from("chat_messages").insert([
-            { table_id: contextTableId, user_id: user.id, message: `${characterName} atacou com ${weaponName} em segredo.`, message_type: "info" },
-            { table_id: contextTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
-        ]);
-    } else {
-        await supabase.from("chat_messages").insert({ table_id: contextTableId, user_id: user.id, message: chatMessage, message_type: "roll" });
-        supabase.functions.invoke('discord-roll-handler', { body: { tableId: contextTableId, rollData: discordRollData, userName: characterName } }).catch(console.error);
-    }
-
-    setLoading(false);
+    setIsRolling(false);
     onOpenChange(false);
-    setIsHidden(false);
   };
 
   return (
-    <BaseRollDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title={`Atacar com: ${weaponName}`}
-      description={`Teste de ${attributeName} (Alvo: ${attributeValue}).`}
-      onRoll={handleRoll}
-      loading={loading || isSaving}
-      buttonLabel="Rolar Ataque"
-    >
-      <div className="flex items-center space-x-2">
-        <Checkbox id="adv-atk" checked={withAdvantage} onCheckedChange={(c) => setWithAdvantage(c as boolean)} />
-        <Label htmlFor="adv-atk">Vantagem (+1d4)</Label>
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="mod-atk">Modificador</Label>
-        <Input id="mod-atk" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="Ex: -2" />
-      </div>
-      {isMaster && (
-        <>
-          <Separator className="my-4" />
-          <div className="flex items-center space-x-2">
-            <Checkbox id="hide-atk" checked={isHidden} onCheckedChange={(c) => setIsHidden(c as boolean)} />
-            <Label htmlFor="hide-atk" className="text-purple-400">Rolar Escondido</Label>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Ataque com {weaponName}</DialogTitle>
+          <DialogDescription>
+            Teste de <strong>{attributeName}</strong> (Valor: {attributeValue})
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="modifier" className="text-right">
+              Modificador
+            </Label>
+            <Input
+              id="modifier"
+              type="number"
+              value={modifier}
+              onChange={(e) => setModifier(e.target.value)}
+              className="col-span-3"
+              placeholder="+0"
+            />
           </div>
-        </>
-      )}
-    </BaseRollDialog>
+          
+          <div className="flex justify-center gap-6">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="advantage" 
+                checked={advantage} 
+                onCheckedChange={(c) => { 
+                    setAdvantage(!!c); 
+                    if(c) setDisadvantage(false); 
+                }} 
+              />
+              <Label htmlFor="advantage">Vantagem</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="disadvantage" 
+                checked={disadvantage} 
+                onCheckedChange={(c) => { 
+                    setDisadvantage(!!c); 
+                    if(c) setAdvantage(false); 
+                }} 
+              />
+              <Label htmlFor="disadvantage">Desvantagem</Label>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button type="submit" onClick={handleRoll} disabled={isRolling}>
+            {isRolling ? <Dices className="mr-2 h-4 w-4 animate-spin" /> : <Dices className="mr-2 h-4 w-4" />}
+            Rolar Ataque
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };

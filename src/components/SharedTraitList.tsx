@@ -1,7 +1,5 @@
-// src/components/SharedTraitList.tsx
-
 import { useState } from "react";
-import { Control, useFieldArray, useWatch, useFormContext } from "react-hook-form";
+import { Control, useFieldArray, useWatch } from "react-hook-form";
 import {
   Accordion,
   AccordionContent,
@@ -48,15 +46,9 @@ const TraitItem = ({
   isReadOnly: boolean; 
 }) => {
   
-  const traitName = useWatch({
-    control,
-    name: `${name}.${index}.name`,
-  });
-  
-  const traitType = useWatch({
-    control,
-    name: `${name}.${index}.type`,
-  });
+  const traitName = useWatch({ control, name: `${name}.${index}.name` });
+  const traitType = useWatch({ control, name: `${name}.${index}.type` });
+  const traitLevel = useWatch({ control, name: `${name}.${index}.level` });
 
   return (
     <AccordionItem
@@ -65,15 +57,29 @@ const TraitItem = ({
     >
       <div className="flex justify-between items-center w-full p-0">
         <AccordionTrigger className="p-0 hover:no-underline flex-1">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-left">
-            <h4 className="font-semibold text-base text-primary-foreground truncate">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-left">
+            {/* Nome do Traço */}
+            <h4 className="font-semibold text-base text-primary-foreground truncate max-w-[200px]">
                {traitName || "Novo Traço"}
             </h4>
-            {traitType && (
-                <Badge variant="secondary" className="px-1.5 py-0.5">
-                  {traitType}
-                </Badge>
-            )}
+
+            {/* Badges e Informações */}
+            <div className="flex items-center gap-2 text-sm">
+                {/* TIPO */}
+                {traitType && (
+                    <Badge variant="secondary" className="px-1.5 py-0 text-[10px] uppercase tracking-wide font-bold h-5">
+                      {traitType}
+                    </Badge>
+                )}
+
+                {/* NÍVEL */}
+                {traitLevel && traitLevel !== "" && traitLevel !== "none" && (
+                    <span className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+                        <span className="w-1 h-1 rounded-full bg-muted-foreground/40" />
+                        {traitLevel}
+                    </span>
+                )}
+            </div>
           </div>
         </AccordionTrigger>
 
@@ -83,7 +89,7 @@ const TraitItem = ({
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="text-destructive hover:text-destructive"
+                className="text-destructive hover:text-destructive h-8 w-8"
                 onClick={() => remove(index)}
             >
                 <Trash2 className="w-4 h-4" />
@@ -94,7 +100,8 @@ const TraitItem = ({
 
       <AccordionContent className="pt-4 mt-3 border-t border-border/50">
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* NOME */}
             <FormField
               control={control}
               name={`${name}.${index}.name`}
@@ -107,22 +114,16 @@ const TraitItem = ({
                 </FormItem>
               )}
             />
+
+            {/* TIPO */}
             <FormField
               control={control}
               name={`${name}.${index}.type`}
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Tipo</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                    disabled={isReadOnly}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tipo" />
-                      </SelectTrigger>
-                    </FormControl>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="Traço">Traço</SelectItem>
                       <SelectItem value="Dádiva">Dádiva</SelectItem>
@@ -133,7 +134,32 @@ const TraitItem = ({
                 </FormItem>
               )}
             />
+
+            {/* NÍVEL (OPCIONAL - APENAS NOVATO, ADEPTO, MESTRE) */}
+            <FormField
+              control={control}
+              name={`${name}.${index}.level`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Nível (Opcional)</FormLabel>
+                  <Select 
+                    onValueChange={(val) => field.onChange(val === "none" ? "" : val)} 
+                    value={field.value || "none"} 
+                    disabled={isReadOnly}
+                  >
+                    <FormControl><SelectTrigger><SelectValue placeholder="-" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">-</SelectItem>
+                      <SelectItem value="Novato">Novato</SelectItem>
+                      <SelectItem value="Adepto">Adepto</SelectItem>
+                      <SelectItem value="Mestre">Mestre</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
           </div>
+
           <FormField
             control={control}
             name={`${name}.${index}.description`}
@@ -141,7 +167,6 @@ const TraitItem = ({
               <FormItem>
                 <FormLabel>Descrição (Regras)</FormLabel>
                 <FormControl>
-                    {/* AQUI ESTÁ A CORREÇÃO: Usa RichTextEditor ou JournalRenderer */}
                     {isReadOnly ? (
                          <div className="p-3 border rounded-md bg-background/50 min-h-[80px]">
                              <JournalRenderer content={field.value} />
@@ -192,15 +217,12 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
                 title="Adicionar Traço"
                 onSelect={(template) => {
                     if (template) {
-                        // LÓGICA MELHORADA DE IMPORTAÇÃO
                         let desc = "";
                         
-                        // 1. Se tiver descrição base, adiciona
                         if (template.description && template.description !== "<p></p>") {
                             desc += template.description;
                         }
 
-                        // 2. Adiciona os níveis formatados em HTML bonito (Lista)
                         if (template.data.novice || template.data.adept || template.data.master) {
                             desc += `<hr/><p><strong>NÍVEIS:</strong></p><ul>`;
                             if (template.data.novice) desc += `<li><strong>I (Novato):</strong> ${template.data.novice}</li>`;
@@ -217,7 +239,8 @@ export const SharedTraitList = ({ control, name, isReadOnly = false }: SharedTra
                             ...getDefaultTrait(),
                             name: template.name,
                             type: template.data.type || "Traço",
-                            description: desc
+                            description: desc,
+                            level: "" 
                         });
                     } else {
                         append(getDefaultTrait());

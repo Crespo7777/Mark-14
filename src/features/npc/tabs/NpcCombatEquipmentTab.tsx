@@ -8,11 +8,8 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -21,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Trash2, Sword, Dices, Shield, Heart } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea"; // Importado
+import { Plus, Trash2, Sword, Dices, Shield, Heart, Database } from "lucide-react";
 import { getDefaultNpcWeapon, getDefaultNpcArmor } from "../npc.schema";
 import { attributesList } from "@/features/character/character.constants";
 import {
@@ -33,11 +31,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { roundUpDiv } from "@/features/character/character.schema";
+import { roundUpDiv, getDefaultProjectile } from "@/features/character/character.schema";
 import { Separator } from "@/components/ui/separator";
 import { QualityInfoButton } from "@/components/QualityInfoButton";
-import { QualitySelector } from "@/components/QualitySelector"; // <-- IMPORTADO
+import { QualitySelector } from "@/components/QualitySelector";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog"; // Importado
 
 type AttackRollData = {
   abilityName: string;
@@ -79,12 +77,14 @@ const DamageHealControl = ({
 export const NpcCombatEquipmentTab = () => {
   const { form, isReadOnly, npc } = useNpcSheet();
   const { toast } = useToast();
-  const { getValues, setValue } = useFormContext();
+  const { setValue } = useFormContext();
   const tableId = npc.table_id;
 
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   const [openArmors, setOpenArmors] = useState<string[]>([]);
+  const [openProjectiles, setOpenProjectiles] = useState<string[]>([]); // Novo state para munição
+  
   const [displayDefense, setDisplayDefense] = useState<string>(() => {
     const val = form.getValues("combat.defense");
     return val === 0 || isNaN(val) ? "" : String(val);
@@ -95,6 +95,8 @@ export const NpcCombatEquipmentTab = () => {
   const watchedDefense = form.watch("combat.defense");
   const vigorous = Number(form.watch("attributes.vigorous.value")) || 0;
   const painThresholdBonus = Number(form.watch("combat.pain_threshold_bonus")) || 0;
+  
+  const projectiles = form.watch("projectiles") || [];
 
   useEffect(() => {
     if (!isReadOnly) {
@@ -125,6 +127,11 @@ export const NpcCombatEquipmentTab = () => {
     name: "armors",
   });
 
+  const { fields: projectileFields, append: appendProjectile, remove: removeProjectile } = useFieldArray({
+    control: form.control,
+    name: "projectiles",
+  });
+
   const handleDamage = (rawDamage: number) => {
     const armorRD = Number(form.getValues("combat.armor_rd")) || 0;
     const painThreshold = Number(form.getValues("combat.pain_threshold")) || 0;
@@ -153,6 +160,30 @@ export const NpcCombatEquipmentTab = () => {
     const attributeValue = selectedAttr ? Number(allAttributes[selectedAttr.key as keyof typeof allAttributes].value) || 0 : 0;
     if (attributeValue === 0 || !selectedAttr) { toast({ title: "Atributo inválido", description: "Defina o atributo de ataque.", variant: "destructive" }); return; }
     setAttackRollData({ abilityName: weapon.name || "Ataque NPC", attributeName: selectedAttr.label, attributeValue: attributeValue });
+  };
+
+  // Funções para adicionar munição
+  const handleAddProjectileManual = () => {
+    appendProjectile(getDefaultProjectile());
+  };
+
+  const handleAddProjectileFromDB = (itemTemplate: any) => {
+    if (!itemTemplate) {
+        handleAddProjectileManual();
+        return;
+    }
+    appendProjectile({
+        ...getDefaultProjectile(),
+        name: itemTemplate.name,
+        quantity: 20, 
+        damage: itemTemplate.data?.damage || "",
+        weight: Number(itemTemplate.weight) || 0,
+        quality: itemTemplate.data?.quality || "",
+        quality_desc: itemTemplate.data?.quality_desc || "",
+        description: itemTemplate.description || "",
+        attack_modifier: itemTemplate.data?.attack_modifier || "",
+    });
+    toast({ title: "Munição Adicionada", description: itemTemplate.name });
   };
 
   return (
@@ -200,6 +231,7 @@ export const NpcCombatEquipmentTab = () => {
         </Card>
       </div>
 
+      {/* ARMAS */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2">
            <CardTitle className="flex items-center gap-2 text-lg"><Sword /> Armas</CardTitle>
@@ -241,6 +273,26 @@ export const NpcCombatEquipmentTab = () => {
                               )}/>
                           </div>
 
+                          <div className="grid grid-cols-2 gap-4">
+                              <FormField control={form.control} name={`weapons.${index}.projectileId`} render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Munição Necessária</FormLabel>
+                                        <Select onValueChange={(v) => field.onChange(v === "none" ? undefined : v)} value={field.value || "none"} disabled={isReadOnly}>
+                                            <FormControl><SelectTrigger className="h-9"><SelectValue placeholder="Selecione..." /></SelectTrigger></FormControl>
+                                            <SelectContent>
+                                                <SelectItem value="none">Nenhuma</SelectItem>
+                                                {projectiles.length > 0 && <Separator />}
+                                                {projectiles.map((p: any) => (
+                                                    <SelectItem key={p.id} value={p.id}>
+                                                        {p.name} (Qtd: {p.quantity})
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </FormItem>
+                                )}/>
+                          </div>
+
                           <FormField control={form.control} name={`weapons.${index}.quality`} render={({field}) => (
                              <FormItem>
                                 <div className="flex items-center justify-between">
@@ -268,6 +320,101 @@ export const NpcCombatEquipmentTab = () => {
               })}
            </Accordion>
         </CardContent>
+      </Card>
+
+      {/* --- MUNIÇÃO & RECURSOS (AGORA COM ACCORDION IGUAL AO PC) --- */}
+      <Card className="mt-6">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-lg flex items-center gap-2">Munição & Recursos</CardTitle>
+              <div className="flex gap-2">
+                  <Button size="sm" variant="ghost" onClick={handleAddProjectileManual} title="Adicionar Manualmente" disabled={isReadOnly}>
+                      <Plus className="w-4 h-4" />
+                  </Button>
+                  {!isReadOnly && (
+                      <ItemSelectorDialog
+                          tableId={tableId}
+                          categories={['ammunition']}
+                          title="Buscar Munição"
+                          onSelect={handleAddProjectileFromDB}
+                      >
+                          <Button size="sm" variant="outline" className="gap-2 border-dashed">
+                              <Database className="w-4 h-4" /> DB
+                          </Button>
+                      </ItemSelectorDialog>
+                  )}
+              </div>
+          </CardHeader>
+          <CardContent>
+              {projectileFields.length === 0 && <p className="text-muted-foreground text-center py-4 text-xs">Sem munição configurada.</p>}
+              
+              <Accordion type="multiple" className="space-y-2" value={openProjectiles} onValueChange={setOpenProjectiles}>
+                  {projectileFields.map((field, index) => (
+                      <AccordionItem key={field.id} value={field.id} className="border rounded-md px-2 bg-card">
+                          <div className="flex justify-between items-center w-full gap-2 py-2">
+                              <AccordionTrigger className="p-0 hover:no-underline flex-1">
+                                  <div className="flex-1 flex items-center gap-2 text-left min-w-0">
+                                      <h4 className="font-semibold text-sm truncate">{form.watch(`projectiles.${index}.name`) || "Novo Recurso"}</h4>
+                                      <div className="flex gap-1 shrink-0">
+                                          <Badge variant="outline" className="text-[10px] h-5 px-1">Qtd: {form.watch(`projectiles.${index}.quantity`)}</Badge>
+                                          {form.watch(`projectiles.${index}.attack_modifier`) && (
+                                              <Badge variant="secondary" className="text-[10px] h-5 px-1 bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100">
+                                                  Atq: {form.watch(`projectiles.${index}.attack_modifier`)}
+                                              </Badge>
+                                          )}
+                                      </div>
+                                  </div>
+                              </AccordionTrigger>
+                              {!isReadOnly && (
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-destructive/10 shrink-0" onClick={(e) => { e.stopPropagation(); removeProjectile(index); }}>
+                                      <Trash2 className="w-4 h-4" />
+                                  </Button>
+                              )}
+                          </div>
+
+                          <AccordionContent className="pt-2 pb-4 border-t border-border/50">
+                              <div className="space-y-4">
+                                  <div className="flex gap-4 items-end">
+                                      <FormField control={form.control} name={`projectiles.${index}.name`} render={({ field }) => (
+                                          <FormItem className="flex-1"><FormLabel className="text-xs">Nome</FormLabel><FormControl><Input {...field} className="h-8" readOnly={isReadOnly}/></FormControl></FormItem>
+                                      )}/>
+                                      <FormField control={form.control} name={`projectiles.${index}.quantity`} render={({ field }) => (
+                                          <FormItem className="w-20"><FormLabel className="text-xs">Quantidade</FormLabel><FormControl><Input type="number" {...field} onChange={e => field.onChange(e.target.valueAsNumber)} className="h-8" readOnly={isReadOnly}/></FormControl></FormItem>
+                                      )}/>
+                                  </div>
+                                  
+                                  <div className="flex gap-4 items-end">
+                                      <FormField control={form.control} name={`projectiles.${index}.weight`} render={({ field }) => (
+                                          <FormItem className="w-24"><FormLabel className="text-xs">Peso (Total)</FormLabel><FormControl><Input type="number" step="0.1" {...field} onChange={e => field.onChange(e.target.valueAsNumber)} className="h-8" readOnly={isReadOnly}/></FormControl></FormItem>
+                                      )}/>
+                                      <FormField control={form.control} name={`projectiles.${index}.damage`} render={({ field }) => (
+                                          <FormItem className="w-24"><FormLabel className="text-xs">Dano Extra</FormLabel><FormControl><Input {...field} placeholder="+0" className="h-8" readOnly={isReadOnly}/></FormControl></FormItem>
+                                      )}/>
+                                      <FormField control={form.control} name={`projectiles.${index}.attack_modifier`} render={({ field }) => (
+                                          <FormItem className="w-24"><FormLabel className="text-xs">Bônus Atq</FormLabel><FormControl><Input {...field} placeholder="+0" className="h-8" readOnly={isReadOnly}/></FormControl></FormItem>
+                                      )}/>
+                                  </div>
+
+                                  <FormField control={form.control} name={`projectiles.${index}.quality`} render={({ field }) => (
+                                      <FormItem>
+                                          <div className="flex justify-between items-center"><FormLabel className="text-xs">Qualidades</FormLabel><QualityInfoButton qualitiesString={field.value} tableId={tableId}/></div>
+                                          <FormControl>
+                                              {isReadOnly ? <Input value={field.value} readOnly /> : <QualitySelector tableId={tableId} value={field.value} onChange={(val) => field.onChange(val)} targetType="weapon" />}
+                                          </FormControl>
+                                      </FormItem>
+                                  )}/>
+
+                                  <FormField control={form.control} name={`projectiles.${index}.description`} render={({ field }) => (
+                                      <FormItem>
+                                          <FormLabel className="text-xs">Descrição</FormLabel>
+                                          <FormControl><Textarea {...field} className="min-h-[60px] text-xs bg-muted/20" readOnly={isReadOnly}/></FormControl>
+                                      </FormItem>
+                                  )}/>
+                              </div>
+                          </AccordionContent>
+                      </AccordionItem>
+                  ))}
+              </Accordion>
+          </CardContent>
       </Card>
 
       <Card>

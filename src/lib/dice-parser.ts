@@ -3,7 +3,7 @@
 /**
  * Interface simples para o resultado da rolagem
  */
-interface DiceRoll {
+export interface DiceRoll {
   rolls: number[];
   modifier: number;
   total: number;
@@ -120,9 +120,7 @@ export const rollAttributeTest = (options: {
 
   const target = attributeValue + modifier;
   
-  // --- CORREÇÃO DE REGRA: ---
   // Em Symbaroum (Roll Under), a vantagem ajuda a baixar o resultado.
-  // Subtraímos o d4 do d20.
   const totalRoll = mainRoll - (advantageRoll || 0);
 
   const isSuccess = totalRoll <= target && mainRoll !== 20; // 20 é sempre falha
@@ -165,7 +163,6 @@ const formatTestResult = (
 
   let rollStr = `<span class="font-bold text-primary-foreground">${mainRoll}</span> (d20)`;
   if (advantageRoll) {
-    // CORREÇÃO VISUAL: Mostra o sinal de menos para a Vantagem
     rollStr += ` - <span class="font-bold text-green-400">${advantageRoll}</span> (Vantagem)`;
   }
 
@@ -229,8 +226,6 @@ export const formatAbilityTest = (
 
   return `${baseMessage}${corruptionStr}`;
 };
-
-// --- NOVAS FUNÇÕES DE ROLAGEM DE COMBATE ---
 
 /**
  * Formata um teste de ATAQUE de Arma para o chat.
@@ -304,4 +299,41 @@ export const formatProtectionRoll = (
 
   return `${characterName} rola <span class="text-primary-foreground font-bold">${armorName}</span> para Proteção...
 Rolagem: ${rollStr} = <span class="text-primary-foreground font-bold text-lg">${protectionRoll.total}</span> Proteção`;
+};
+
+/**
+ * (NOVO) Formata uma rolagem de atributo genérica baseada em DiceRoll simples.
+ * Usado pelo WeaponAttackDialog para compatibilidade.
+ */
+export const formatAttributeRoll = (
+  characterName: string,
+  attributeName: string,
+  result: DiceRoll,
+  target: number,
+  contextName?: string
+): string => {
+  const total = result.total;
+  const isSuccess = total <= target && total !== 20;
+  const isCrit = total === 1;
+  const isFumble = total === 20;
+
+  let outcomeColor = isSuccess ? "text-primary" : "text-destructive";
+  let outcomeText = isSuccess ? "Sucesso" : "Falha";
+  
+  if (isCrit) {
+      outcomeColor = "text-accent";
+      outcomeText = "Sucesso Crítico!";
+  }
+  if (isFumble) {
+      outcomeColor = "text-destructive font-bold";
+      outcomeText = "Falha Crítica!";
+  }
+
+  const action = contextName 
+    ? `usa <span class="font-bold text-primary-foreground">${contextName}</span> (${attributeName})`
+    : `testa <span class="font-bold text-primary-foreground">${attributeName}</span>`;
+
+  return `${characterName} ${action}...
+Rolagem: <span class="font-bold text-primary-foreground">${total}</span> (vs ${target})
+Resultado: <span class="${outcomeColor} font-bold">${outcomeText}</span>`;
 };

@@ -5,6 +5,7 @@ import {
   abilitySchema,
   traitSchema,
   inventoryItemSchema,
+  projectileSchema, // IMPORTANTE: Importando o schema da munição
   simpleUUID,
   numeric,
 } from "@/features/character/character.schema";
@@ -54,7 +55,7 @@ export const npcArmorSchema = z.object({
 });
 
 // ---
-// Schema de Arma
+// Schema de Arma (Adicionado projectileId)
 // ---
 export const npcWeaponSchema = z.object({
   id: z.string().default(simpleUUID),
@@ -62,6 +63,7 @@ export const npcWeaponSchema = z.object({
   quality: z.string().default(""),
   damage: z.string().default(""),
   attackAttribute: z.string().default(""),
+  projectileId: z.string().optional(), // Novo campo para ligar arma à munição
 });
 
 // ---
@@ -74,8 +76,8 @@ export const npcSheetSchema = z.object({
   occupation: z.string().default("Monstro"),
 
   // --- NOVOS CAMPOS PARA A IMAGEM ---
-  image_url: z.string().nullable().optional(), // Permite URL da imagem
-  data: z.any().optional(), // Permite configurações extras (zoom, etc)
+  image_url: z.string().nullable().optional(), 
+  data: z.any().optional(), 
 
   // Campos da aba Detalhes
   shadow: z.string().default(""), 
@@ -102,6 +104,8 @@ export const npcSheetSchema = z.object({
   traits: z.array(traitSchema).default([]),
   armors: z.array(npcArmorSchema).default([]),
   inventory: z.array(inventoryItemSchema).default([]),
+  projectiles: z.array(projectileSchema).default([]), // Lista de Munição
+
 }).passthrough();
 
 // Tipos e Valores Padrão

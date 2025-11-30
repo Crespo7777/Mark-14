@@ -29,6 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { defaultCharacterData } from "./character.schema";
 
 // Importação das Abas
 import { DetailsTab } from "./tabs/DetailsTab";
@@ -61,7 +62,19 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
   }
 
   const { form, character, isDirty, isSaving, saveSheet } = context;
-  
+
+  // --- CORREÇÃO: Sincroniza o formulário quando os dados do banco mudam (ex: XP alterado) ---
+  useEffect(() => {
+    if (character?.data) {
+        // Mescla com os dados padrão para garantir segurança
+        const syncedData = { ...defaultCharacterData, ...character.data };
+        
+        // Reseta o formulário com os novos dados
+        // keepDirty: true impede que a gente perca o que o usuário está digitando agora
+        form.reset(syncedData, { keepDirty: true });
+    }
+  }, [character?.data, form]); // Executa sempre que os dados do personagem mudarem no contexto
+
   // Leitura dos Dados
   const currentXp = calculations.currentExperience; 
   const nextLevelXp = 100;
@@ -78,7 +91,6 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
   const imageUrl = form.watch("image_url");
 
   // Configurações de Imagem (Zoom/Posição)
-  // Nota: Salvamos em data.image_settings para o Card ler depois
   const imageSettings = form.watch("data.image_settings") || { x: 50, y: 50, scale: 100 };
 
   const updateImageSettings = (key: string, value: number[]) => {
@@ -131,7 +143,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
     <Form {...form}>
       <form onSubmit={(e) => { e.preventDefault(); saveSheet(); }} className="h-full flex flex-col space-y-4">
         
-        {/* HEADER DA FICHA (REFORMULADO) */}
+        {/* HEADER DA FICHA */}
         <Card className="p-4 border-l-4 border-l-primary bg-card/50 m-4 mb-0">
             <div className="flex flex-col md:flex-row gap-4 items-center md:items-start">
                 
@@ -145,12 +157,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
 
                 {/* ÁREA DA IMAGEM */}
                 <div className="relative group shrink-0">
-                    <div 
-                        className={`
-                            w-24 h-24 rounded-lg border-2 border-primary shadow-lg 
-                            overflow-hidden bg-muted flex items-center justify-center relative
-                        `}
-                    >
+                    <div className="w-24 h-24 rounded-lg border-2 border-primary shadow-lg overflow-hidden bg-muted flex items-center justify-center relative">
                         {isUploading ? (
                             <Loader2 className="w-8 h-8 animate-spin text-primary" />
                         ) : imageUrl ? (
@@ -186,64 +193,26 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                     {!isReadOnly && imageUrl && (
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button 
-                                    size="icon" 
-                                    variant="secondary" 
-                                    className="absolute -bottom-2 -right-2 h-7 w-7 rounded-full shadow-md z-20 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
+                                <Button size="icon" variant="secondary" className="absolute -bottom-2 -right-2 h-7 w-7 rounded-full shadow-md z-20 opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Settings2 className="w-3.5 h-3.5" />
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-64 p-4" align="start">
                                 <div className="space-y-4">
-                                    <h4 className="font-medium leading-none flex items-center gap-2">
-                                        <Move className="w-4 h-4"/> Enquadramento
-                                    </h4>
-                                    
+                                    <h4 className="font-medium leading-none flex items-center gap-2"><Move className="w-4 h-4"/> Enquadramento</h4>
                                     <div className="space-y-1.5">
-                                        <div className="flex justify-between text-xs text-muted-foreground">
-                                            <Label>Zoom</Label>
-                                            <span>{imageSettings.scale}%</span>
-                                        </div>
-                                        <Slider 
-                                            value={[imageSettings.scale]} 
-                                            min={100} max={300} step={5}
-                                            onValueChange={(val) => updateImageSettings("scale", val)} 
-                                        />
+                                        <div className="flex justify-between text-xs text-muted-foreground"><Label>Zoom</Label><span>{imageSettings.scale}%</span></div>
+                                        <Slider value={[imageSettings.scale]} min={100} max={300} step={5} onValueChange={(val) => updateImageSettings("scale", val)} />
                                     </div>
-
                                     <div className="space-y-1.5">
-                                        <div className="flex justify-between text-xs text-muted-foreground">
-                                            <Label>Horizontal (X)</Label>
-                                            <span>{imageSettings.x}%</span>
-                                        </div>
-                                        <Slider 
-                                            value={[imageSettings.x]} 
-                                            min={0} max={100} step={1}
-                                            onValueChange={(val) => updateImageSettings("x", val)} 
-                                        />
+                                        <div className="flex justify-between text-xs text-muted-foreground"><Label>Horizontal (X)</Label><span>{imageSettings.x}%</span></div>
+                                        <Slider value={[imageSettings.x]} min={0} max={100} step={1} onValueChange={(val) => updateImageSettings("x", val)} />
                                     </div>
-
                                     <div className="space-y-1.5">
-                                        <div className="flex justify-between text-xs text-muted-foreground">
-                                            <Label>Vertical (Y)</Label>
-                                            <span>{imageSettings.y}%</span>
-                                        </div>
-                                        <Slider 
-                                            value={[imageSettings.y]} 
-                                            min={0} max={100} step={1}
-                                            onValueChange={(val) => updateImageSettings("y", val)} 
-                                        />
+                                        <div className="flex justify-between text-xs text-muted-foreground"><Label>Vertical (Y)</Label><span>{imageSettings.y}%</span></div>
+                                        <Slider value={[imageSettings.y]} min={0} max={100} step={1} onValueChange={(val) => updateImageSettings("y", val)} />
                                     </div>
-                                    
-                                    <Button 
-                                        variant="outline" 
-                                        size="sm" 
-                                        className="w-full text-xs h-7"
-                                        onClick={() => form.setValue("data.image_settings", { x: 50, y: 50, scale: 100 }, { shouldDirty: true })}
-                                    >
-                                        Resetar
-                                    </Button>
+                                    <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => form.setValue("data.image_settings", { x: 50, y: 50, scale: 100 }, { shouldDirty: true })}>Resetar</Button>
                                 </div>
                             </PopoverContent>
                         </Popover>
@@ -268,14 +237,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                                     <ShareDialog itemTitle={character.name} currentSharedWith={character.shared_with_players || []} onSave={async () => {}}> 
                                         <Button variant="ghost" size="icon" type="button"><Share2 className="w-4 h-4"/></Button>
                                     </ShareDialog>
-                                    <Button 
-                                        type="button" 
-                                        onClick={() => saveSheet()} 
-                                        disabled={!isDirty || isSaving}
-                                        variant={isDirty ? "default" : "outline"}
-                                        size="sm"
-                                        className="min-w-[100px]"
-                                    >
+                                    <Button type="button" onClick={() => saveSheet()} disabled={!isDirty || isSaving} variant={isDirty ? "default" : "outline"} size="sm" className="min-w-[100px]">
                                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>}
                                         {isDirty ? "Salvar*" : "Salvo"}
                                     </Button>
@@ -307,14 +269,14 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
             </div>
         </Card>
 
-        {/* TABS DE CONTEÚDO */}
+        {/* TABS DE CONTEÚDO (ORDEM CORRETA: Detalhes, Atributos, Combate, Habilidades...) */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
             <div className="px-4 overflow-x-auto pb-2">
-                <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground w-full justify-start">
+                <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground w-full justify-start gap-1">
                     <TabsTrigger value="details" className="text-xs"><User className="w-3.5 h-3.5 mr-1.5"/> Detalhes</TabsTrigger>
                     <TabsTrigger value="attributes" className="text-xs"><Sparkles className="w-3.5 h-3.5 mr-1.5"/> Atributos</TabsTrigger>
-                    <TabsTrigger value="abilities" className="text-xs"><Shield className="w-3.5 h-3.5 mr-1.5"/> Habilidades</TabsTrigger>
                     <TabsTrigger value="combat" className="text-xs"><Swords className="w-3.5 h-3.5 mr-1.5"/> Combate</TabsTrigger>
+                    <TabsTrigger value="abilities" className="text-xs"><Shield className="w-3.5 h-3.5 mr-1.5"/> Habilidades</TabsTrigger>
                     <TabsTrigger value="inventory" className="text-xs"><Backpack className="w-3.5 h-3.5 mr-1.5"/> Mochila</TabsTrigger>
                     <TabsTrigger value="journal" className="text-xs"><Book className="w-3.5 h-3.5 mr-1.5"/> Diário</TabsTrigger>
                 </TabsList>
@@ -324,8 +286,8 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                 <div className={isReadOnly ? "pointer-events-none opacity-90" : ""}>
                     <TabsContent value="details" className="mt-0"><DetailsTab /></TabsContent>
                     <TabsContent value="attributes" className="mt-0"><AttributesTab /></TabsContent>
-                    <TabsContent value="abilities" className="mt-0"><AbilitiesTraitsTab /></TabsContent>
                     <TabsContent value="combat" className="mt-0"><CombatEquipmentTab /></TabsContent>
+                    <TabsContent value="abilities" className="mt-0"><AbilitiesTraitsTab /></TabsContent>
                     <TabsContent value="inventory" className="mt-0"><BackpackTab /></TabsContent>
                     <TabsContent value="journal" className="mt-0"><CharacterJournalTab /></TabsContent>
                 </div>
