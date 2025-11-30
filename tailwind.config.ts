@@ -81,6 +81,6 @@ export default {
   },
   plugins: [
     require("tailwindcss-animate"),
-    require("@tailwindcss/typography"), // <-- 1. ADICIONE ESTA LINHA
+    require("@tailwindcss/typography"),
   ],
 } satisfies Config;
