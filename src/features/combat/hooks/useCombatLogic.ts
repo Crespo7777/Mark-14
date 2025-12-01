@@ -21,7 +21,6 @@ interface UseCombatLogicProps {
   fields: {
     currentToughness: string;
     maxToughness: string;
-    // Adicionado: Campo opcional para suportar vida temporária (padrão PC ou NPC)
     tempToughness?: string;
   };
 }
@@ -33,22 +32,17 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
   const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null);
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
 
-  // Campo de vida temporária (usa o prop ou o padrão de PC)
   const tempField = fields.tempToughness || "toughness.temporary";
-
-  // --- LÓGICA DE DANO E CURA (ATUALIZADA) ---
 
   const handleDamage = (amount: number, armorRD = 0) => {
     const damage = Math.max(0, amount - armorRD);
     
-    // Ler valores atuais
     const current = Number(form.getValues(fields.currentToughness)) || 0;
     const temporary = Number(form.getValues(tempField)) || 0;
 
     let damageRemaining = damage;
     let newTemporary = temporary;
 
-    // 1. Absorver com Vida Temporária primeiro (Escudo/Magia)
     if (newTemporary > 0) {
         if (newTemporary >= damageRemaining) {
             newTemporary -= damageRemaining;
@@ -59,14 +53,12 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
         }
     }
 
-    // 2. Aplicar o dano restante à Vida Atual
     const newCurrent = Math.max(0, current - damageRemaining);
     
-    // Atualizar formulário
-    form.setValue(tempField, newTemporary, { shouldDirty: true });
-    form.setValue(fields.currentToughness, newCurrent, { shouldDirty: true });
+    // CORREÇÃO CRÍTICA: Adicionado shouldTouch para garantir salvamento
+    form.setValue(tempField, newTemporary, { shouldDirty: true, shouldTouch: true });
+    form.setValue(fields.currentToughness, newCurrent, { shouldDirty: true, shouldTouch: true });
     
-    // Feedback detalhado
     let description = `Dano Real: ${damage}`;
     if (armorRD > 0) description += ` (${amount} - ${armorRD} RD)`;
     description += `. (Temp: ${temporary} -> ${newTemporary}, Vida: ${current} -> ${newCurrent})`;
@@ -76,21 +68,19 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
 
   const handleHeal = (amount: number, manualMax?: number) => {
     const current = Number(form.getValues(fields.currentToughness)) || 0;
-    // Usa o manualMax se passado (útil para NPCs), senão tenta ler do formulário
     const max = manualMax ?? (Number(form.getValues(fields.maxToughness)) || 10);
     
     const newValue = Math.min(max, current + amount);
     
-    form.setValue(fields.currentToughness, newValue, { shouldDirty: true });
+    // CORREÇÃO CRÍTICA: Adicionado shouldTouch para garantir salvamento
+    form.setValue(fields.currentToughness, newValue, { shouldDirty: true, shouldTouch: true });
     toast({ title: "Cura Aplicada", description: `+${amount} Vitalidade (Atual: ${newValue}/${max}).` });
   };
 
-  // --- LÓGICA DE ATAQUE DO JOGADOR (PRESERVADA) ---
   const preparePcAttack = (weaponIndex: number) => {
     const weapon = form.getValues(`weapons.${weaponIndex}`);
-    let attackModifier = 0; // Bônus acumulado
+    let attackModifier = 0;
     
-    // 1. Verificar Munição
     if (weapon.projectileId && weapon.projectileId !== "none") {
         const projectiles = form.getValues("projectiles") || [];
         const projIndex = projectiles.findIndex((p: any) => p.id === weapon.projectileId);
@@ -112,7 +102,6 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
             return; 
         }
 
-        // Aplica Bônus do Projétil
         if (projectile.attack_modifier) {
             const mod = parseInt(projectile.attack_modifier, 10);
             if (!isNaN(mod)) {
@@ -122,7 +111,6 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
         }
     }
 
-    // 2. Preparar Atributos
     const allAttributes = form.getValues("attributes");
     const selectedAttr = attributesList.find((attr) => attr.key === weapon.attackAttribute);
     
@@ -130,12 +118,6 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
       ? Number(allAttributes[selectedAttr.key as keyof typeof allAttributes]?.value || allAttributes[selectedAttr.key as keyof typeof allAttributes]) || 0 
       : 0;
 
-    if (baseAttributeValue === 0 && !selectedAttr) {
-      // Se não achar atributo, assume 0 mas deixa rolar (fallback)
-      // toast({ title: "Aviso", description: "Atributo de ataque não encontrado ou zero." });
-    }
-
-    // Soma o bônus ao atributo base
     const finalAttributeValue = baseAttributeValue + attackModifier;
 
     setAttackRollData({
@@ -155,7 +137,7 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
       if (projIndex !== -1) {
           const currentQty = projectiles[projIndex].quantity || 0;
           if (currentQty > 0) {
-              form.setValue(`projectiles.${projIndex}.quantity`, currentQty - 1, { shouldDirty: true });
+              form.setValue(`projectiles.${projIndex}.quantity`, currentQty - 1, { shouldDirty: true, shouldTouch: true });
               toast({ title: "Munição Gasta", description: `1x ${projectiles[projIndex].name} consumido. Restam: ${currentQty - 1}` });
           }
       }
@@ -186,12 +168,10 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
     }
     let finalDamage = weapon.damage;
     
-    // Dano Base da Arma + Bônus (Amoque)
     if (bonusDice) {
         finalDamage += `+${bonusDice}`;
     }
 
-    // Aplica Dano Extra do Projétil
     if (weapon.projectileId && weapon.projectileId !== "none") {
         const projectiles = form.getValues("projectiles") || [];
         const projectile = projectiles.find((p: any) => p.id === weapon.projectileId);

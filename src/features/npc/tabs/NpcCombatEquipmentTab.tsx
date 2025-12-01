@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-// Componentes
 import { VitalityCard } from "@/features/combat/components/VitalityCard";
 import { CorruptionCard } from "@/features/combat/components/CorruptionCard";
 import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
@@ -33,9 +32,6 @@ export const NpcCombatEquipmentTab = () => {
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
   
-  // --- OTIMIZAÇÃO DE PERFORMANCE ---
-  // NÃO observar toughness_current aqui. Isso causa re-render da aba inteira a cada ponto de dano.
-  // Observamos apenas o que afeta o layout estático ou máximos.
   const maxToughness = Number(form.watch("combat.toughness_max")) || 10;
   const painThreshold = Number(form.watch("combat.pain_threshold")) || 0;
   const resolute = Number(form.watch("attributes.resolute.value")) || 0;
@@ -43,9 +39,7 @@ export const NpcCombatEquipmentTab = () => {
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({ control: form.control, name: "weapons" });
   const { fields: projectileFields, append: appendProjectile, remove: removeProjectile } = useFieldArray({ control: form.control, name: "projectiles" });
 
-  // Funções de Dano/Cura (Usando getValues para performance)
   const handleDamage = (val: number) => {
-      // Ler valores apenas no momento da ação (sem re-render)
       const armor = Number(form.getValues("combat.armor_rd")) || 0;
       const current = Number(form.getValues("combat.toughness_current")) || 0;
       const temporary = Number(form.getValues("combat.temporary")) || 0;
@@ -54,7 +48,6 @@ export const NpcCombatEquipmentTab = () => {
       let remainingDamage = damageToTake;
       let newTemporary = temporary;
 
-      // 1. Absorver com Temp HP
       if (newTemporary > 0) {
           if (newTemporary >= remainingDamage) {
               newTemporary -= remainingDamage;
@@ -65,12 +58,10 @@ export const NpcCombatEquipmentTab = () => {
           }
       }
 
-      // 2. Aplicar resto à Vida Real
       const newCurrent = Math.max(0, current - remainingDamage);
 
-      // Salvar (Isso vai disparar atualização apenas no VitalityCard que observa o campo)
-      form.setValue("combat.temporary", newTemporary, { shouldDirty: true });
-      form.setValue("combat.toughness_current", newCurrent, { shouldDirty: true });
+      form.setValue("combat.temporary", newTemporary, { shouldDirty: true, shouldTouch: true });
+      form.setValue("combat.toughness_current", newCurrent, { shouldDirty: true, shouldTouch: true });
 
       toast({ 
           title: "Dano no NPC", 
@@ -81,9 +72,9 @@ export const NpcCombatEquipmentTab = () => {
   const handleHeal = (val: number) => {
       const currentToughness = Number(form.getValues("combat.toughness_current")) || 0;
       const max = Number(form.getValues("combat.toughness_max")) || 10;
-      
       const newCurrent = Math.min(max, currentToughness + val);
-      form.setValue("combat.toughness_current", newCurrent, { shouldDirty: true });
+      
+      form.setValue("combat.toughness_current", newCurrent, { shouldDirty: true, shouldTouch: true });
       toast({ title: `NPC Curado`, description: `+${val} Vitalidade` });
   };
 
@@ -102,11 +93,7 @@ export const NpcCombatEquipmentTab = () => {
 
   return (
     <div className="space-y-4 h-full flex flex-col">
-        
-        {/* --- DASHBOARD NPC (3 COLUNAS) --- */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
-            {/* DEFESA NPC */}
             <Card className="border-t-4 border-t-blue-500 shadow-sm">
                 <CardHeader className="pb-2 pt-4 px-4 bg-muted/10">
                     <CardTitle className="flex items-center gap-2 text-base"><Shield className="w-4 h-4 text-blue-500"/> Defesa & Armadura</CardTitle>
@@ -137,7 +124,6 @@ export const NpcCombatEquipmentTab = () => {
                 </CardContent>
             </Card>
 
-            {/* VITALIDADE NPC */}
             <VitalityCard 
                 form={form}
                 currentField="combat.toughness_current"
@@ -150,7 +136,6 @@ export const NpcCombatEquipmentTab = () => {
                 isReadOnly={isReadOnly}
             />
 
-            {/* CORRUPÇÃO NPC */}
             <CorruptionCard 
                 form={form}
                 threshold={Math.ceil(resolute / 2)}
@@ -158,7 +143,6 @@ export const NpcCombatEquipmentTab = () => {
             />
         </div>
 
-        {/* --- TABS: ARMAS e RECURSOS --- */}
         <Card className="flex-1 flex flex-col border-t-4 border-t-red-700 shadow-sm">
             <Tabs defaultValue="weapons" className="flex-1 flex flex-col">
                 <CardHeader className="py-2 px-4 bg-muted/10 border-b flex flex-row items-center justify-between">
@@ -169,11 +153,11 @@ export const NpcCombatEquipmentTab = () => {
                 </CardHeader>
                 
                 <CardContent className="p-2 overflow-y-auto flex-1">
-                    
                     <TabsContent value="weapons" className="m-0 space-y-2">
                         {!isReadOnly && <Button size="sm" variant="ghost" className="w-full border border-dashed mb-2" onClick={() => appendWeapon(getDefaultNpcWeapon())}><Plus className="w-4 h-4 mr-2"/> Adicionar Ataque</Button>}
                         <Accordion type="multiple" className="space-y-2" value={openWeapons} onValueChange={setOpenWeapons}>
                             {weaponFields.map((field, index) => (
+                                // CORREÇÃO: Usar field.id para evitar duplicação no expand
                                 <AccordionItem key={field.id} value={field.id} className="border rounded bg-card px-2">
                                     <div className="flex items-center justify-between py-2">
                                         <AccordionTrigger className="p-0 hover:no-underline flex-1">
@@ -213,7 +197,6 @@ export const NpcCombatEquipmentTab = () => {
                             </div>
                         ))}
                     </TabsContent>
-
                 </CardContent>
             </Tabs>
         </Card>
