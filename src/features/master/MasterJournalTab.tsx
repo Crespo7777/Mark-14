@@ -3,13 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
-  CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
-  CardFooter,
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Plus,
   MoreVertical,
@@ -19,7 +17,9 @@ import {
   ArchiveRestore,
   FolderOpen,
   Share2,
-  Eye
+  Eye,
+  Book,
+  Image as ImageIcon
 } from "lucide-react";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
@@ -47,20 +47,20 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JournalRenderer } from "@/components/JournalRenderer";
 import { EntityListManager } from "@/components/EntityListManager";
 import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
 import { JournalReadDialog } from "@/components/JournalReadDialog";
 import { useTableContext } from "@/features/table/TableContext";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
 );
 
 const SheetLoadingFallback = () => (
-  <Card className="border-border/50 flex flex-col h-[200px]">
-    <CardHeader><Skeleton className="h-6 w-1/2" /><Skeleton className="h-4 w-1/3" /></CardHeader>
-    <CardContent className="flex-1"><Skeleton className="h-4 w-3/4" /></CardContent>
+  <Card className="border-border/50 flex flex-col h-[200px] overflow-hidden">
+    <Skeleton className="h-full w-full" />
   </Card>
 );
 
@@ -136,76 +136,134 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
     return matchesSearch && matchesArchive;
   });
 
+  // --- RENDERIZAÇÃO NO ESTILO FOUNDRY VTT (Tiles) ---
   const renderJournalCard = (entry: JournalEntryWithRelations) => {
-     let description = "Anotação do Mestre";
-     let canShare = true;
-     if (entry.player) { description = `De: ${entry.player.display_name}`; canShare = false; }
-     else if (entry.character) { description = `Personagem: ${entry.character.name}`; canShare = false; }
-     else if (entry.npc) { description = `NPC: ${entry.npc.name}`; canShare = false; }
-     else if (entry.is_shared) { description = "Público"; }
-     
-     return (
+      let sourceLabel = "";
+      if (entry.player) sourceLabel = ` Jogador: ${entry.player.display_name}`;
+      else if (entry.character) sourceLabel = ` PJ: ${entry.character.name}`;
+      else if (entry.npc) sourceLabel = ` NPC: ${entry.npc.name}`;
+      
+      const coverUrl = entry.data?.cover_image;
+      const canShare = !entry.player && !entry.character && !entry.npc; // Regras de quem pode partilhar
+      const timeAgo = formatDistanceToNow(new Date(entry.created_at), { locale: ptBR, addSuffix: true });
+
+      return (
         <Card 
-          className={`border-border/50 flex flex-col h-[280px] hover:shadow-glow transition-shadow cursor-pointer group ${entry.is_archived ? "opacity-60 bg-muted/20" : ""}`}
+          className={`
+            group relative flex flex-col h-[200px] overflow-hidden border-border/40 bg-muted/20 
+            transition-all duration-300 hover:shadow-lg hover:border-primary/50 cursor-pointer
+            ${entry.is_archived ? "opacity-60 grayscale" : ""}
+          `}
           onClick={() => setEntryToRead(entry)}
         >
-            <CardHeader className="pb-2">
-                <CardTitle className="flex justify-between items-start text-lg truncate">
-                    <span className="truncate pr-2">{entry.title}</span>
-                    {entry.is_archived && <span className="text-xs bg-muted px-2 py-1 rounded shrink-0">Arq</span>}
-                </CardTitle>
-                <CardDescription className="text-xs">{description}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1 overflow-hidden text-sm pt-2 pb-2 relative">
-                <JournalRenderer content={entry.content} className="line-clamp-6 text-sm" />
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
-                  <span className="bg-background/80 px-3 py-1 rounded-full text-xs font-medium flex items-center shadow-sm"><Eye className="w-3 h-3 mr-1" /> Ler</span>
-                </div>
-            </CardContent>
-            <CardFooter className="flex justify-between items-center pt-0 pb-3 px-4 h-12" onClick={(e) => e.stopPropagation()}>
-                <div>
-                    {canShare ? (
-                        <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
-                            <Button variant="outline" size="sm"><Share2 className="w-4 h-4 mr-2" /> Partilhar</Button>
-                        </ShareDialog>
-                    ) : <div/>}
-                </div>
-                <div className="flex gap-1">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                             <DropdownMenuItem onClick={() => handleArchiveItem(entry.id, !!entry.is_archived)}>
-                                {entry.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
-                                {entry.is_archived ? "Restaurar" : "Arquivar"}
-                             </DropdownMenuItem>
-                             {canShare && (
-                                 <DropdownMenuSub>
-                                    <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover para...</DropdownMenuSubTrigger>
-                                    <DropdownMenuSubContent>
-                                        <DropdownMenuRadioGroup value={entry.folder_id || "none"} onValueChange={val => handleMoveItem(entry.id, val === "none" ? null : val)}>
-                                            <DropdownMenuRadioItem value="none">Sem Pasta</DropdownMenuRadioItem>
-                                            {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
-                                        </DropdownMenuRadioGroup>
-                                    </DropdownMenuSubContent>
-                                 </DropdownMenuSub>
-                             )}
-                             <DropdownMenuSeparator />
-                             <DropdownMenuItem className="text-destructive" onClick={() => setEntryToDelete(entry)}><Trash2 className="w-4 h-4 mr-2" /> Excluir</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+            {/* 1. ÁREA DA IMAGEM DE CAPA (Fundo) */}
+            <div className="absolute inset-0 z-0 bg-muted">
+                {coverUrl ? (
+                    <img 
+                        src={coverUrl} 
+                        alt={entry.title} 
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                ) : (
+                    // Fallback se não tiver imagem: Ícone grande suave
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/50 to-background">
+                        <Book className="w-12 h-12 text-muted-foreground/10 group-hover:text-primary/20 transition-colors" />
+                    </div>
+                )}
+                {/* Gradiente para o texto ficar legível */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+            </div>
+
+            {/* 2. MENU DE AÇÕES (Canto Superior Direito) - Visível no Hover */}
+            <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="secondary" size="icon" className="h-8 w-8 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-sm">
+                            <MoreVertical className="w-4 h-4 text-foreground" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                         <DropdownMenuItem onClick={() => setEntryToRead(entry)}>
+                             <Eye className="w-4 h-4 mr-2" /> Ler Entrada
+                         </DropdownMenuItem>
+                         
+                         <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
+                             <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} entry={entry} isPlayerNote={!!entry.player_id} characterId={entry.character_id || undefined} npcId={entry.npc_id || undefined}>
+                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                    <Edit className="w-4 h-4 mr-2" /> Editar
+                                </DropdownMenuItem>
+                             </JournalEntryDialog>
+                         </Suspense>
+
+                         <DropdownMenuSeparator />
+                         
+                         <DropdownMenuItem onClick={() => handleArchiveItem(entry.id, !!entry.is_archived)}>
+                            {entry.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
+                            {entry.is_archived ? "Restaurar" : "Arquivar"}
+                         </DropdownMenuItem>
+
+                         {canShare && (
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover</DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                    <DropdownMenuRadioGroup value={entry.folder_id || "none"} onValueChange={val => handleMoveItem(entry.id, val === "none" ? null : val)}>
+                                        <DropdownMenuRadioItem value="none">Raiz (Sem Pasta)</DropdownMenuRadioItem>
+                                        {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
+                                    </DropdownMenuRadioGroup>
+                                </DropdownMenuSubContent>
+                             </DropdownMenuSub>
+                         )}
+
+                         <DropdownMenuSeparator />
+                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setEntryToDelete(entry)}>
+                            <Trash2 className="w-4 h-4 mr-2" /> Excluir
+                         </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
+
+            {/* 3. ÍCONES DE ESTADO (Canto Superior Esquerdo) */}
+            <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
+                 {entry.is_shared && (
+                    <Badge variant="secondary" className="bg-primary/20 text-primary-foreground text-[10px] h-5 px-1.5 backdrop-blur-md border border-primary/30 shadow-sm">
+                        <Share2 className="w-3 h-3 mr-1" /> Público
+                    </Badge>
+                 )}
+                 {sourceLabel && (
+                    <Badge variant="outline" className="bg-black/40 text-white border-white/20 text-[10px] h-5 px-1.5 backdrop-blur-md">
+                        {sourceLabel}
+                    </Badge>
+                 )}
+            </div>
+
+            {/* 4. CONTEÚDO DE TEXTO (Rodapé) */}
+            <div className="mt-auto relative z-10 p-3 pb-3">
+                 <h3 className="font-bold text-base text-white leading-tight line-clamp-2 drop-shadow-md mb-1">
+                    {entry.title || "Sem Título"}
+                 </h3>
+                 <div className="flex items-center justify-between text-[11px] text-gray-300 font-medium">
+                    <span className="flex items-center gap-1 opacity-80">
+                       {coverUrl ? <ImageIcon className="w-3 h-3" /> : <Book className="w-3 h-3" />}
+                       {timeAgo}
+                    </span>
                     
-                    <Suspense fallback={<Button variant="outline" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
-                        <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} entry={entry} isPlayerNote={!!entry.player_id} characterId={entry.character_id || undefined} npcId={entry.npc_id || undefined}>
-                            <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="w-4 h-4" /></Button>
-                        </JournalEntryDialog>
-                    </Suspense>
-                </div>
-            </CardFooter>
+                    {/* Botão de Partilha Rápida (só se for permitido) */}
+                    {canShare && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                            <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10 rounded-full">
+                                    <Share2 className="w-3 h-3" />
+                                </Button>
+                            </ShareDialog>
+                        </div>
+                    )}
+                 </div>
+            </div>
         </Card>
-     );
+      );
   };
 
-  if (isLoadingJournal) return <div className="grid gap-4 md:grid-cols-2"><SheetLoadingFallback /><SheetLoadingFallback /></div>;
+  if (isLoadingJournal) return <div className="grid gap-4 grid-cols-2 md:grid-cols-4"><SheetLoadingFallback /><SheetLoadingFallback /><SheetLoadingFallback /><SheetLoadingFallback /></div>;
 
   return (
     <>
@@ -218,13 +276,14 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
             onToggleArchived={setShowArchivedJournal}
             renderItem={renderJournalCard}
             emptyMessage="Nenhuma anotação encontrada."
-            gridClassName="grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" // <--- CORREÇÃO DO LAYOUT AQUI
+            // Layout de Grade Responsivo para Cartões Menores
+            gridClassName="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
             actions={
                 <>
                     <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Diário" />
                     <Suspense fallback={<Button size="sm" disabled>...</Button>}>
                         <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal}>
-                            <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Entrada</Button>
+                            <Button size="sm" className="shadow-md"><Plus className="w-4 h-4 mr-2" /> Nova Nota</Button>
                         </JournalEntryDialog>
                     </Suspense>
                 </>

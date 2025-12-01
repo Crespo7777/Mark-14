@@ -32,13 +32,17 @@ export const attributesSchema = z.object({
   precise: numeric.default(0),
   quick: numeric.default(0),
   resolute: numeric.default(0),
+  vigorous: numeric.default(0), // Nota: Vigorous é o nosso 'Strong' (Forte)
   vigilant: numeric.default(0),
-  vigorous: numeric.default(0),
 });
 
+// ATUALIZADO: Suporte para Bónus Máximo e Temporário
 export const toughnessSchema = z.object({
-  bonus: numeric.default(0),
   current: numeric.default(10),
+  max_modifier: numeric.default(0), // Bônus permanente (ex: Robusto)
+  temporary: numeric.default(0),    // Vida Temporária (ex: Magia/Escudo)
+  // Mantemos 'bonus' opcional para compatibilidade antiga se necessário, mas o código novo usará max_modifier
+  bonus: numeric.optional().default(0), 
 });
 
 export const corruptionSchema = z.object({
@@ -95,12 +99,11 @@ export const abilitySchema = z.object({
   isActive: z.boolean().default(false),
 });
 
-// --- ATUALIZAÇÃO AQUI ---
 export const traitSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default(""),
   type: z.string().default(""),
-  level: z.string().default(""), // Novo campo de nível
+  level: z.string().default(""),
   description: z.string().default(""),
 });
 

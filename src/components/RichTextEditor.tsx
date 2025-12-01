@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { useEditor, EditorContent, type Editor, NodeViewWrapper, ReactNodeViewRenderer, BubbleMenu } from "@tiptap/react";
+import { useEditor, EditorContent, type Editor, NodeViewWrapper, ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import ImageExtension from "@tiptap/extension-image";
 import LinkExtension from "@tiptap/extension-link";
@@ -9,11 +9,12 @@ import Table from "@tiptap/extension-table";
 import TableRow from "@tiptap/extension-table-row";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
+import Placeholder from '@tiptap/extension-placeholder';
 import { 
-  Bold, Italic, Underline as UnderlineIcon, Strikethrough, 
+  Bold, Italic, Underline as UnderlineIcon, 
   List, ListOrdered, Quote, Heading1, Heading2, Heading3,
   AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, 
-  Image as ImageIcon, Undo, Redo, Eraser, Check, Unlink, Trash2,
+  Image as ImageIcon, Undo, Redo, Check, 
   AlignJustify
 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
@@ -23,11 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { MediaLibrary } from "@/components/MediaLibrary";
 import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
 
-// --- (MANTIVE SEU RESIZABLE IMAGE E CUSTOM IMAGE AQUI) ---
-// ... (Copie o código do ResizableImage e CustomImage que você já tem, é excelente) ...
-// Vou colocar aqui resumido para caber na resposta, mas USE O SEU.
+// --- COMPONENTES DE IMAGEM (MANTIDOS DO TEU CÓDIGO) ---
 
 const ResizableImage = ({ node, updateAttributes, selected }: any) => {
   const [isResizing, setIsResizing] = useState(false);
@@ -38,11 +36,13 @@ const ResizableImage = ({ node, updateAttributes, selected }: any) => {
     e.preventDefault(); e.stopPropagation(); setIsResizing(true);
     const startX = e.clientX;
     const startWidth = imageRef.current ? imageRef.current.clientWidth : (width || 200);
+    
     const onMouseMove = (e: MouseEvent) => {
       const currentX = e.clientX;
       const newWidth = Math.max(50, startWidth + (currentX - startX));
       if (imageRef.current) imageRef.current.style.width = `${newWidth}px`;
     };
+    
     const onMouseUp = (e: MouseEvent) => {
       const newWidth = Math.max(50, startWidth + (e.clientX - startX));
       updateAttributes({ width: newWidth });
@@ -50,6 +50,7 @@ const ResizableImage = ({ node, updateAttributes, selected }: any) => {
       document.removeEventListener("mousemove", onMouseMove);
       document.removeEventListener("mouseup", onMouseUp);
     };
+    
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("mouseup", onMouseUp);
   };
@@ -75,7 +76,8 @@ const CustomImage = ImageExtension.extend({
   addNodeView() { return ReactNodeViewRenderer(ResizableImage); },
 });
 
-// --- TOOLBAR SIMPLIFICADA E FLUTUANTE ---
+// --- BARRA DE FERRAMENTAS (MANTIDA DO TEU CÓDIGO) ---
+
 const EditorToolbar = ({ editor, onImageSelect }: { editor: Editor | null, onImageSelect: (url: string) => void }) => {
   if (!editor) return null;
 
@@ -98,9 +100,8 @@ const EditorToolbar = ({ editor, onImageSelect }: { editor: Editor | null, onIma
 
   const toggle = (cb: () => void) => { cb(); editor.view.focus(); };
 
-  // Toolbar sticky com blur
   return (
-    <div className="border-b border-border/40 bg-background/80 backdrop-blur-md p-1 flex flex-wrap items-center gap-0.5 sticky top-0 z-30 transition-all duration-200">
+    <div className="border-b border-border/40 bg-background/80 backdrop-blur-md p-1 flex flex-wrap items-center gap-0.5 sticky top-0 z-30 transition-all duration-200 shadow-sm">
       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => editor.chain().focus().undo().run()} disabled={!editor.can().undo()}><Undo className="h-4 w-4" /></Button>
       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => editor.chain().focus().redo().run()} disabled={!editor.can().redo()}><Redo className="h-4 w-4" /></Button>
       <Separator orientation="vertical" className="h-6 mx-1" />
@@ -136,6 +137,8 @@ const EditorToolbar = ({ editor, onImageSelect }: { editor: Editor | null, onIma
   );
 };
 
+// --- EDITOR PRINCIPAL COM CORREÇÕES E OTIMIZAÇÃO ---
+
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
@@ -144,10 +147,14 @@ interface RichTextEditorProps {
 }
 
 export const RichTextEditor = ({ value, onChange, placeholder, className }: RichTextEditorProps) => {
+  // Ref para controlar o atraso na gravação (Debounce)
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
+        // Melhoria: mantém marcas (negrito) ao dar enter em listas
         bulletList: { keepMarks: true, keepAttributes: false },
         orderedList: { keepMarks: true, keepAttributes: false },
       }),
@@ -157,18 +164,54 @@ export const RichTextEditor = ({ value, onChange, placeholder, className }: Rich
       CustomImage,
       Table.configure({ resizable: true }),
       TableRow, TableHeader, TableCell,
+      Placeholder.configure({
+        placeholder: placeholder || 'Escreva aqui...',
+      }),
     ],
     content: value,
     editorProps: {
       attributes: {
-        // AQUI ESTÁ A MÁGICA: Classes 'prose' para tipografia bonita
-        class: "prose prose-zinc dark:prose-invert max-w-none min-h-[300px] p-4 focus:outline-none text-foreground/90 font-serif leading-relaxed [&_img]:max-w-full [&_p]:mb-4 [&_h1]:mt-8 [&_h2]:mt-6",
+        // Classes Tailwind otimizadas para leitura (estilo Notion/Livro)
+        class: cn(
+          "prose prose-zinc dark:prose-invert max-w-none min-h-[300px] p-4",
+          "focus:outline-none text-foreground/90 font-serif leading-relaxed",
+          "[&_img]:max-w-full [&_p]:mb-4 [&_h1]:mt-8 [&_h2]:mt-6",
+          "selection:bg-primary/20" // Cor de seleção bonita
+        ),
       },
+      // --- A MÁGICA DA COLAGEM DE PDF ---
+      handlePaste: (view, event, slice) => {
+        const text = event.clipboardData?.getData('text/plain');
+        if (text) {
+          const lines = text.split('\n');
+          // Se tiver muitas quebras de linha curtas, provavelmente é PDF/Livro
+          if (lines.length > 2) {
+             const fixedText = text
+                .replace(/([^\n])\n(?!\n)/g, '$1 ') // Junta linhas quebradas
+                .replace(/\n\n/g, '<br><br>');     // Mantém parágrafos reais
+             
+             // Injeta o texto limpo
+             view.props.onPaste?.(view, event, slice);
+             editor?.commands.insertContent(fixedText);
+             return true; // Impede a colagem duplicada
+          }
+        }
+        return false;
+      }
     },
-    onUpdate: ({ editor }) => { onChange(editor.getHTML()); },
+    // --- OTIMIZAÇÃO DE PERFORMANCE (DEBOUNCE) ---
+    onUpdate: ({ editor }) => {
+      // Limpa o timer anterior se o usuário digitar rápido
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+
+      // Só envia para o pai (save) depois de 500ms sem digitar
+      debounceRef.current = setTimeout(() => {
+        onChange(editor.getHTML());
+      }, 500);
+    },
   });
 
-  // Sincronia inicial
+  // Sincronia inicial apenas quando o editor monta ou muda drasticamente externamente
   useEffect(() => {
     if (editor && value && editor.isEmpty && value !== '<p></p>') {
         editor.commands.setContent(value);
@@ -176,7 +219,7 @@ export const RichTextEditor = ({ value, onChange, placeholder, className }: Rich
   }, [value, editor]);
 
   return (
-    <div className={cn("flex flex-col w-full relative", className)}>
+    <div className={cn("flex flex-col w-full relative bg-background/50 rounded-lg border border-border/40", className)}>
       <EditorToolbar editor={editor} onImageSelect={(url) => editor?.chain().focus().setImage({ src: url }).run()} />
       <div className="flex-1 cursor-text" onClick={() => editor?.view.focus()}>
         <EditorContent editor={editor} />

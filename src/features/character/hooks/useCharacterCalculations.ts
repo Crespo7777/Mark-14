@@ -1,89 +1,73 @@
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { useMemo } from "react";
-import { attributesList } from "../character.constants";
+import { useMemo, useEffect } from "react"; // Import useEffect
 
 export const useCharacterCalculations = () => {
   const { form } = useCharacterSheet();
 
-  // Observar todos os campos que afetam cálculos
+  // Observar campos que afetam o cálculo (Otimizado para performance)
   const attributes = form.watch("attributes");
-  const toughness = form.watch("toughness");
-  const weapons = form.watch("weapons") || [];
+  const toughnessMaxMod = form.watch("toughness.max_modifier");
+  
   const armors = form.watch("armors") || [];
   const inventory = form.watch("inventory") || [];
   const projectiles = form.watch("projectiles") || [];
   const experience = form.watch("experience");
-  const money = form.watch("money");
   const corruption = form.watch("corruption");
   
   // Modificadores manuais
   const painThresholdBonus = Number(form.watch("painThresholdBonus") || 0);
 
-  return useMemo(() => {
-    // 1. Atributos Básicos
-    const strong = Number(attributes?.strong || 0);
-    const quick = Number(attributes?.quick || 0);
-    const resolute = Number(attributes?.resolute || 0);
-    const vigorous = Number(attributes?.vigorous?.value || attributes?.vigorous || 0);
+  // 1. Realizar os cálculos (useMemo)
+  const calculations = useMemo(() => {
+    // 1. Atributos
+    const strong = Number(attributes?.vigorous?.value || attributes?.vigorous || 0);
+    const quick = Number(attributes?.quick?.value || attributes?.quick || 0);
+    const resolute = Number(attributes?.resolute?.value || attributes?.resolute || 0);
 
-    // 2. Limiar de Dor (Metade da Força ou 5, + Bônus)
-    const painThreshold = Math.ceil(strong / 2) + painThresholdBonus;
+    // 2. Limiar de Dor
+    const basePainThreshold = Math.ceil(strong / 2);
+    const painThreshold = Math.max(1, basePainThreshold + painThresholdBonus);
 
-    // 3. Defesa (Rápido - Penalidade de Armadura)
+    // 3. Defesa
     const equippedArmors = armors.filter((a: any) => a.equipped);
     const armorImpeding = equippedArmors.reduce((acc: number, item: any) => {
         return acc + (Number(item.obstructive) || 0);
     }, 0);
-    
-    const defense = quick - armorImpeding; 
+    const defense = quick - armorImpeding;
 
-    // 4. Carga e Peso (Encumbrance)
-    // REGRA 1: Não multiplicar por quantidade (o peso inserido é o total da pilha)
-    const inventoryWeight = inventory.reduce((acc: number, item: any) => {
-      return acc + (Number(item.weight) || 0);
-    }, 0);
+    // 4. Vida Máxima
+    const maxHpBase = Math.max(10, strong);
+    // Se o campo for 0/vazio, assume 0. Sem fallbacks para campos antigos.
+    const bonusHp = Number(toughnessMaxMod) || 0;
+    const toughnessMax = maxHpBase + bonusHp;
 
-    // REGRA 1: Não multiplicar por quantidade para projéteis também
-    const projectilesWeight = projectiles.reduce((acc: number, item: any) => {
-        return acc + (Number(item.weight) || 0);
-    }, 0);
-
-    // REGRA 2: Armas e Armaduras NÃO contam peso (apenas o que está na mochila conta)
+    // 5. Carga
+    const inventoryWeight = inventory.reduce((acc: number, item: any) => acc + (Number(item.weight) || 0), 0);
+    const projectilesWeight = projectiles.reduce((acc: number, item: any) => acc + (Number(item.weight) || 0), 0);
     const totalWeight = inventoryWeight + projectilesWeight;
+    const maxLoad = strong > 0 ? strong : 10;
     
-    // Limite de Carga (Baseado em Força/Strong)
-    const maxLoad = strong > 0 ? strong : 10; 
-    
-    // Status de Carga
     let encumbranceStatus = "Leve";
     if (totalWeight > maxLoad) encumbranceStatus = "Sobrecarregado";
     else if (totalWeight > maxLoad / 2) encumbranceStatus = "Pesado";
 
-    // 5. XP
-    const totalXp = Number(experience?.total || 0);
-    const spentXp = Number(experience?.spent || 0);
-    const currentXp = totalXp - spentXp;
-
-    // 6. Corrupção
+    // 6. XP e Corrupção
+    const currentXp = (Number(experience?.total) || 0) - (Number(experience?.spent) || 0);
     const corruptionThreshold = Math.ceil(resolute / 2);
     const totalCorruption = (Number(corruption?.temporary) || 0) + (Number(corruption?.permanent) || 0);
 
-    // 7. Vida Máxima
-    const toughnessMax = Math.max(10, vigorous); 
-
-    // 8. Amoque Ativo?
+    // 7. Amoque
     const abilities = form.getValues("abilities") || [];
-    const activeBerserk = abilities.find(
-        (a: any) => a.name.toLowerCase().includes("amoque") && a.isActive
-    );
+    const activeBerserk = abilities.find((a: any) => a.name.toLowerCase().includes("amoque") && a.isActive);
 
     return {
+      strong,
+      quick,
       painThreshold,
       defense,
       totalDefense: defense,
       armorImpeding,
       totalWeight,
-      projectilesWeight,
       maxLoad,
       encumbranceStatus,
       currentExperience: currentXp,
@@ -94,14 +78,28 @@ export const useCharacterCalculations = () => {
     };
   }, [
     attributes, 
-    toughness, 
-    weapons, 
+    toughnessMaxMod, 
     armors, 
     inventory, 
     projectiles,
     experience, 
-    money, 
     corruption, 
     painThresholdBonus
   ]);
+
+  // 2. GUARDIÃO DA VIDA (UseEffect)
+  // Correção Automática: Se o Máximo mudar e ficar menor que o Atual, corta o excesso.
+  useEffect(() => {
+      const currentVal = Number(form.getValues("toughness.current")) || 0;
+      
+      if (currentVal > calculations.toughnessMax) {
+          // Usa setTimeout para evitar erro de atualização durante a renderização
+          const timer = setTimeout(() => {
+              form.setValue("toughness.current", calculations.toughnessMax, { shouldDirty: true });
+          }, 0);
+          return () => clearTimeout(timer);
+      }
+  }, [calculations.toughnessMax, form]); 
+
+  return calculations;
 };
