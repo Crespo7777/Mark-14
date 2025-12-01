@@ -1,48 +1,35 @@
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Importação dos Sub-Componentes Refatorados
+// Importação dos Sub-Componentes (Agora com visuais melhorados mas lógica original)
 import { MoneyCard } from "./backpack/MoneyCard";
 import { ExperienceCard } from "./backpack/ExperienceCard";
 import { EncumbranceCard } from "./backpack/EncumbranceCard";
 import { InventoryList } from "./backpack/InventoryList";
-import { ProjectileList } from "./backpack/ProjectileList"; // <--- Novo componente
+import { ProjectileList } from "./backpack/ProjectileList"; 
 
 export const BackpackTab = () => {
-  const { form, character } = useCharacterSheet();
+  const { character } = useCharacterSheet();
 
-  // Proteção contra carregamento
-  if (!character) {
-      return (
-        <div className="space-y-4 p-1">
-            <div className="grid grid-cols-3 gap-4">
-                <Skeleton className="h-32" /><Skeleton className="h-32" /><Skeleton className="h-32" />
-            </div>
-            <Skeleton className="h-64 w-full" />
-        </div>
-      );
-  }
+  if (!character) return <div className="p-4"><Skeleton className="h-64 w-full" /></div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300 pb-10">
+    <div className="space-y-6 animate-in fade-in duration-300 pb-10 h-full flex flex-col">
       
-      {/* 1. Status Cards (Dinheiro, XP, Peso) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <MoneyCard />
-        <ExperienceCard />
+      {/* 1. DASHBOARD DE STATUS (Grid 3 Colunas) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 shrink-0">
         <EncumbranceCard />
+        <MoneyCard /> 
+        <ExperienceCard />
       </div>
 
-      {/* 2. Listas de Itens */}
-      <div className="space-y-6">
+      {/* 2. LISTAS DE ITENS (Ocupam o resto do espaço) */}
+      <div className="flex-1 flex flex-col gap-6 min-h-0">
         
-        {/* Lista de Munição (Agora com dano +3 ou 1d4) */}
-        <ProjectileList 
-            control={form.control} 
-            tableId={character.table_id} 
-        />
+        {/* Munição (Compacta) */}
+        <ProjectileList tableId={character.table_id} control={null} />
         
-        {/* Lista de Inventário Geral */}
+        {/* Inventário Geral (Expandível e com scroll próprio) */}
         <InventoryList />
       </div>
 

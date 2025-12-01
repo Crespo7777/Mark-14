@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useCharacterSheet } from "./CharacterSheetContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,10 @@ import {
   ImagePlus,
   Camera,
   Settings2,
-  Move
+  Move,
+  ArrowLeft
 } from "lucide-react";
-import { Form, FormControl, FormField, FormItem } from "@/components/ui/form";
+import { Form } from "@/components/ui/form"; // Importante: usar o Form do shadcn para o contexto
 import { useToast } from "@/hooks/use-toast";
 import { ShareDialog } from "@/components/ShareDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,7 +43,12 @@ import { CharacterJournalTab } from "./tabs/CharacterJournalTab";
 import { EntityJournalTab } from "./tabs/EntityJournalTab";
 import { useCharacterCalculations } from "./hooks/useCharacterCalculations";
 
-export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean }) => {
+interface CharacterSheetProps {
+  isReadOnly?: boolean;
+  onBack?: () => void; // Opcional, para quando usado em página cheia
+}
+
+export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetProps) => {
   const context = useCharacterSheet();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("combat");
@@ -54,10 +60,10 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Hook de cálculos (já otimizado)
+  // Hook de cálculos
   const calculations = useCharacterCalculations(); 
 
-  // 1. Proteção contra falha no carregamento do contexto
+  // 1. Proteção: Se o contexto não existir (ex: erro de carregamento), mostra loading
   if (!context || !context.character) {
       return (
           <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4 text-muted-foreground">
@@ -68,35 +74,31 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
   }
 
   const { form, character, isDirty, isSaving, saveSheet } = context;
+  
+  // Garante que temos dados válidos para evitar erros de "undefined"
   const data = character.data || defaultCharacterData;
 
-  // 2. Sincronização segura com a base de dados (Realtime)
+  // 2. Sincronização: Se o banco atualizar (via realtime), atualiza o formulário
   useEffect(() => {
     if (character?.data) {
-        // Se o utilizador não estiver a mexer, atualiza os dados
+        // Só atualiza se o utilizador NÃO estiver a mexer no momento (form !dirty)
         if (!form.formState.isDirty) {
             const syncedData = { ...defaultCharacterData, ...character.data };
             form.reset(syncedData, { keepDirty: false });
         }
     }
-  }, [character?.data, form]); 
+  }, [character?.data, form]);
 
-  // 3. AUTO-SAVE INTELIGENTE (Debounce de 2s + Silencioso)
-  // Substitui o salvamento manual constante
+  // 3. AUTO-SAVE SILENCIOSO (Debounce 2s)
   useEffect(() => {
     const subscription = form.watch(() => {
       if (isReadOnly) return;
 
-      // Reinicia o cronómetro a cada tecla premida
       if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
 
       autoSaveTimeoutRef.current = setTimeout(() => {
-        // Só salva se houver mudanças reais
         if (form.formState.isDirty) {
-            // Chamamos o saveSheet do contexto.
-            // Nota: O saveSheet original pode mostrar Toast. Se quiseres silenciar,
-            // teríamos de alterar o Context, mas o debounce já reduz o spam visual.
-            saveSheet(); 
+            saveSheet(); // Chama a função do contexto
         }
       }, 2000);
     });
@@ -107,22 +109,22 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
     };
   }, [form, saveSheet, isReadOnly]);
 
-  // Leitura dos Dados para o Cabeçalho
+  // Leitura dos Dados (Segura)
   const currentXp = calculations.currentExperience; 
   const nextLevelXp = 100;
   const xpPercentage = Math.min(100, Math.max(0, (currentXp / nextLevelXp) * 100));
   
   const currentHp = form.watch("toughness.current") || 0;
-  const maxHp = calculations.toughnessMax;
+  // Usa o cálculo corrigido de Vida Máxima
+  const maxHp = calculations.toughnessMax; 
 
-  // Dados com fallback seguro
   const name = form.watch("name") || "Sem Nome";
   const archetype = form.watch("archetype") || "Aventureiro";
   const occupation = form.watch("occupation") || "Vagabundo";
   const imageUrl = form.watch("image_url");
-  const race = data.race || "Humano"; // Leitura segura do objeto data
+  const race = form.watch("race") || "Humano";
 
-  // Configurações de Imagem (Zoom/Posição)
+  // Configurações de Imagem
   const imageSettings = form.watch("data.image_settings") || { x: 50, y: 50, scale: 100 };
 
   const updateImageSettings = (key: string, value: number[]) => {
@@ -130,7 +132,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
       form.setValue("data.image_settings", newSettings, { shouldDirty: true });
   };
 
-  // Lógica de Upload
+  // Upload
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file || isReadOnly) return;
@@ -165,10 +167,11 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
     <Form {...form}>
       <form onSubmit={(e) => { e.preventDefault(); saveSheet(); }} className="h-full flex flex-col space-y-4">
         
-        {/* HEADER RICO (Visual Foundry) */}
-        <Card className="p-4 border-l-4 border-l-primary bg-card/50 m-4 mb-0">
+        {/* HEADER RICO (Estilo Foundry) */}
+        <Card className="p-4 border-l-4 border-l-primary bg-card/50 m-4 mb-0 shrink-0">
             <div className="flex flex-col md:flex-row gap-4 items-center md:items-start">
                 
+                {/* Input de Arquivo (Escondido) */}
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/png, image/jpeg, image/gif, image/webp" onChange={handleImageUpload} />
 
                 {/* FOTO E ENQUADRAMENTO */}
@@ -188,6 +191,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                                 <ImagePlus className="w-8 h-8 mb-1 opacity-50" />
                             </div>
                         )}
+                        
                         {!isReadOnly && imageUrl && (
                             <div onClick={triggerFileInput} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex items-center justify-center z-10">
                                 <Camera className="w-6 h-6 text-white/90" />
@@ -195,7 +199,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                         )}
                     </div>
 
-                    {/* BOTÃO ZOOM */}
+                    {/* Menu de Zoom */}
                     {!isReadOnly && imageUrl && (
                         <Popover>
                             <PopoverTrigger asChild>
@@ -220,23 +224,41 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                 <div className="flex-1 text-center md:text-left space-y-1 w-full">
                     <div className="flex flex-col md:flex-row justify-between items-center">
                         <div className="w-full">
-                            <FormField control={form.control} name="name" render={({ field }) => (
-                                <Input {...field} className="text-2xl font-bold tracking-tight text-primary border-none bg-transparent hover:bg-muted/30 px-0 h-auto focus-visible:ring-0 text-center md:text-left" placeholder="Nome do Personagem" readOnly={isReadOnly} />
-                            )}/>
+                            {/* Nome Editável */}
+                            <Input 
+                                {...form.register("name")} 
+                                className="text-2xl font-bold tracking-tight text-primary border-none bg-transparent hover:bg-muted/30 px-0 h-auto focus-visible:ring-0 text-center md:text-left shadow-none" 
+                                placeholder="Nome do Personagem" 
+                                readOnly={isReadOnly} 
+                            />
                             <div className="flex gap-2 justify-center md:justify-start text-sm text-muted-foreground items-center mt-1">
                                 <Badge variant="outline">{race}</Badge>
                                 <span className="flex items-center gap-1">• {occupation}</span>
                             </div>
                         </div>
                         
-                        {/* BOTÕES DE AÇÃO */}
+                        {/* AÇÕES (Voltar, Partilhar, Salvar) */}
                         <div className="flex gap-2 mt-2 md:mt-0 shrink-0">
+                            {onBack && (
+                                <Button variant="ghost" size="icon" onClick={onBack} title="Voltar">
+                                    <ArrowLeft className="w-4 h-4"/>
+                                </Button>
+                            )}
+                            
                             {!isReadOnly && (
                                 <>
                                     <ShareDialog itemTitle={character.name} currentSharedWith={character.shared_with_players || []} onSave={async () => {}}> 
                                         <Button variant="ghost" size="icon" type="button"><Share2 className="w-4 h-4"/></Button>
                                     </ShareDialog>
-                                    <Button type="button" onClick={() => saveSheet()} disabled={!isDirty || isSaving} variant={isDirty ? "default" : "secondary"} size="sm" className="min-w-[100px] transition-all">
+                                    
+                                    <Button 
+                                        type="button" 
+                                        onClick={() => saveSheet()} 
+                                        disabled={!isDirty || isSaving} 
+                                        variant={isDirty ? "default" : "secondary"} 
+                                        size="sm" 
+                                        className="min-w-[100px] transition-all"
+                                    >
                                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2"/> : <Save className="w-4 h-4 mr-2"/>}
                                         {isDirty ? "Salvar*" : "Salvo"}
                                     </Button>
@@ -247,7 +269,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
 
                     <Separator className="my-2" />
 
-                    {/* BARRAS DE VIDA E XP */}
+                    {/* BARRAS DE STATUS (HP / XP) */}
                     <div className="grid grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
                             <div className="flex justify-between">
@@ -268,7 +290,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
             </div>
         </Card>
 
-        {/* NAVEGAÇÃO E ABAS */}
+        {/* NAVEGAÇÃO DE ABAS */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
             <div className="px-4 overflow-x-auto pb-2 scrollbar-thin">
                 <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground w-full justify-start gap-1 min-w-max">
@@ -282,6 +304,7 @@ export const CharacterSheet = ({ isReadOnly = false }: { isReadOnly?: boolean })
                 </TabsList>
             </div>
 
+            {/* CONTEÚDO DAS ABAS */}
             <div className="flex-1 overflow-y-auto px-4 pb-4">
                 <div className={isReadOnly ? "pointer-events-none opacity-90 h-full" : "h-full"}>
                     <TabsContent value="details" className="mt-0 h-full"><DetailsTab /></TabsContent>
