@@ -1,58 +1,71 @@
 import { useNpcSheet } from "../NpcSheetContext";
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 
 export const useNpcCalculations = () => {
   const { form } = useNpcSheet();
 
-  // Observar mudanças no formulário
+  // Observar mudanças nos campos
   const attributes = form.watch("attributes");
   const armors = form.watch("armors") || [];
   
-  // Defesa agora é manual (vem de stats ou um campo específico)
-  // Assumimos que existe um campo 'stats.defense' ou usamos um valor base
-  const manualDefense = form.watch("stats.defense"); 
+  // --- INPUTS MANUAIS ---
+  // Agora o Limiar de Dor e Corrupção vêm de inputs diretos, sem calculo automatico
+  const manualDefense = form.watch("stats.defense");
+  const manualPainThreshold = form.watch("stats.pain_threshold");
+  const manualCorruptionThreshold = form.watch("stats.corruption_threshold");
   
   const toughnessMaxMod = form.watch("toughness.max_modifier");
-  const painThresholdBonus = Number(form.watch("painThresholdBonus") || 0);
   const corruption = form.watch("corruption");
 
+  // 1. CÁLCULOS (MEMOIZED)
   const calculations = useMemo(() => {
-    // 1. Atributos Básicos
+    // Mantemos leitura de atributos caso precise para outra coisa, mas não para os limiares
     const strong = Number(attributes?.vigorous?.value || 0);
-    const resolute = Number(attributes?.resolute?.value || 0);
 
-    // 2. Limiar de Dor
-    const basePainThreshold = Math.ceil(strong / 2);
-    const painThreshold = Math.max(1, basePainThreshold + painThresholdBonus);
-
-    // 3. Redução de Dano (DR) - Soma as proteções fixas
+    // Redução de Dano (Soma simples de valores numéricos nas armaduras)
     const damageReduction = armors.reduce((acc: number, item: any) => {
-        // Tenta converter a string de proteção para numero (ex: "3" vira 3, "1d4" vira 0)
         const protectionValue = parseInt(item.protection);
         return acc + (isNaN(protectionValue) ? 0 : protectionValue);
     }, 0);
 
-    // 4. Vida Máxima
+    // Vida Máxima (Mantemos o cálculo base ou 10, mas aceitando modificadores)
+    // Se quiser manual total na vida maxima também, avise. Por enquanto mantive a base de Strong.
     const maxHpBase = Math.max(10, strong);
     const bonusHp = Number(toughnessMaxMod) || 0;
     const toughnessMax = maxHpBase + bonusHp;
 
-    // 5. Corrupção
-    const corruptionThreshold = Math.ceil(resolute / 2);
+    // Corrupção Total Atual
     const totalCorruption = (Number(corruption?.temporary) || 0) + (Number(corruption?.permanent) || 0);
 
     return {
-      strong,
-      resolute,
-      painThreshold,
-      // Se manualDefense for nulo, assume 0.
-      totalDefense: Number(manualDefense) || 0, 
+      // Valores manuais com fallback para 0 se estiverem vazios
+      painThreshold: Number(manualPainThreshold) || 0,
+      corruptionThreshold: Number(manualCorruptionThreshold) || 0,
+      totalDefense: Number(manualDefense) || 0,
+      
       toughnessMax,
-      corruptionThreshold,
       totalCorruption,
-      damageReduction // Novo campo exportado
+      damageReduction
     };
-  }, [attributes, toughnessMaxMod, painThresholdBonus, armors, corruption, manualDefense]);
+  }, [attributes, toughnessMaxMod, armors, corruption, manualDefense, manualPainThreshold, manualCorruptionThreshold]);
+
+
+  // 2. GUARDIÃO DE ESTADO
+  useEffect(() => {
+    const currentToughness = form.getValues("toughness.current");
+    const max = calculations.toughnessMax;
+
+    // Inicialização segura
+    if (currentToughness === undefined || currentToughness === null) {
+        form.setValue("toughness.current", max);
+        return; 
+    }
+
+    // Clamping (Cortar excesso de vida)
+    if (currentToughness > max) {
+        form.setValue("toughness.current", max, { shouldDirty: true, shouldTouch: true });
+    }
+  }, [calculations.toughnessMax, form]);
 
   return calculations;
 };
