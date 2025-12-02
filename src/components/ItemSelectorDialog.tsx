@@ -1,6 +1,4 @@
-// src/components/ItemSelectorDialog.tsx
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -21,15 +19,18 @@ interface ItemSelectorDialogProps {
   tableId: string;
   categories?: string[];
   category?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode; // Tornar opcional caso não tenha trigger
   onSelect: (template: ItemTemplate | null) => void;
   title?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
+// --- OTIMIZAÇÃO: Select apenas colunas necessárias ---
 const fetchItemsForSelector = async (tableId: string, categories: string[]) => {
   let query = supabase
     .from("item_templates")
-    .select("*")
+    .select("id, name, description, category, weight, data") 
     .eq("table_id", tableId)
     .order("name");
     
@@ -42,28 +43,41 @@ const fetchItemsForSelector = async (tableId: string, categories: string[]) => {
   return data as ItemTemplate[];
 };
 
-export const ItemSelectorDialog = ({ tableId, categories, category, children, onSelect, title }: ItemSelectorDialogProps) => {
+export const ItemSelectorDialog = ({ tableId, categories, category, children, onSelect, title, open: controlledOpen, onOpenChange }: ItemSelectorDialogProps) => {
   const targetCategories = categories || (category ? [category] : []);
   
-  const [open, setOpen] = useState(false);
+  // Controle híbrido (interno ou externo)
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setIsOpen = onOpenChange || setInternalOpen;
+
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeTab, setActiveTab] = useState(targetCategories[0] || "all");
+
+  // --- OTIMIZAÇÃO: Debounce na pesquisa ---
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        setDebouncedSearch(search);
+    }, 300); // 300ms delay
+    return () => clearTimeout(timer);
+  }, [search]);
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['item_templates', tableId, targetCategories.join(',')],
     queryFn: () => fetchItemsForSelector(tableId, targetCategories),
-    enabled: open,
+    enabled: isOpen,
   });
 
   const filteredItems = items.filter(i => {
-      const matchesSearch = i.name.toLowerCase().includes(search.toLowerCase());
+      const matchesSearch = i.name.toLowerCase().includes(debouncedSearch.toLowerCase());
       const matchesTab = targetCategories.length > 1 ? i.category === activeTab : true;
       return matchesSearch && matchesTab;
   });
 
   const handleSelect = (item: ItemTemplate | null) => {
     onSelect(item);
-    setOpen(false);
+    setIsOpen(false);
   };
 
   // Ícones completos para todas as categorias
@@ -125,8 +139,8 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {children && <DialogTrigger asChild>{children}</DialogTrigger>}
       <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
