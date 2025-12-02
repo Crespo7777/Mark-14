@@ -40,7 +40,7 @@ import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcCombatEquipmentTab } from "./tabs/NpcCombatEquipmentTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
 import { NpcAbilitiesTraitsTab } from "./tabs/NpcAbilitiesTraitsTab";
-import { SharedInventoryList } from "@/components/SharedInventoryList";
+import { NpcInventoryTab } from "./tabs/NpcInventoryTab"; // <--- IMPORTADO O NOVO COMPONENTE
 import { NpcJournalTab } from "./tabs/NpcJournalTab";
 
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
@@ -320,9 +320,12 @@ const NpcSheetInner = ({
                  <TabsContent value="attributes" className="mt-0"><NpcAttributesTab /></TabsContent>
                  <TabsContent value="combat_equip" className="mt-0"><NpcCombatEquipmentTab /></TabsContent>
                  <TabsContent value="abilities_traits" className="mt-0"><NpcAbilitiesTraitsTab /></TabsContent>
-                 <TabsContent value="backpack" className="mt-0">
-                     <SharedInventoryList control={form.control} name="inventory" isReadOnly={isReadOnly} />
+                 
+                 {/* SUBSTITUIÇÃO AQUI: USANDO NpcInventoryTab */}
+                 <TabsContent value="backpack" className="mt-0 h-full">
+                     <NpcInventoryTab />
                  </TabsContent>
+                 
                  <TabsContent value="journal" className="mt-0"><NpcJournalTab /></TabsContent>
               </div>
             </Tabs>
@@ -349,7 +352,7 @@ const NpcSheetInner = ({
   );
 };
 
-// --- WRAPPER PRINCIPAL (CORRIGIDO) ---
+// --- WRAPPER PRINCIPAL ---
 export const NpcSheet = ({ initialNpc, onClose }: NpcSheetProps) => {
   const queryClient = useQueryClient();
 
