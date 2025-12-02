@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch"; // Importado Switch
+import { Switch } from "@/components/ui/switch"; 
 import { parseDiceRoll, formatAttributeRoll } from "@/lib/dice-parser";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Dices, Eye, EyeOff } from "lucide-react";
-import { useTableContext } from "@/features/table/TableContext"; // Importado Contexto
+import { useTableContext } from "@/features/table/TableContext"; 
 
 interface WeaponAttackDialogProps {
   open: boolean;
@@ -34,19 +34,18 @@ export const WeaponAttackDialog = ({
   onConfirm
 }: WeaponAttackDialogProps) => {
   const { toast } = useToast();
-  const { isMaster } = useTableContext(); // Pegar isMaster
+  const { isMaster } = useTableContext(); 
   
   const [modifier, setModifier] = useState("0");
   const [advantage, setAdvantage] = useState(false);
   const [disadvantage, setDisadvantage] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
   
-  // Estado de Visibilidade (Iniciado conforme Mestre/Jogador)
   const [isHidden, setIsHidden] = useState(false);
 
   useEffect(() => {
       if (open) {
-          setIsHidden(isMaster); // Mestre começa escondido
+          setIsHidden(isMaster); // Mestre começa escondido, Jogador público
           setModifier("0");
       }
   }, [open, isMaster]);
@@ -69,7 +68,7 @@ export const WeaponAttackDialog = ({
       const criticalSuccess = rollResult.total === 1;
       const criticalFailure = rollResult.total === 20;
 
-      // Feedback Local (Sempre visível para quem rola)
+      // Feedback Local (Sempre aparece para quem rolou)
       toast({
         title: isSuccess ? "Sucesso!" : "Falha!",
         description: `Rolou ${rollResult.total} vs ${targetValue} (${attributeName})`,
@@ -79,16 +78,14 @@ export const WeaponAttackDialog = ({
       if (tableId) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-            // Salvar no Chat do Banco
             await supabase.from("chat_messages").insert({
                 table_id: tableId,
                 user_id: user.id,
                 message: formatAttributeRoll(characterName, attributeName, rollResult, targetValue, weaponName),
                 message_type: "roll",
-                is_hidden: isHidden, // Usa o estado
+                is_hidden: isHidden, // Usa o estado correto
             });
 
-            // Enviar para Discord
             const discordData = {
                 rollType: "attack",
                 weaponName,
@@ -98,7 +95,7 @@ export const WeaponAttackDialog = ({
                 isSuccess,
                 isCrit: criticalSuccess,
                 isFumble: criticalFailure,
-                isHidden // Envia flag para Discord handler (para saber se deve esconder ou formatar diferente)
+                isHidden 
             };
 
             supabase.functions.invoke('discord-roll-handler', {
@@ -128,9 +125,7 @@ export const WeaponAttackDialog = ({
         
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="modifier" className="text-right">
-              Modificador
-            </Label>
+            <Label htmlFor="modifier" className="text-right">Modificador</Label>
             <Input
               id="modifier"
               type="number"
@@ -143,48 +138,35 @@ export const WeaponAttackDialog = ({
           
           <div className="flex justify-center gap-6">
             <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="advantage" 
-                checked={advantage} 
-                onCheckedChange={(c) => { 
-                    setAdvantage(!!c); 
-                    if(c) setDisadvantage(false); 
-                }} 
-              />
+              <Checkbox id="advantage" checked={advantage} onCheckedChange={(c) => { setAdvantage(!!c); if(c) setDisadvantage(false); }} />
               <Label htmlFor="advantage">Vantagem</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="disadvantage" 
-                checked={disadvantage} 
-                onCheckedChange={(c) => { 
-                    setDisadvantage(!!c); 
-                    if(c) setAdvantage(false); 
-                }} 
-              />
+              <Checkbox id="disadvantage" checked={disadvantage} onCheckedChange={(c) => { setDisadvantage(!!c); if(c) setAdvantage(false); }} />
               <Label htmlFor="disadvantage">Desvantagem</Label>
             </div>
           </div>
 
-          {/* SWITCH DE VISIBILIDADE (Mesma lógica do BaseRollDialog) */}
-          <div className="flex items-center justify-between border p-3 rounded-md bg-muted/20">
-            <div className="space-y-0.5">
-                <Label className="flex items-center gap-2">
-                    {isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>}
-                    {isMaster ? "Rolar Publicamente" : "Rolar Escondido"}
-                </Label>
+          {/* CORREÇÃO: Visível APENAS para o Mestre */}
+          {isMaster && (
+            <div className="flex items-center justify-between border p-3 rounded-md bg-muted/20">
+                <div className="space-y-0.5">
+                    <Label className="flex items-center gap-2">
+                        {isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>}
+                        Rolar Publicamente?
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">{isHidden ? "Privado (GM)" : "Público"}</p>
+                </div>
+                <Switch
+                checked={!isHidden}
+                onCheckedChange={(checked) => setIsHidden(!checked)}
+                />
             </div>
-            <Switch
-              checked={isMaster ? !isHidden : isHidden}
-              onCheckedChange={(checked) => isMaster ? setIsHidden(!checked) : setIsHidden(checked)}
-            />
-          </div>
+          )}
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>
-            Cancelar
-          </Button>
+          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancelar</Button>
           <Button type="submit" onClick={handleRoll} disabled={isRolling}>
             {isRolling ? <Dices className="mr-2 h-4 w-4 animate-spin" /> : <Dices className="mr-2 h-4 w-4" />}
             Rolar Ataque
