@@ -3,7 +3,7 @@ import { useNpcSheet } from "../NpcSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Sword, Dices, Trash2, Plus, Target, Database, PenTool } from "lucide-react";
+import { Shield, Sword, Dices, Trash2, Plus, Target, Database, PenTool, Minus, Crosshair } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
 import { WeaponDamageDialog } from "@/components/WeaponDamageDialog";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { QualityInfoButton } from "@/components/QualityInfoButton";
+import { QualitySelector } from "@/components/QualitySelector";
 
 import { useCombatLogic } from "@/features/combat/hooks/useCombatLogic";
 import { useNpcCalculations } from "../hooks/useNpcCalculations";
@@ -29,6 +30,7 @@ export const NpcCombatEquipmentTab = () => {
   const { toast } = useToast();
   
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
+  const [openProjectiles, setOpenProjectiles] = useState<string[]>([]); 
   
   const [isWeaponSelectorOpen, setIsWeaponSelectorOpen] = useState(false);
   const [isArmorSelectorOpen, setIsArmorSelectorOpen] = useState(false);
@@ -43,19 +45,28 @@ export const NpcCombatEquipmentTab = () => {
       fields: { currentToughness: "toughness.current", maxToughness: "toughness.max" }
   });
 
-  // Funções Manuais (Fallback)
+  // --- Funções Manuais (Fallback) ---
   const addManualWeapon = () => appendWeapon({ name: "Nova Arma", damage: "1d6", attackAttribute: "vigorous", quality_desc: "", is_natural: false });
   const addManualArmor = () => appendArmor({ name: "Nova Armadura", protection: "0", obstructive: 0, equipped: true, quality_desc: "" });
-  const addManualProjectile = () => appendProjectile({ id: crypto.randomUUID(), name: "Munição", amount: 10, damage_bonus: "0", quality_desc: "" });
+  
+  // ATUALIZADO: Inicializa com attack_bonus
+  const addManualProjectile = () => appendProjectile({ 
+      id: crypto.randomUUID(), 
+      name: "Nova Munição", 
+      amount: 10, 
+      damage_bonus: "0", 
+      attack_bonus: "0", 
+      quality_desc: "" 
+  });
 
-  // Funções do Banco de Dados
+  // --- Funções do Banco de Dados ---
   const handleAddWeapon = (item: any) => {
-      const stats = item.stats || {};
+      const data = item.data || {}; 
       appendWeapon({ 
           name: item.name, 
-          damage: stats.damage || "1d6", 
-          attackAttribute: stats.attribute || "vigorous", 
-          quality_desc: stats.qualities ? JSON.stringify(stats.qualities) : "",
+          damage: data.damage || "1d6", 
+          attackAttribute: data.attackAttribute || "vigorous", 
+          quality_desc: data.quality ? data.quality : "", 
           is_natural: false
       });
       setIsWeaponSelectorOpen(false);
@@ -63,26 +74,28 @@ export const NpcCombatEquipmentTab = () => {
   };
 
   const handleAddArmor = (item: any) => {
-      const stats = item.stats || {};
+      const data = item.data || {};
       appendArmor({
           name: item.name,
-          protection: stats.protection || "0",
-          obstructive: stats.impeding || 0,
+          protection: data.protection || "0",
+          obstructive: Number(data.obstructive) || 0,
           equipped: true,
-          quality_desc: stats.qualities ? JSON.stringify(stats.qualities) : ""
+          quality_desc: data.quality ? data.quality : "" 
       });
       setIsArmorSelectorOpen(false);
       toast({ title: "Item Importado", description: `${item.name} equipado.` });
   };
 
+  // ATUALIZADO: Inicializa com attack_bonus
   const handleAddProjectile = (item: any) => {
-      const stats = item.stats || {};
+      const data = item.data || {};
       appendProjectile({
           id: crypto.randomUUID(),
           name: item.name,
           amount: 20, 
-          damage_bonus: stats.damage_bonus || "",
-          quality_desc: stats.qualities ? JSON.stringify(stats.qualities) : ""
+          damage_bonus: data.damage || "0", 
+          attack_bonus: "0", // Padrão 0, editável na ficha
+          quality_desc: data.quality ? data.quality : "" 
       });
       setIsProjectileSelectorOpen(false);
       toast({ title: "Item Importado", description: `${item.name} adicionado.` });
@@ -110,6 +123,12 @@ export const NpcCombatEquipmentTab = () => {
       } catch (e) {
           return [qualityStr];
       }
+  };
+
+  const handleAmmoChange = (index: number, change: number) => {
+      const current = Number(form.getValues(`projectiles.${index}.amount`)) || 0;
+      const newValue = Math.max(0, current + change);
+      form.setValue(`projectiles.${index}.amount`, newValue);
   };
 
   return (
@@ -226,7 +245,12 @@ export const NpcCombatEquipmentTab = () => {
                                         ))}
                                     </div>
                                     <FormField control={form.control} name={`weapons.${index}.quality_desc`} render={({ field }) => (
-                                       <Textarea {...field} className="h-10 text-xs resize-none" placeholder="Qualidades (JSON)" />
+                                       <QualitySelector 
+                                            tableId={npc.table_id}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            targetType="weapon"
+                                       />
                                     )} />
                                 </div>
                             </AccordionContent>
@@ -236,8 +260,8 @@ export const NpcCombatEquipmentTab = () => {
             </CardContent>
           </Card>
 
-          {/* ARMADURAS E MUNIÇÃO */}
           <div className="flex flex-col gap-4">
+              {/* ARMADURAS */}
               <Card className="flex flex-col border-t-4 border-t-slate-500 shadow-sm">
                 <CardHeader className="py-3 px-4 bg-muted/10 border-b flex flex-row items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -278,15 +302,26 @@ export const NpcCombatEquipmentTab = () => {
                                         <div className="space-y-1 flex-1"><FormLabel className="text-[10px]">Defesa</FormLabel><Input {...field} className="h-7 text-xs" type="number" /></div>
                                     )} />
                                 </div>
+                                <div>
+                                    <FormField control={form.control} name={`armors.${index}.quality_desc`} render={({ field }) => (
+                                       <QualitySelector 
+                                            tableId={npc.table_id}
+                                            value={field.value}
+                                            onChange={field.onChange}
+                                            targetType="armor"
+                                       />
+                                    )} />
+                                </div>
                             </div>
                         )})}
                     </div>
                 </CardContent>
               </Card>
 
+              {/* MUNIÇÃO - ATUALIZADO */}
               <Card className="flex flex-col border-t-4 border-t-yellow-600 shadow-sm flex-1">
                 <CardHeader className="py-2 px-4 bg-muted/10 border-b flex flex-row items-center justify-between">
-                    <CardTitle className="text-sm flex items-center gap-2"><Target className="w-4 h-4 text-yellow-600" /> Munição</CardTitle>
+                    <CardTitle className="text-sm flex items-center gap-2"><Target className="w-4 h-4 text-yellow-600" /> Munição & Projéteis</CardTitle>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="h-6 w-6 p-0"><Plus className="w-4 h-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -295,26 +330,151 @@ export const NpcCombatEquipmentTab = () => {
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </CardHeader>
-                <CardContent className="p-2 space-y-1 overflow-y-auto max-h-[150px]">
+                <CardContent className="p-2 space-y-1 overflow-y-auto max-h-[300px]">
                      {projectileFields.length === 0 && <div className="text-center text-xs text-muted-foreground py-2">Sem munição</div>}
-                     {projectileFields.map((field, index) => (
-                         <div key={field.id} className="flex items-center gap-2 border rounded p-1 bg-card">
-                             <div className="flex-1 min-w-0">
-                                 <div className="text-xs font-medium truncate">{form.watch(`projectiles.${index}.name`)}</div>
-                                 <div className="text-[10px] text-muted-foreground flex gap-2"><span>Qtd: {form.watch(`projectiles.${index}.amount`)}</span></div>
-                             </div>
-                             <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeProjectile(index)}><Trash2 className="w-3 h-3" /></Button>
-                         </div>
-                     ))}
+                     
+                     <Accordion type="multiple" className="space-y-2" value={openProjectiles} onValueChange={setOpenProjectiles}>
+                        {projectileFields.map((field, index) => {
+                            const qualities = parseQualities(form.watch(`projectiles.${index}.quality_desc`));
+                            const currentAmount = form.watch(`projectiles.${index}.amount`);
+                            const damageBonus = form.watch(`projectiles.${index}.damage_bonus`);
+                            const attackBonus = form.watch(`projectiles.${index}.attack_bonus`);
+                            
+                            return (
+                            <AccordionItem key={field.id} value={field.id} className="border rounded bg-card px-2">
+                                <div className="flex items-center justify-between py-2">
+                                    <AccordionTrigger className="p-0 hover:no-underline flex-1 py-1 mr-2">
+                                        <div className="flex flex-col items-start text-left gap-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="font-semibold text-xs">{form.watch(`projectiles.${index}.name`) || "Munição"}</span>
+                                                {/* BADGES VISUAIS NO CABEÇALHO */}
+                                                {damageBonus && damageBonus !== "0" && (
+                                                    <Badge variant="outline" className="text-[9px] h-3 px-1 border-destructive/50 text-destructive bg-destructive/5">
+                                                        +{damageBonus} Dano
+                                                    </Badge>
+                                                )}
+                                                {attackBonus && attackBonus !== "0" && (
+                                                    <Badge variant="outline" className="text-[9px] h-3 px-1 border-blue-500/50 text-blue-600 bg-blue-500/5">
+                                                        +{attackBonus} Acerto
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {qualities.length > 0 && (
+                                                <div className="flex gap-1 flex-wrap">
+                                                    {qualities.slice(0, 2).map((q: any, i: number) => (
+                                                        <Badge key={i} variant="secondary" className="text-[9px] h-3 px-1">{typeof q === 'string' ? q : q.name}</Badge>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </AccordionTrigger>
+
+                                    {/* CONTROLO RÁPIDO DE QUANTIDADE */}
+                                    <div className="flex items-center bg-muted/30 rounded border border-border mr-2">
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6 rounded-r-none hover:bg-destructive/20 hover:text-destructive"
+                                            onClick={(e) => { e.stopPropagation(); handleAmmoChange(index, -1); }}
+                                        >
+                                            <Minus className="w-3 h-3" />
+                                        </Button>
+                                        <span className="text-xs font-mono w-8 text-center font-bold">{currentAmount}</span>
+                                        <Button 
+                                            type="button" 
+                                            variant="ghost" 
+                                            size="icon" 
+                                            className="h-6 w-6 rounded-l-none hover:bg-primary/20 hover:text-primary"
+                                            onClick={(e) => { e.stopPropagation(); handleAmmoChange(index, 1); }}
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                        </Button>
+                                    </div>
+
+                                    <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-destructive opacity-50 hover:opacity-100" onClick={() => removeProjectile(index)}>
+                                        <Trash2 className="w-3 h-3" />
+                                    </Button>
+                                </div>
+
+                                <AccordionContent className="border-t pt-2 space-y-3">
+                                    <div className="grid grid-cols-6 gap-2">
+                                        <FormField control={form.control} name={`projectiles.${index}.name`} render={({ field }) => (
+                                            <div className="col-span-4 space-y-1"><FormLabel className="text-[10px]">Nome</FormLabel><Input {...field} className="h-7 text-xs" /></div>
+                                        )} />
+                                        <FormField control={form.control} name={`projectiles.${index}.amount`} render={({ field }) => (
+                                            <div className="col-span-2 space-y-1"><FormLabel className="text-[10px]">Qtd.</FormLabel><Input {...field} type="number" className="h-7 text-xs" /></div>
+                                        )} />
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <FormField control={form.control} name={`projectiles.${index}.damage_bonus`} render={({ field }) => (
+                                            <div className="space-y-1">
+                                                <FormLabel className="text-[10px] text-destructive">Bónus Dano</FormLabel>
+                                                <Input {...field} className="h-7 text-xs" placeholder="+0 ou 1d4" />
+                                            </div>
+                                        )} />
+                                        
+                                        {/* NOVO CAMPO: BÓNUS DE ACERTO */}
+                                        <FormField control={form.control} name={`projectiles.${index}.attack_bonus`} render={({ field }) => (
+                                            <div className="space-y-1">
+                                                <FormLabel className="text-[10px] text-blue-600">Bónus Acerto</FormLabel>
+                                                <Input {...field} className="h-7 text-xs" placeholder="+0" />
+                                            </div>
+                                        )} />
+                                        
+                                        {/* Botões de Ação para Arremesso (Se for granada/adaga) */}
+                                        <div className="col-span-2 flex items-end gap-1 pt-1">
+                                            <Button type="button" size="sm" variant="secondary" className="h-7 flex-1 text-[10px]" disabled title="Futuro: Rolar arremesso">
+                                                <Crosshair className="w-3 h-3 mr-1" /> Arremessar / Usar
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <FormField control={form.control} name={`projectiles.${index}.quality_desc`} render={({ field }) => (
+                                           <QualitySelector 
+                                                tableId={npc.table_id}
+                                                value={field.value}
+                                                onChange={field.onChange}
+                                                targetType="ammunition" 
+                                           />
+                                        )} />
+                                    </div>
+                                </AccordionContent>
+                            </AccordionItem>
+                            );
+                        })}
+                     </Accordion>
                 </CardContent>
               </Card>
           </div>
       </div>
 
-      {/* --- AQUI ESTAVA O ERRO: NOMES EM PORTUGUÊS --- */}
-      <ItemSelectorDialog open={isWeaponSelectorOpen} onOpenChange={setIsWeaponSelectorOpen} type="Arma" tableId={npc.table_id} onSelect={handleAddWeapon} />
-      <ItemSelectorDialog open={isArmorSelectorOpen} onOpenChange={setIsArmorSelectorOpen} type="Armadura" tableId={npc.table_id} onSelect={handleAddArmor} />
-      <ItemSelectorDialog open={isProjectileSelectorOpen} onOpenChange={setIsProjectileSelectorOpen} type="Munição" tableId={npc.table_id} onSelect={handleAddProjectile} />
+      <ItemSelectorDialog 
+          open={isWeaponSelectorOpen} 
+          onOpenChange={setIsWeaponSelectorOpen} 
+          category="weapon" 
+          title="Selecionar Arma"
+          tableId={npc.table_id} 
+          onSelect={handleAddWeapon} 
+      />
+      <ItemSelectorDialog 
+          open={isArmorSelectorOpen} 
+          onOpenChange={setIsArmorSelectorOpen} 
+          category="armor" 
+          title="Selecionar Armadura"
+          tableId={npc.table_id} 
+          onSelect={handleAddArmor} 
+      />
+      <ItemSelectorDialog 
+          open={isProjectileSelectorOpen} 
+          onOpenChange={setIsProjectileSelectorOpen} 
+          category="ammunition" 
+          title="Selecionar Munição"
+          tableId={npc.table_id} 
+          onSelect={handleAddProjectile} 
+      />
 
       {/* Rolagens */}
       {combatLogic.attackRollData && <WeaponAttackDialog open={!!combatLogic.attackRollData} onOpenChange={(o) => !o && combatLogic.setAttackRollData(null)} characterName={npc.name} tableId={npc.table_id} {...combatLogic.attackRollData} />}
