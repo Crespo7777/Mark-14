@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch"; // Importado Switch
 import { parseDiceRoll, formatAttributeRoll } from "@/lib/dice-parser";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Dices } from "lucide-react";
+import { Dices, Eye, EyeOff } from "lucide-react";
+import { useTableContext } from "@/features/table/TableContext"; // Importado Contexto
 
 interface WeaponAttackDialogProps {
   open: boolean;
@@ -18,7 +20,7 @@ interface WeaponAttackDialogProps {
   attributeName: string;
   attributeValue: number;
   projectileId?: string;
-  onConfirm?: () => void; // <--- NOVA PROP PARA CONSUMO
+  onConfirm?: () => void;
 }
 
 export const WeaponAttackDialog = ({
@@ -32,25 +34,32 @@ export const WeaponAttackDialog = ({
   onConfirm
 }: WeaponAttackDialogProps) => {
   const { toast } = useToast();
+  const { isMaster } = useTableContext(); // Pegar isMaster
+  
   const [modifier, setModifier] = useState("0");
   const [advantage, setAdvantage] = useState(false);
   const [disadvantage, setDisadvantage] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
+  
+  // Estado de Visibilidade (Iniciado conforme Mestre/Jogador)
+  const [isHidden, setIsHidden] = useState(false);
+
+  useEffect(() => {
+      if (open) {
+          setIsHidden(isMaster); // Mestre começa escondido
+          setModifier("0");
+      }
+  }, [open, isMaster]);
 
   const handleRoll = async () => {
     setIsRolling(true);
     
-    // 1. Consumir Munição (se houver callback)
     if (onConfirm) {
         onConfirm();
     }
 
-    // 2. Lógica de Rolagem
     const modValue = parseInt(modifier) || 0;
     const targetValue = attributeValue + modValue;
-    
-    // Fórmula base: 1d20 vs Atributo Modificado
-    // Em Symbaroum, sucesso é rolar MENOS ou IGUAL ao atributo modificado.
     
     const diceString = advantage ? "2d20kl1" : disadvantage ? "2d20kh1" : "1d20";
     const rollResult = parseDiceRoll(diceString);
@@ -60,14 +69,13 @@ export const WeaponAttackDialog = ({
       const criticalSuccess = rollResult.total === 1;
       const criticalFailure = rollResult.total === 20;
 
-      // Feedback Local
+      // Feedback Local (Sempre visível para quem rola)
       toast({
         title: isSuccess ? "Sucesso!" : "Falha!",
         description: `Rolou ${rollResult.total} vs ${targetValue} (${attributeName})`,
         variant: isSuccess ? "default" : "destructive",
       });
 
-      // Enviar para Chat/Discord
       if (tableId) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -76,7 +84,8 @@ export const WeaponAttackDialog = ({
                 table_id: tableId,
                 user_id: user.id,
                 message: formatAttributeRoll(characterName, attributeName, rollResult, targetValue, weaponName),
-                message_type: "roll"
+                message_type: "roll",
+                is_hidden: isHidden, // Usa o estado
             });
 
             // Enviar para Discord
@@ -88,7 +97,8 @@ export const WeaponAttackDialog = ({
                 result: rollResult,
                 isSuccess,
                 isCrit: criticalSuccess,
-                isFumble: criticalFailure
+                isFumble: criticalFailure,
+                isHidden // Envia flag para Discord handler (para saber se deve esconder ou formatar diferente)
             };
 
             supabase.functions.invoke('discord-roll-handler', {
@@ -154,6 +164,20 @@ export const WeaponAttackDialog = ({
               />
               <Label htmlFor="disadvantage">Desvantagem</Label>
             </div>
+          </div>
+
+          {/* SWITCH DE VISIBILIDADE (Mesma lógica do BaseRollDialog) */}
+          <div className="flex items-center justify-between border p-3 rounded-md bg-muted/20">
+            <div className="space-y-0.5">
+                <Label className="flex items-center gap-2">
+                    {isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>}
+                    {isMaster ? "Rolar Publicamente" : "Rolar Escondido"}
+                </Label>
+            </div>
+            <Switch
+              checked={isMaster ? !isHidden : isHidden}
+              onCheckedChange={(checked) => isMaster ? setIsHidden(!checked) : setIsHidden(checked)}
+            />
           </div>
         </div>
 

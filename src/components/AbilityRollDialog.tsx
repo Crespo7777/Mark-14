@@ -6,8 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, AlertOctagon, Hand } from "lucide-react";
 import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Separator } from "@/components/ui/separator";
 import { useTableContext } from "@/features/table/TableContext";
 import { useCharacterCalculations } from "@/features/character/hooks/useCharacterCalculations";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -50,7 +48,8 @@ export const AbilityRollDialog = ({
   
   const { corruptionThreshold } = useCharacterCalculations();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
-  const [isHidden, setIsHidden] = useState(false);
+  
+  // REMOVED: const [isHidden, setIsHidden] = useState(false); - Managed by BaseRollDialog
 
   // Lê a corrupção atual (do form se disponível, senão assume 0 para não quebrar)
   const currentTempCorruption = form ? (form.watch("corruption.temporary") || 0) : 0;
@@ -76,7 +75,8 @@ export const AbilityRollDialog = ({
   const isOverThreshold = projectedCorruption !== null && projectedCorruption > corruptionThreshold;
   const isAtThreshold = projectedCorruption !== null && projectedCorruption === corruptionThreshold;
 
-  const handleRoll = async () => {
+  // UPDATED: Accepts isHidden from BaseRollDialog
+  const handleRoll = async (isHidden: boolean) => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
@@ -122,17 +122,19 @@ export const AbilityRollDialog = ({
        chatMessage = `${characterName} usou <span class="text-primary-foreground font-bold">${abilityName}</span>.`;
        if (appliedCost > 0) chatMessage += `\n<span class="text-purple-400">(Recebeu +${appliedCost} Corrupção Temporária${costMessage})</span>`;
        
-       discordRollData = { rollType: "manual", command: `usou ${abilityName}`, result: { rolls: [], modifier: 0, total: 0 } };
+       discordRollData = { rollType: "manual", command: `usou ${abilityName}`, result: { rolls: [], modifier: 0, total: 0 }, isHidden };
        
-       toast({ 
-           title: `${abilityName} usado`, 
-           description: appliedCost > 0 ? `+${appliedCost} Corrupção aplicada.` : "Sem custo.", 
-           action: <div className="flex items-center gap-2 text-primary font-bold"><Hand className="w-4 h-4"/> Usado</div> 
-       });
+       if (!isHidden || isMaster) {
+           toast({ 
+               title: `${abilityName} usado`, 
+               description: appliedCost > 0 ? `+${appliedCost} Corrupção aplicada.` : "Sem custo.", 
+               action: <div className="flex items-center gap-2 text-primary font-bold"><Hand className="w-4 h-4"/> Usado</div> 
+           });
+       }
     } else {
        const result = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: false });
        chatMessage = formatAbilityTest(characterName, abilityName, attributeName, result, appliedCost) + (costMessage ? `\n🎲 Corrupção: ${costMessage}` : "");
-       discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result };
+       discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result, isHidden };
        
        if (!isHidden || isMaster) {
            toast({ title: `Teste de ${abilityName}`, description: `Resultado: ${result.totalRoll} (Alvo: ${result.target})` });
@@ -148,7 +150,13 @@ export const AbilityRollDialog = ({
           { table_id: targetTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
       ]);
     } else {
-      await supabase.from("chat_messages").insert({ table_id: targetTableId, user_id: user.id, message: chatMessage, message_type: "roll" });
+      await supabase.from("chat_messages").insert({ 
+          table_id: targetTableId, 
+          user_id: user.id, 
+          message: chatMessage, 
+          message_type: "roll",
+          is_hidden: isHidden 
+      });
       supabase.functions.invoke('discord-roll-handler', { 
           body: { tableId: targetTableId, rollData: discordRollData, userName: characterName, chatMessage: isNoRoll ? chatMessage : undefined } 
       }).catch(console.error);
@@ -156,7 +164,6 @@ export const AbilityRollDialog = ({
 
     setLoading(false);
     onOpenChange(false);
-    setIsHidden(false);
   };
 
   return (
@@ -165,8 +172,8 @@ export const AbilityRollDialog = ({
       onOpenChange={onOpenChange}
       title={isNoRoll ? `Usar: ${abilityName}` : `Testar: ${abilityName}`}
       description={isNoRoll ? "Esta habilidade não requer teste de atributo." : `Teste de ${attributeName} (Alvo: ${attributeValue}).`}
-      onRoll={handleRoll}
-      loading={loading || isSaving}
+      onRoll={handleRoll} // Passes function receiving isHidden
+      loading={loading} // Removed isSaving check here as it might be undefined if not used within context
       buttonLabel={isOverThreshold ? "Aceitar Risco e Usar" : (isNoRoll ? "Confirmar Uso" : buttonText)}
       actionColorClass={isOverThreshold ? "bg-red-600 hover:bg-red-700" : ""}
     >
@@ -201,16 +208,7 @@ export const AbilityRollDialog = ({
           </div>
       )}
 
-      {/* Opção do Mestre (Rolar Escondido) */}
-      {isMaster && (
-        <>
-          <Separator className="my-4" />
-          <div className="flex items-center space-x-2">
-            <Checkbox id="hidden-roll-ability" checked={isHidden} onCheckedChange={(c) => setIsHidden(c as boolean)} />
-            <Label htmlFor="hidden-roll-ability" className="text-purple-400">{isNoRoll ? "Usar em Segredo" : "Rolar Escondido"}</Label>
-          </div>
-        </>
-      )}
+      {/* REMOVED: Manual hidden roll checkbox section */}
     </BaseRollDialog>
   );
 };

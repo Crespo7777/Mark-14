@@ -1,5 +1,4 @@
-// src/components/BaseRollDialog.tsx
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,18 +8,21 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Dices } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Dices, Eye, EyeOff } from "lucide-react";
+import { useTableContext } from "@/features/table/TableContext";
 
 interface BaseRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   description: string;
-  children: React.ReactNode; // Conteúdo específico (modifier, advantage, etc.)
-  onRoll: () => void;
+  children: React.ReactNode;
+  onRoll: (isHidden: boolean) => void; // <--- Atualizado para receber isHidden
   loading: boolean;
   buttonLabel?: React.ReactNode;
-  actionColorClass?: string; // Para mudar a cor do botão se necessário
+  actionColorClass?: string;
 }
 
 export const BaseRollDialog = ({
@@ -34,9 +36,30 @@ export const BaseRollDialog = ({
   buttonLabel = "Rolar",
   actionColorClass,
 }: BaseRollDialogProps) => {
+  const { isMaster } = useTableContext();
+  
+  // Se for mestre, começa escondido (true). Se jogador, começa público (false).
+  const [isHidden, setIsHidden] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+        setIsHidden(isMaster);
+    }
+  }, [open, isMaster]);
+
+  const handleSwitchChange = (checked: boolean) => {
+      if (isMaster) {
+          // Mestre: Switch ativa o modo "Público" (ou seja, isHidden = false)
+          setIsHidden(!checked);
+      } else {
+          // Jogador: Switch ativa o modo "Escondido" (ou seja, isHidden = true)
+          setIsHidden(checked);
+      }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
@@ -44,13 +67,35 @@ export const BaseRollDialog = ({
         
         <div className="space-y-4 py-4">
           {children}
+
+          {/* Área de Controle de Visibilidade */}
+          <div className="flex items-center justify-between border p-3 rounded-md bg-muted/20">
+            <div className="space-y-0.5">
+                <Label htmlFor="roll-mode" className="flex items-center gap-2 cursor-pointer">
+                    {isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>}
+                    {isMaster ? "Rolar Publicamente" : "Rolar Escondido"}
+                </Label>
+                <p className="text-[10px] text-muted-foreground">
+                    {isHidden 
+                        ? "Visível apenas para o Mestre." 
+                        : "Visível para todos na mesa."}
+                </p>
+            </div>
+            <Switch
+              id="roll-mode"
+              // Se Mestre: Checked se NÃO estiver escondido.
+              // Se Jogador: Checked se ESTIVER escondido.
+              checked={isMaster ? !isHidden : isHidden}
+              onCheckedChange={handleSwitchChange}
+            />
+          </div>
         </div>
 
         <DialogFooter>
           <Button
             type="button"
             className={`w-full ${actionColorClass || ""}`}
-            onClick={onRoll}
+            onClick={() => onRoll(isHidden)}
             disabled={loading}
           >
             {loading ? "Rolando..." : (
