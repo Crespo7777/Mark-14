@@ -19,7 +19,7 @@ interface BaseRollDialogProps {
   title: string;
   description: string;
   children: React.ReactNode;
-  onRoll: (isHidden: boolean) => void; // <--- Atualizado para receber isHidden
+  onRoll: (isHidden: boolean) => void;
   loading: boolean;
   buttonLabel?: React.ReactNode;
   actionColorClass?: string;
@@ -48,12 +48,9 @@ export const BaseRollDialog = ({
   }, [open, isMaster]);
 
   const handleSwitchChange = (checked: boolean) => {
+      // Mestre: Switch ativa o modo "Público" (inverte o isHidden)
       if (isMaster) {
-          // Mestre: Switch ativa o modo "Público" (ou seja, isHidden = false)
           setIsHidden(!checked);
-      } else {
-          // Jogador: Switch ativa o modo "Escondido" (ou seja, isHidden = true)
-          setIsHidden(checked);
       }
   };
 
@@ -68,27 +65,27 @@ export const BaseRollDialog = ({
         <div className="space-y-4 py-4">
           {children}
 
-          {/* Área de Controle de Visibilidade */}
-          <div className="flex items-center justify-between border p-3 rounded-md bg-muted/20">
-            <div className="space-y-0.5">
-                <Label htmlFor="roll-mode" className="flex items-center gap-2 cursor-pointer">
-                    {isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>}
-                    {isMaster ? "Rolar Publicamente" : "Rolar Escondido"}
-                </Label>
-                <p className="text-[10px] text-muted-foreground">
-                    {isHidden 
-                        ? "Visível apenas para o Mestre." 
-                        : "Visível para todos na mesa."}
-                </p>
+          {/* CORREÇÃO: Visível APENAS para o Mestre */}
+          {isMaster && (
+            <div className="flex items-center justify-between border p-3 rounded-md bg-muted/20">
+                <div className="space-y-0.5">
+                    <Label htmlFor="roll-mode" className="flex items-center gap-2 cursor-pointer">
+                        {isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>}
+                        Rolar Publicamente?
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground">
+                        {isHidden 
+                            ? "Atualmente: Invisível para jogadores." 
+                            : "Atualmente: Visível para todos."}
+                    </p>
+                </div>
+                <Switch
+                id="roll-mode"
+                checked={!isHidden} // Switch ON = Público
+                onCheckedChange={handleSwitchChange}
+                />
             </div>
-            <Switch
-              id="roll-mode"
-              // Se Mestre: Checked se NÃO estiver escondido.
-              // Se Jogador: Checked se ESTIVER escondido.
-              checked={isMaster ? !isHidden : isHidden}
-              onCheckedChange={handleSwitchChange}
-            />
-          </div>
+          )}
         </div>
 
         <DialogFooter>
