@@ -4,11 +4,9 @@ import { useFieldArray } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { 
-  Package, Plus, Trash2, Sword, Shield, Backpack, Database, 
-  Tag
+  Package, Plus, Trash2, Sword, Shield, Backpack, Database
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEquipmentManager } from "../../hooks/useEquipmentManager";
@@ -20,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { attributesList } from "../../character.constants";
 import { QualitySelector } from "@/components/QualitySelector";
 import { QualityInfoButton } from "@/components/QualityInfoButton";
+import { EditItemDialog } from "./EditItemDialog"; // IMPORTANTE: Importar o Dialog de Edição
 
 const INVENTORY_CATEGORIES_SELECTOR = [
   'general', 'consumable', 'container', 'ammunition', 'tool', 'spec_tool', 
@@ -28,14 +27,14 @@ const INVENTORY_CATEGORIES_SELECTOR = [
 ];
 
 export const InventoryList = () => {
-  const { form, character, isReadOnly } = useCharacterSheet();
+  const { form, character, isReadOnly, saveSheet } = useCharacterSheet();
   const { toast } = useToast();
   const { equipItem } = useEquipmentManager();
   
   const [openItems, setOpenItems] = useState<string[]>([]);
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
 
-  // useFieldArray para gestão direta da lista
-  const { fields, append, remove } = useFieldArray({ 
+  const { fields, append, remove, update } = useFieldArray({ 
       control: form.control, 
       name: "inventory" 
   });
@@ -48,7 +47,8 @@ export const InventoryList = () => {
         weight: itemTemplate ? (Number(itemTemplate.weight) || 0) : 0,
         quantity: 1,
         data: itemTemplate ? (itemTemplate.data || {}) : {},
-        description: itemTemplate ? itemTemplate.description : ""
+        description: itemTemplate ? itemTemplate.description : "",
+        icon_url: itemTemplate ? itemTemplate.icon_url : null // Importar ícone do banco
     };
     
     append(newItem);
@@ -57,7 +57,8 @@ export const InventoryList = () => {
         toast({ title: "Item Adicionado", description: `${newItem.name} na mochila.` });
     } else {
         toast({ title: "Item Criado", description: "Edite os detalhes abaixo." });
-        setTimeout(() => setOpenItems(prev => [...prev, newItem.id]), 100);
+        // Abre o editor imediatamente para itens manuais (opcional, mas boa UX)
+        setTimeout(() => setEditingItemIndex(fields.length), 100); 
     }
   };
 
@@ -71,6 +72,14 @@ export const InventoryList = () => {
       else if (category === 'armor') equipItem(index, 'armor');
       else {
           toast({ title: "Ação Inválida", description: "Apenas armas e armaduras podem ser equipadas.", variant: "destructive" });
+      }
+  };
+
+  const handleSaveEdit = (updatedItem: any) => {
+      if (editingItemIndex !== null) {
+          update(editingItemIndex, updatedItem);
+          saveSheet(); // Salvar a ficha após edição
+          setEditingItemIndex(null);
       }
   };
 
@@ -115,24 +124,37 @@ export const InventoryList = () => {
                 ) : (
                     <Accordion type="multiple" className="space-y-2" value={openItems} onValueChange={setOpenItems}>
                         {fields.map((field, index) => {
-                            // Leitura direta dos dados para renderização
-                            // Como não há filtros, o index do map é o index real!
-                            const cat = form.watch(`inventory.${index}.category`);
+                            const item = form.getValues(`inventory.${index}`); // Ler valor atual
+                            const cat = item.category;
                             const isEquippable = cat === 'weapon' || cat === 'armor';
-                            const fieldId = field.id;
+                            const iconUrl = item.icon_url;
 
                             return (
-                                <AccordionItem key={fieldId} value={fieldId} className="border rounded-md bg-card px-2">
+                                <AccordionItem key={field.id} value={field.id} className="border rounded-md bg-card px-2">
                                     
                                     {/* CABEÇALHO DO ITEM */}
                                     <div className="flex items-center justify-between py-2">
                                         <AccordionTrigger className="p-0 hover:no-underline flex-1 py-1">
                                             <div className="flex items-center gap-3 text-left w-full overflow-hidden">
-                                                {/* Ícone por Categoria */}
-                                                <div className="bg-muted w-8 h-8 rounded-md flex items-center justify-center shrink-0 border border-border/50 text-muted-foreground">
-                                                    {cat === 'weapon' ? <Sword className="w-4 h-4"/> : 
-                                                     cat === 'armor' ? <Shield className="w-4 h-4"/> : 
-                                                     <Package className="w-4 h-4"/>}
+                                                
+                                                {/* ÍCONE (Imagem Customizada ou Padrão) */}
+                                                <div 
+                                                    className="w-10 h-10 rounded-md shrink-0 border border-border/50 overflow-hidden bg-muted flex items-center justify-center cursor-pointer hover:border-primary transition-colors"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (!isReadOnly) setEditingItemIndex(index);
+                                                    }}
+                                                    title="Clique para editar detalhes e ícone"
+                                                >
+                                                    {iconUrl ? (
+                                                        <img src={iconUrl} alt="Item" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="text-muted-foreground">
+                                                            {cat === 'weapon' ? <Sword className="w-5 h-5"/> : 
+                                                             cat === 'armor' ? <Shield className="w-5 h-5"/> : 
+                                                             <Package className="w-5 h-5"/>}
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 
                                                 {/* Nome e Info */}
@@ -149,10 +171,10 @@ export const InventoryList = () => {
                                             </div>
                                         </AccordionTrigger>
 
-                                        {/* AÇÕES (Qtd, Equipar, Apagar) */}
+                                        {/* AÇÕES */}
                                         <div className="flex items-center gap-2 pl-2" onClick={(e) => e.stopPropagation()}>
                                             
-                                            {/* Input de Quantidade */}
+                                            {/* Quantidade */}
                                             <div className="flex items-center bg-muted/30 rounded border border-border/50 px-1 h-7">
                                                 <span className="text-[10px] text-muted-foreground mr-1">Qtd</span>
                                                 <FormField control={form.control} name={`inventory.${index}.quantity`} render={({field}) => (
@@ -190,9 +212,11 @@ export const InventoryList = () => {
                                         </div>
                                     </div>
 
-                                    {/* CONTEÚDO EXPANDIDO */}
+                                    {/* CONTEÚDO EXPANDIDO (Edição rápida inline também mantida) */}
                                     <AccordionContent className="border-t pt-3 pb-3">
                                         <div className="space-y-3 px-1">
+                                            {/* Nota: Deixei os inputs inline caso o usuário queira editar rápido sem abrir o modal, 
+                                                mas o modal (clique no ícone) agora é o método principal para coisas complexas como ícones. */}
                                             <div className="grid grid-cols-12 gap-2">
                                                 <div className="col-span-6">
                                                     <FormField control={form.control} name={`inventory.${index}.name`} render={({field}) => (
@@ -201,75 +225,21 @@ export const InventoryList = () => {
                                                 </div>
                                                 <div className="col-span-3">
                                                     <FormField control={form.control} name={`inventory.${index}.weight`} render={({field}) => (
-                                                        <FormItem className="space-y-0"><FormLabel className="text-[10px]">Peso Total</FormLabel><FormControl><Input type="number" step="0.1" {...field} className="h-7 text-xs text-center" onChange={e => field.onChange(e.target.valueAsNumber)} readOnly={isReadOnly}/></FormControl></FormItem>
+                                                        <FormItem className="space-y-0"><FormLabel className="text-[10px]">Peso</FormLabel><FormControl><Input type="number" step="0.1" {...field} className="h-7 text-xs text-center" onChange={e => field.onChange(e.target.valueAsNumber)} readOnly={isReadOnly}/></FormControl></FormItem>
                                                     )}/>
                                                 </div>
                                                 <div className="col-span-3">
-                                                    <FormField control={form.control} name={`inventory.${index}.category`} render={({field}) => (
-                                                        <FormItem className="space-y-0">
-                                                            <FormLabel className="text-[10px]">Categoria</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
-                                                                <FormControl><SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger></FormControl>
-                                                                <SelectContent>
-                                                                    {INVENTORY_CATEGORIES_SELECTOR.map(c => (<SelectItem key={c} value={c} className="text-xs capitalize">{getCategoryLabel(c)}</SelectItem>))}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )}/>
+                                                    <Button 
+                                                        variant="secondary" 
+                                                        size="sm" 
+                                                        className="w-full h-[54px] mt-[1px] text-xs flex flex-col gap-1"
+                                                        onClick={() => setEditingItemIndex(index)}
+                                                    >
+                                                        <span>Editar</span>
+                                                        <span className="text-[9px] opacity-70">Detalhes</span>
+                                                    </Button>
                                                 </div>
                                             </div>
-
-                                            {/* Campos Específicos */}
-                                            {cat === 'weapon' && (
-                                                <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded border border-border/50">
-                                                    <FormField control={form.control} name={`inventory.${index}.data.damage`} render={({field}) => (
-                                                        <FormItem className="space-y-0"><FormLabel className="text-[10px] text-red-500">Dano</FormLabel><FormControl><Input {...field} className="h-7 text-xs" placeholder="Ex: 1d8"/></FormControl></FormItem>
-                                                    )}/>
-                                                    <FormField control={form.control} name={`inventory.${index}.data.attackAttribute`} render={({field}) => (
-                                                        <FormItem className="space-y-0">
-                                                            <FormLabel className="text-[10px]">Atributo</FormLabel>
-                                                            <Select onValueChange={field.onChange} value={field.value} disabled={isReadOnly}>
-                                                                <FormControl><SelectTrigger className="h-7 text-xs"><SelectValue placeholder="-"/></SelectTrigger></FormControl>
-                                                                <SelectContent>
-                                                                    {attributesList.map(a => <SelectItem key={a.key} value={a.key} className="text-xs">{a.label}</SelectItem>)}
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </FormItem>
-                                                    )}/>
-                                                </div>
-                                            )}
-
-                                            {cat === 'armor' && (
-                                                <div className="grid grid-cols-2 gap-2 bg-muted/20 p-2 rounded border border-border/50">
-                                                    <FormField control={form.control} name={`inventory.${index}.data.protection`} render={({field}) => (
-                                                        <FormItem className="space-y-0"><FormLabel className="text-[10px] text-blue-500">Proteção</FormLabel><FormControl><Input {...field} className="h-7 text-xs" placeholder="Ex: 1d4"/></FormControl></FormItem>
-                                                    )}/>
-                                                    <FormField control={form.control} name={`inventory.${index}.data.obstructive`} render={({field}) => (
-                                                        <FormItem className="space-y-0"><FormLabel className="text-[10px]">Penalidade</FormLabel><FormControl><Input type="number" {...field} className="h-7 text-xs" placeholder="0"/></FormControl></FormItem>
-                                                    )}/>
-                                                </div>
-                                            )}
-
-                                            {(cat === 'weapon' || cat === 'armor' || cat === 'artifact') && (
-                                                <div className="bg-muted/20 p-2 rounded border border-border/50">
-                                                    <FormField control={form.control} name={`inventory.${index}.data.quality`} render={({ field }) => (
-                                                        <FormItem className="space-y-0">
-                                                            <div className="flex justify-between items-center mb-1">
-                                                                <FormLabel className="text-[10px]">Qualidades</FormLabel>
-                                                                <QualityInfoButton qualitiesString={field.value} tableId={character.table_id}/>
-                                                            </div>
-                                                            <FormControl>
-                                                                <QualitySelector 
-                                                                    tableId={character.table_id} 
-                                                                    value={field.value} 
-                                                                    onChange={field.onChange} 
-                                                                    targetType={cat === 'armor' ? 'armor' : 'weapon'} 
-                                                                />
-                                                            </FormControl>
-                                                        </FormItem>
-                                                    )}/>
-                                                </div>
-                                            )}
 
                                             <FormField control={form.control} name={`inventory.${index}.description`} render={({field}) => (
                                                 <FormItem className="space-y-0"><FormLabel className="text-[10px]">Descrição / Efeitos</FormLabel><FormControl><Textarea {...field} className="min-h-[60px] text-xs resize-none bg-muted/20" placeholder="Detalhes do item..." readOnly={isReadOnly}/></FormControl></FormItem>
@@ -283,6 +253,17 @@ export const InventoryList = () => {
                 )}
             </ScrollArea>
         </CardContent>
+
+        {/* DIÁLOGO DE EDIÇÃO COMPLETA */}
+        {editingItemIndex !== null && (
+            <EditItemDialog
+                open={true}
+                onClose={() => setEditingItemIndex(null)}
+                item={form.getValues(`inventory.${editingItemIndex}`)}
+                onSave={handleSaveEdit}
+                tableId={character.table_id}
+            />
+        )}
     </Card>
   );
 };

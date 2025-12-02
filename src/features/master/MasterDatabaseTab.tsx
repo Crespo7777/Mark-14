@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ItemTemplate } from "@/types/app-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,13 +14,14 @@ import {
   PawPrint, Zap, Dna, Star, Save, X, Search, 
   Castle, Box, CircleDot, Wheat, Coins, 
   Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music,
-  Loader2 
+  Loader2, Image as ImageIcon
 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea"; 
 import { QualitySelector } from "@/components/QualitySelector"; 
+import { ItemIconUploader } from "@/components/ItemIconUploader"; // NOVO: Importação do Uploader
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,18 +32,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { validateItemData } from "./database.schemas"; // IMPORTADO
+import { validateItemData } from "./database.schemas";
 
 const RichTextEditor = lazy(() => 
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
 );
 
-// --- ATUALIZAÇÃO DOS NOMES DAS CATEGORIAS ---
 const CATEGORIES = [
   { id: 'quality', label: 'Qualidades', icon: Star },
-  { id: 'weapon', label: 'Armas', icon: Sword },           // Mudado de 'Armamentos'
-  { id: 'armor', label: 'Armaduras', icon: Shield },       // Mudado de 'Proteção'
-  { id: 'ability', label: 'Habilidades', icon: Zap },      // Mudado de 'Habilidades & Poderes'
+  { id: 'weapon', label: 'Armas', icon: Sword },
+  { id: 'armor', label: 'Armaduras', icon: Shield },
+  { id: 'ability', label: 'Habilidades', icon: Zap },
   { id: 'trait', label: 'Traços & Dádivas', icon: Dna },
   { id: 'consumable', label: 'Elixires Alquímicos', icon: FlaskConical },
   { id: 'general', label: 'Equipamentos', icon: Backpack },
@@ -67,15 +66,16 @@ const WEAPON_SUBCATEGORIES = ["Arma de uma Mão", "Arma Curta", "Arma Longa", "A
 const ARMOR_SUBCATEGORIES = ["Leve", "Média", "Pesada"];
 const FOOD_SUBCATEGORIES = ["Bebidas", "Carne", "Chás", "Ensopados", "Mingau", "Peixe", "Sobremesas", "Sopas", "Tortas"];
 
-const fetchTemplates = async (tableId: string, category: string) => {
+// Atualizado para usar a tabela 'items' e coluna 'type'
+const fetchItems = async (tableId: string, category: string) => {
   const { data, error } = await supabase
-    .from("item_templates")
+    .from("items")
     .select("*")
     .eq("table_id", tableId)
-    .eq("category", category)
+    .eq("type", category)
     .order("name");
   if (error) throw error;
-  return data as ItemTemplate[];
+  return data;
 };
 
 export const MasterDatabaseTab = ({ tableId }: { tableId: string }) => {
@@ -114,7 +114,8 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  const defaultState = { name: "", description: "", image_url: "", weight: "", data: {} };
+  // Incluído icon_url no estado inicial
+  const defaultState = { name: "", description: "", icon_url: null, weight: "", data: {} };
   const [newItem, setNewItem] = useState<any>(defaultState);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -127,14 +128,15 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
     setSearchQuery("");
   }, [category]);
 
-  const queryKey = ['item_templates', tableId, category];
+  // QueryKey atualizada para 'items'
+  const queryKey = ['items', tableId, category];
 
   const { data: items = [] } = useQuery({
     queryKey: queryKey,
-    queryFn: () => fetchTemplates(tableId, category),
+    queryFn: () => fetchItems(tableId, category),
   });
 
-  const filteredItems = items.filter(item => {
+  const filteredItems = items.filter((item: any) => {
     const term = searchQuery.toLowerCase();
     const nameMatch = item.name.toLowerCase().includes(term);
     const subCategoryMatch = item.data.subcategory 
@@ -146,38 +148,39 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const handleSave = async () => {
     if (!newItem.name) return toast({ title: "Erro", description: "O nome é obrigatório.", variant: "destructive" });
     
-    // --- VALIDAÇÃO ZOD ---
     const validation = validateItemData(category, newItem.data);
     if (!validation.success) {
         const errorMsg = validation.error.errors[0]?.message || "Dados inválidos.";
         return toast({ title: "Erro de Validação", description: errorMsg, variant: "destructive" });
     }
-    // ---------------------
 
     setIsSaving(true);
+    // Payload atualizado para tabela 'items'
     const payload = {
         table_id: tableId,
-        category,
+        type: category, // Mapeia category -> type
         name: newItem.name,
         description: newItem.description,
         weight: parseFloat(newItem.weight) || 0,
+        icon_url: newItem.icon_url, // Salva a imagem
         data: newItem.data
     };
+
     try {
         let savedData;
         if (editingId) {
-            const { data, error } = await supabase.from("item_templates").update(payload).eq("id", editingId).select().single();
+            const { data, error } = await supabase.from("items").update(payload).eq("id", editingId).select().single();
             if (error) throw error;
             savedData = data;
-            queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
+            queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
                 return old ? old.map(i => i.id === editingId ? savedData : i) : [savedData];
             });
             toast({ title: "Item Atualizado!" });
         } else {
-            const { data, error } = await supabase.from("item_templates").insert(payload).select().single();
+            const { data, error } = await supabase.from("items").insert(payload).select().single();
             if (error) throw error;
             savedData = data;
-            queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
+            queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
                 return old ? [...old, savedData].sort((a,b) => a.name.localeCompare(b.name)) : [savedData];
             });
             toast({ title: "Item Criado!" });
@@ -190,12 +193,13 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
     }
   };
 
-  const handleEdit = (item: ItemTemplate) => {
+  const handleEdit = (item: any) => {
       setEditingId(item.id);
       setNewItem({
           name: item.name,
           description: item.description || "",
           weight: String(item.weight || ""), 
+          icon_url: item.icon_url, // Carrega a imagem existente
           data: item.data || {}
       });
       setEditorKey(prev => prev + 1);
@@ -210,11 +214,12 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const confirmDelete = async () => {
      if (!itemToDelete) return;
-     const previousData = queryClient.getQueryData<ItemTemplate[]>(queryKey);
-     queryClient.setQueryData(queryKey, (old: ItemTemplate[] | undefined) => {
+     const previousData = queryClient.getQueryData<any[]>(queryKey);
+     queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
          return old ? old.filter(i => i.id !== itemToDelete) : [];
      });
-     const { error } = await supabase.from("item_templates").delete().eq("id", itemToDelete);
+     // Atualizado para deletar de 'items'
+     const { error } = await supabase.from("items").delete().eq("id", itemToDelete);
      if (error) {
         queryClient.setQueryData(queryKey, previousData);
         toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
@@ -301,8 +306,21 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                   </h3>
                   {editingId && <Button variant="ghost" size="sm" onClick={cancelEdit}><X className="w-4 h-4 mr-1"/> Cancelar Edição</Button>}
               </div>
-              <div className="grid grid-cols-12 gap-4">
-                 <div className="col-span-12 space-y-4">
+              
+              {/* LAYOUT DE EDIÇÃO COM ÍCONE */}
+              <div className="flex flex-col md:flex-row gap-6">
+                 
+                 {/* Lado Esquerdo: Upload */}
+                 <div className="shrink-0 flex justify-center md:justify-start">
+                    <ItemIconUploader 
+                        currentUrl={newItem.icon_url}
+                        onUpload={(url) => setNewItem((prev: any) => ({ ...prev, icon_url: url }))}
+                        onRemove={() => setNewItem((prev: any) => ({ ...prev, icon_url: null }))}
+                    />
+                 </div>
+
+                 {/* Lado Direito: Campos */}
+                 <div className="flex-1 space-y-4">
                      <div className="grid grid-cols-12 gap-3">
                         <div className="col-span-8 space-y-2">
                             <Label>Nome</Label>
@@ -318,23 +336,26 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                      </div>
                      {renderSpecificFields()}
                  </div>
-                 <div className="col-span-12 space-y-2">
-                     <Label>Descrição Completa / Regras</Label>
-                     <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
-                        <RichTextEditor 
-                            key={`${editingId || 'new'}-${category}-${editorKey}`}
-                            value={newItem.description} 
-                            onChange={val => setNewItem({...newItem, description: val})} 
-                            placeholder="Escreva as regras, efeitos e detalhes aqui..." 
-                        />
-                     </Suspense>
-                 </div>
-                 <div className="col-span-12 flex justify-end pt-2">
-                     <Button onClick={handleSave} className="w-full sm:w-auto" disabled={isSaving}>
-                         {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : (editingId ? <Save className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>)} 
-                         {editingId ? "Salvar Alterações" : "Adicionar ao Database"}
-                     </Button>
-                 </div>
+              </div>
+
+              {/* Editor de Texto (Full Width) */}
+              <div className="space-y-2">
+                 <Label>Descrição Completa / Regras</Label>
+                 <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
+                    <RichTextEditor 
+                        key={`${editingId || 'new'}-${category}-${editorKey}`}
+                        value={newItem.description} 
+                        onChange={val => setNewItem({...newItem, description: val})} 
+                        placeholder="Escreva as regras, efeitos e detalhes aqui..." 
+                    />
+                 </Suspense>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                 <Button onClick={handleSave} className="w-full sm:w-auto" disabled={isSaving}>
+                     {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : (editingId ? <Save className="w-4 h-4 mr-2"/> : <Plus className="w-4 h-4 mr-2"/>)} 
+                     {editingId ? "Salvar Alterações" : "Adicionar ao Database"}
+                 </Button>
               </div>
           </CardContent>
        </Card>
@@ -350,8 +371,18 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
        </div>
 
        <div className="grid grid-cols-1 gap-2 pb-10">
-          {filteredItems.map(item => (
+          {filteredItems.map((item: any) => (
              <div key={item.id} className="flex gap-3 p-3 border rounded-md bg-card hover:bg-accent/50 group cursor-pointer transition-all items-start" onClick={() => handleEdit(item)}>
+                
+                {/* ÍCONE NA LISTA */}
+                <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center shrink-0 border border-border/50 overflow-hidden">
+                    {item.icon_url ? (
+                        <img src={item.icon_url} alt={item.name} className="w-full h-full object-cover" />
+                    ) : (
+                        <ImageIcon className="w-5 h-5 text-muted-foreground/30" />
+                    )}
+                </div>
+
                 <div className="flex-1 min-w-0">
                     <div className="font-bold flex items-center gap-2 flex-wrap">
                         {item.name}

@@ -1,5 +1,3 @@
-// src/features/master/MasterShopsTab.tsx
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -12,14 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch"; 
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Store, Trash2, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database, Loader2, Infinity as InfinityIcon } from "lucide-react";
+import { Plus, Store, Trash2, Package, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database, Loader2, Infinity as InfinityIcon } from "lucide-react";
 import { formatPrice } from "@/lib/economy-utils";
 import { Separator } from "@/components/ui/separator";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
-// ... (Interface e Fetch functions mantêm-se iguais)
 interface ExtendedShopItem extends ShopItem {
   data?: any;
+  icon_url?: string | null; // Adicionado suporte a tipos
 }
 
 const SHOP_CATEGORIES = [
@@ -50,11 +48,6 @@ const fetchCharacters = async (tableId: string) => {
 };
 
 export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
-  // ... (MasterShopsTab mantém-se igual, apenas o ShopItemsManager muda)
-  // (Copia o conteúdo do MasterShopsTab anterior ou mantém o que tens)
-  
-  // Vou incluir o ShopItemsManager completo aqui para garantir que tens tudo
-  
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [newShopName, setNewShopName] = useState("");
@@ -198,7 +191,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // --- NOVO: stock no estado local (-1 para infinito) ---
   const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, stock: -1, description: "", category: "general", data: {} as any });
   const [currencyType, setCurrencyType] = useState<"ortega" | "shekel" | "taler">("ortega");
   const [itemToSend, setItemToSend] = useState<ExtendedShopItem | null>(null);
@@ -237,7 +229,7 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
       name: newItem.name,
       price: finalPrice, 
       weight: newItem.weight,
-      quantity: newItem.stock, // <-- USA AQUI O STOCK
+      quantity: newItem.stock,
       description: newItem.description,
       data: { category: newItem.category, ...newItem.data }
     };
@@ -248,7 +240,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
         queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
             return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
         });
-        // Reset
         setNewItem({ name: "", amount: 0, weight: 0, stock: -1, description: "", category: "general", data: {} }); 
         setCurrencyType("ortega");
     } catch (error: any) {
@@ -277,7 +268,8 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
             description: template.description,
             weight: template.weight,
             price: price,
-            quantity: -1, // Padrão para importados é Infinito
+            quantity: -1, 
+            icon_url: template.image_url || template.icon_url, // <--- CORREÇÃO: Inclui ícone
             data: { ...template.data, category: template.category }
          }).select().single();
          if (error) throw error;
@@ -320,6 +312,7 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
             quantity: 1,
             weight: itemToSend.weight,
             description: itemToSend.description || "Presente do Mestre",
+            icon_url: itemToSend.icon_url, // <--- Envia o ícone para o jogador
             data: itemToSend.data || {}
         };
         newInventory = [...currentInventory, newItemObj];
@@ -400,7 +393,6 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
                         <SelectContent><SelectItem value="taler">Táler (Ouro)</SelectItem><SelectItem value="shekel">Xelim (Prata)</SelectItem><SelectItem value="ortega">Ortega (Cobre)</SelectItem></SelectContent>
                     </Select>
                 </div>
-                {/* --- CAMPO DE ESTOQUE NOVO --- */}
                 <div className="col-span-3">
                     <Label className="text-xs">Estoque</Label>
                     <div className="flex items-center gap-2">
@@ -451,12 +443,21 @@ const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) =>
 
              return (
              <div key={item.id} className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/10 text-sm">
+                
+                {/* ÍCONE DA LOJA */}
+                <div className="w-9 h-9 rounded bg-muted flex items-center justify-center shrink-0 border border-border/50 overflow-hidden mr-3">
+                    {(item as any).icon_url ? (
+                        <img src={(item as any).icon_url} className="w-full h-full object-cover" />
+                    ) : (
+                        <Package className="w-4 h-4 text-muted-foreground/30" />
+                    )}
+                </div>
+
                 <div className="flex-1">
                    <div className="font-bold flex items-center gap-2">
                         {item.name}
                         {item.data?.category === 'service' && <span className="text-[9px] font-mono uppercase bg-primary/20 text-primary px-1 rounded border border-primary/30">SERVICE</span>}
                         {item.data?.category && item.data.category !== 'service' && <span className="text-[9px] uppercase border px-1 rounded bg-background text-muted-foreground">{item.data.category}</span>}
-                        {/* Mostra o estoque na lista */}
                         {!isInfinite && <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${item.quantity === 0 ? "bg-red-500/20 text-red-500 border-red-500/30" : "bg-background text-muted-foreground"}`}>Qtd: {item.quantity}</span>}
                         {isInfinite && <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono bg-background text-muted-foreground"><InfinityIcon className="w-3 h-3 inline"/></span>}
                    </div>

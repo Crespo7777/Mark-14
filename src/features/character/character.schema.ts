@@ -17,11 +17,18 @@ export const roundUpDiv = (value: number, divisor: number) => {
   return Math.ceil(value / divisor);
 };
 
-export const numeric = z.union([z.string(), z.number()]).transform((val) => {
-  if (val === "" || val === "-") return 0; 
-  const n = Number(val);
-  return isNaN(n) ? 0 : n;
-});
+// Helper ROBUSTO para tratar números (aceita null, undefined, string vazia, etc.)
+export const numeric = z.union([z.string(), z.number(), z.null(), z.undefined()])
+  .transform((val) => {
+    if (val === "" || val === "-" || val === null || val === undefined) return 0;
+    const n = Number(val);
+    return isNaN(n) ? 0 : n;
+  });
+
+// Helper ROBUSTO para tratar strings (converte null/undefined para "")
+export const safeString = z.union([z.string(), z.null(), z.undefined()])
+  .transform((val) => val || "")
+  .default("");
 
 // --- SUB-SCHEMAS ---
 
@@ -32,23 +39,21 @@ export const attributesSchema = z.object({
   precise: numeric.default(0),
   quick: numeric.default(0),
   resolute: numeric.default(0),
-  vigorous: numeric.default(0), // Nota: Vigorous é o nosso 'Strong' (Forte)
+  vigorous: numeric.default(0),
   vigilant: numeric.default(0),
 });
 
-// ATUALIZADO: Suporte para Bónus Máximo e Temporário
 export const toughnessSchema = z.object({
   current: numeric.default(10),
-  max_modifier: numeric.default(0), // Bônus permanente (ex: Robusto)
-  temporary: numeric.default(0),    // Vida Temporária (ex: Magia/Escudo)
-  // Mantemos 'bonus' opcional para compatibilidade antiga se necessário, mas o código novo usará max_modifier
-  bonus: numeric.optional().default(0), 
+  max_modifier: numeric.default(0), 
+  temporary: numeric.default(0),
+  bonus: numeric.optional().default(0),
 });
 
 export const corruptionSchema = z.object({
   temporary: numeric.default(0),
   permanent: numeric.default(0),
-  stigma: z.string().default(""),
+  stigma: safeString,
 });
 
 export const moneySchema = z.object({
@@ -66,66 +71,96 @@ export const experienceSchema = z.object({
 
 export const weaponSchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""), 
-  quality: z.string().default(""), 
-  quality_desc: z.string().default(""),
-  damage: z.string().default(""), 
-  attribute: z.string().default(""), 
-  attackAttribute: z.string().default(""), 
+  name: safeString.pipe(z.string().default("Nova Arma")), // Aceita null e converte
+  quality: safeString,
+  quality_desc: safeString,
+  damage: safeString.default("1d4"),
+  attribute: safeString,
+  attackAttribute: safeString.default("vigorous"),
   projectileId: z.string().optional(),
   weight: numeric.default(1),
+  
+  icon_url: z.string().nullable().optional(),
+  system_tags: z.array(z.string()).optional().default([]),
 });
 
 export const armorSchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""), 
-  quality: z.string().default(""), 
-  quality_desc: z.string().default(""),
-  protection: z.string().default(""), 
+  name: safeString.default("Nova Armadura"),
+  quality: safeString,
+  quality_desc: safeString,
+  protection: safeString.default("1d4"),
   obstructive: numeric.default(0),
   equipped: z.boolean().default(true),
   weight: numeric.default(0),
+
+  icon_url: z.string().nullable().optional(),
 });
+
+// --- HABILIDADES (ONDE O ERRO OCORRIA) ---
 
 export const abilitySchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""),
-  level: z.string().default(""), 
-  type: z.string().default(""), 
-  description: z.string().default(""),
-  associatedAttribute: z.string().default(""), 
-  corruptionCost: z.union([z.string(), z.number()]).transform((v) => String(v)).default("0"),
-  tradition: z.string().optional().default(""),
+  // Removi o .min(1) estrito e adicionei tratamento de null
+  name: safeString.transform(v => v || "Nova Habilidade").default("Nova Habilidade"),
+  
+  level: safeString, 
+  type: safeString.default("Habilidade"), 
+  description: safeString,
+  associatedAttribute: safeString, 
+  
+  // CORREÇÃO CRÍTICA: Agora aceita null/undefined do banco e converte para "0"
+  corruptionCost: z.union([z.string(), z.number(), z.null(), z.undefined()])
+    .transform((v) => v ? String(v) : "0")
+    .default("0"),
+    
+  tradition: safeString,
   isActive: z.boolean().default(false),
+
+  icon_url: z.string().nullable().optional(),
 });
+
+// --- TRAÇOS ---
 
 export const traitSchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""),
-  type: z.string().default(""),
-  level: z.string().default(""),
-  description: z.string().default(""),
+  name: safeString.default("Novo Traço"),
+  type: safeString.default("Traço"),
+  level: safeString,
+  description: safeString,
+  icon_url: z.string().nullable().optional(),
 });
+
+// --- INVENTÁRIO ---
 
 export const inventoryItemSchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""),
+  name: safeString.default("Novo Item"),
   quantity: numeric.default(1),
-  weight: numeric.default(0), 
-  description: z.string().default(""),
-  data: z.record(z.any()).optional().default({}), 
+  weight: numeric.optional().default(0),
+  description: safeString,
+  data: z.record(z.any()).optional().default({}),
+  icon_url: z.string().nullable().optional(),
 });
+
+// --- PROJÉTEIS ---
 
 export const projectileSchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""), 
+  name: safeString.default("Munição"),
   quantity: numeric.default(1),
   weight: numeric.default(0),
-  damage: z.string().default(""),
-  attack_modifier: z.string().default(""),
-  quality: z.string().default(""),
-  quality_desc: z.string().default(""),
-  description: z.string().default(""),
+  damage: safeString,
+  attack_modifier: safeString.default("0"),
+  
+  damage_bonus: safeString.default("0"),
+  attack_bonus: safeString.default("0"),
+
+  quality: safeString,
+  quality_desc: safeString,
+  description: safeString,
+  
+  icon_url: z.string().nullable().optional(),
 });
 
 // --- TIPOS EXPORTADOS ---
@@ -144,20 +179,22 @@ export const getDefaultTrait = (): Trait => traitSchema.parse({});
 export const getDefaultInventoryItem = (): InventoryItem => inventoryItemSchema.parse({});
 export const getDefaultProjectile = (): Projectile => projectileSchema.parse({});
 
-// --- SCHEMA PRINCIPAL ---
+// --- SCHEMA PRINCIPAL (FICHA DE PERSONAGEM) ---
 
 export const characterSheetSchema = z.object({
-  name: z.string().min(1, "Nome é obrigatório").default("Novo Personagem"),
-  race: z.string().default("Humano"),
-  occupation: z.string().default("Aventureiro"),
-  age: z.string().default(""),
-  height: z.string().default(""),
-  weight: z.string().default(""),
-  shadow: z.string().default(""), 
-  personalGoal: z.string().default(""), 
-  importantAllies: z.string().default(""), 
-  notes: z.string().default(""), 
+  // Dados Pessoais
+  name: safeString.transform(v => v || "Novo Personagem").default("Novo Personagem"),
+  race: safeString.default("Humano"),
+  occupation: safeString.default("Aventureiro"),
+  age: safeString,
+  height: safeString,
+  weight: safeString,
+  shadow: safeString, 
+  personalGoal: safeString, 
+  importantAllies: safeString, 
+  notes: safeString, 
   
+  // Stats
   attributes: attributesSchema.default({}),
   toughness: toughnessSchema.default({}),
   corruption: corruptionSchema.default({}),
@@ -165,6 +202,7 @@ export const characterSheetSchema = z.object({
   money: moneySchema.default({}),
   experience: experienceSchema.default({}),
   
+  // Listas
   weapons: z.array(weaponSchema).default([]),
   armors: z.array(armorSchema).default([]),
   abilities: z.array(abilitySchema).default([]),
@@ -172,6 +210,7 @@ export const characterSheetSchema = z.object({
   inventory: z.array(inventoryItemSchema).default([]),
   projectiles: z.array(projectileSchema).default([]),
 
+  // Metadados Visuais
   image_url: z.string().nullable().optional(), 
   data: z.any().optional(), 
 

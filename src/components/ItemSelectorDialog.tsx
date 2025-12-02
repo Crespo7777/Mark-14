@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Search, Plus, Package, Shield, Sword, Zap, FlaskConical, Gem, Sparkles, 
   PawPrint, HandCoins, Dna, Box, CircleDot, Hammer, Wrench, Shirt, 
-  Utensils, Castle, Skull, Music, Coins, Star
+  Utensils, Castle, Skull, Music, Coins, Star, Image as ImageIcon
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ItemTemplate } from "@/types/app-types";
@@ -19,34 +19,38 @@ interface ItemSelectorDialogProps {
   tableId: string;
   categories?: string[];
   category?: string;
-  children?: React.ReactNode; // Tornar opcional caso não tenha trigger
+  children?: React.ReactNode; 
   onSelect: (template: ItemTemplate | null) => void;
   title?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }
 
-// --- OTIMIZAÇÃO: Select apenas colunas necessárias ---
+// --- CORREÇÃO: Usa a nova tabela 'items' ---
 const fetchItemsForSelector = async (tableId: string, categories: string[]) => {
   let query = supabase
-    .from("item_templates")
-    .select("id, name, description, category, weight, data") 
+    .from("items") // <--- MUDANÇA CRÍTICA: Tabela 'items' em vez de 'item_templates'
+    .select("id, name, description, type, weight, data, icon_url") // <--- Inclui icon_url
     .eq("table_id", tableId)
     .order("name");
     
   if (categories.length > 0) {
-     query = query.in("category", categories);
+     query = query.in("type", categories); // <--- Usa 'type' em vez de 'category'
   }
 
   const { data, error } = await query;
   if (error) throw error;
-  return data as ItemTemplate[];
+  
+  // Mapeia para o formato esperado pelo frontend
+  return data.map((item: any) => ({
+      ...item,
+      category: item.type
+  })) as ItemTemplate[];
 };
 
 export const ItemSelectorDialog = ({ tableId, categories, category, children, onSelect, title, open: controlledOpen, onOpenChange }: ItemSelectorDialogProps) => {
   const targetCategories = categories || (category ? [category] : []);
   
-  // Controle híbrido (interno ou externo)
   const [internalOpen, setInternalOpen] = useState(false);
   const isOpen = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setIsOpen = onOpenChange || setInternalOpen;
@@ -55,16 +59,15 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeTab, setActiveTab] = useState(targetCategories[0] || "all");
 
-  // --- OTIMIZAÇÃO: Debounce na pesquisa ---
   useEffect(() => {
     const timer = setTimeout(() => {
         setDebouncedSearch(search);
-    }, 300); // 300ms delay
+    }, 300); 
     return () => clearTimeout(timer);
   }, [search]);
 
   const { data: items = [], isLoading } = useQuery({
-    queryKey: ['item_templates', tableId, targetCategories.join(',')],
+    queryKey: ['items_selector', tableId, targetCategories.join(',')], 
     queryFn: () => fetchItemsForSelector(tableId, targetCategories),
     enabled: isOpen,
   });
@@ -80,7 +83,6 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
     setIsOpen(false);
   };
 
-  // Ícones completos para todas as categorias
   const getIcon = (cat: string) => {
     switch(cat) {
         case 'quality': return <Star className="w-4 h-4"/>;
@@ -109,7 +111,6 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
     }
   };
 
-  // Nomes completos e traduzidos para todas as categorias
   const getLabel = (cat: string) => {
       switch(cat) {
           case 'quality': return "Qualidades";
@@ -147,7 +148,7 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
              {targetCategories.length === 1 ? getIcon(targetCategories[0]) : <Package className="w-4 h-4"/>} 
              {title || "Selecionar Item"}
           </DialogTitle>
-          <DialogDescription>Escolha do compêndio ou crie um item customizado.</DialogDescription>
+          <DialogDescription>Escolha do compêndio.</DialogDescription>
         </DialogHeader>
 
         {targetCategories.length > 1 && (
@@ -195,31 +196,35 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
                 {!isLoading && filteredItems.map(item => (
                     <div 
                         key={item.id} 
-                        className="flex flex-col p-3 border rounded-md hover:bg-accent cursor-pointer transition-colors bg-card"
+                        className="flex items-center gap-3 p-3 border rounded-md hover:bg-accent cursor-pointer transition-colors bg-card"
                         onClick={() => handleSelect(item)}
                     >
-                        <div className="flex justify-between items-center">
-                            <span className="font-bold flex items-center gap-2">
-                                {item.name}
-                                {item.data.price && <span className="text-[10px] font-normal text-muted-foreground border px-1 rounded bg-muted/50">{item.data.price}</span>}
-                            </span>
-                            {item.category !== 'ability' && item.category !== 'trait' && <Badge variant="secondary" className="text-xs font-normal">{item.weight} peso</Badge>}
+                        {/* MOSTRAR ÍCONE */}
+                        <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0 overflow-hidden border border-border/50">
+                            {item.image_url || item.icon_url ? ( 
+                                <img src={item.image_url || item.icon_url || ""} className="w-full h-full object-cover" />
+                            ) : (
+                                <Package className="w-5 h-5 text-muted-foreground/30" />
+                            )}
                         </div>
-                        {item.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{item.description}</p>
-                        )}
-                        
-                        <div className="flex gap-2 mt-2 text-[10px] opacity-80 flex-wrap">
-                             {item.data.damage && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Dano: {item.data.damage}</span>}
-                             {item.data.protection && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Prot: {item.data.protection}</span>}
-                             {item.data.effect && <span className="bg-background/50 px-1.5 py-0.5 rounded border text-purple-400 border-purple-500/30">Efeito: {item.data.effect}</span>}
-                             {item.data.level && <span className="bg-background/50 px-1.5 py-0.5 rounded border">Nível: {item.data.level}</span>}
+
+                        <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-center">
+                                <span className="font-bold flex items-center gap-2">
+                                    {item.name}
+                                    {item.data.price && <span className="text-[10px] font-normal text-muted-foreground border px-1 rounded bg-muted/50">{item.data.price}</span>}
+                                </span>
+                                {item.category !== 'ability' && item.category !== 'trait' && <Badge variant="secondary" className="text-xs font-normal">{item.weight} peso</Badge>}
+                            </div>
+                            {item.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description.replace(/<[^>]*>?/gm, '')}</p>
+                            )}
                         </div>
                     </div>
                 ))}
                 
                 {!isLoading && filteredItems.length === 0 && (
-                    <p className="text-center text-xs text-muted-foreground py-8">Nenhum item encontrado nesta categoria.</p>
+                    <p className="text-center text-xs text-muted-foreground py-8">Nenhum item encontrado.</p>
                 )}
             </div>
         </ScrollArea>
