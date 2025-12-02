@@ -37,39 +37,26 @@ export const AttributeRollDialog = ({
       if (open) setModifier("0");
   }, [open]);
 
-  // Recebe isHidden do BaseRollDialog
   const handleRoll = async (isHidden: boolean) => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
     const modValue = parseInt(modifier) || 0;
-    
-    // Executa a rolagem
     const rollResult = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: advantage, withDisadvantage: disadvantage });
-
-    // --- CORREÇÃO: Cálculo de Sucesso/Falha ---
     const isSuccess = rollResult.totalRoll <= rollResult.target;
-    
-    // Feedback visual (Toast)
+
     if (!isHidden || isMaster) {
         toast({ 
             title: isSuccess ? "Sucesso!" : "Falha!", 
-            description: `Rolou ${rollResult.totalRoll} vs ${rollResult.target} (${attributeName})`,
-            variant: isSuccess ? "default" : "destructive" // Verde (default) ou Vermelho (destructive)
+            description: `Rolou ${rollResult.totalRoll} vs ${rollResult.target}`,
+            variant: isSuccess ? "default" : "destructive" 
         });
     }
 
     const chatMessage = formatAttributeRoll(characterName, attributeName, { total: rollResult.totalRoll, rolls: rollResult.rolls } as any, rollResult.target);
-    
-    const discordRollData = { 
-        rollType: "attribute", 
-        attributeName, 
-        targetValue: rollResult.target, 
-        result: { total: rollResult.totalRoll, rolls: rollResult.rolls },
-        isSuccess, // Passa info de sucesso
-        isHidden 
-    };
+    const discordResult = { total: rollResult.totalRoll, rolls: rollResult.rolls, ...rollResult };
+    const discordRollData = { rollType: "attribute", attributeName, targetValue: rollResult.target, result: discordResult, isSuccess };
 
     if (isHidden && isMaster) {
       await supabase.from("chat_messages").insert([
@@ -81,15 +68,12 @@ export const AttributeRollDialog = ({
           table_id: tableId, 
           user_id: user.id, 
           message: chatMessage, 
-          message_type: "roll",
-          is_hidden: isHidden 
+          message_type: "roll"
       });
-      
       supabase.functions.invoke('discord-roll-handler', { 
-          body: { tableId, rollData: discordRollData, userName: characterName } 
+          body: { tableId: tableId, rollData: discordRollData, userName: characterName } 
       }).catch(console.error);
     }
-
     setLoading(false);
     onOpenChange(false);
   };
@@ -109,16 +93,9 @@ export const AttributeRollDialog = ({
             <Label htmlFor="attr-mod" className="text-right">Modificador</Label>
             <Input id="attr-mod" value={modifier} onChange={(e) => setModifier(e.target.value)} className="col-span-3" placeholder="+0" type="number" />
           </div>
-          
           <div className="flex justify-center gap-6">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="attr-adv" checked={advantage} onCheckedChange={(c) => { setAdvantage(!!c); if(c) setDisadvantage(false); }} />
-              <Label htmlFor="attr-adv">Vantagem</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="attr-dis" checked={disadvantage} onCheckedChange={(c) => { setDisadvantage(!!c); if(c) setAdvantage(false); }} />
-              <Label htmlFor="attr-dis">Desvantagem</Label>
-            </div>
+            <div className="flex items-center space-x-2"><Checkbox id="attr-adv" checked={advantage} onCheckedChange={(c) => { setAdvantage(!!c); if(c) setDisadvantage(false); }} /><Label htmlFor="attr-adv">Vantagem</Label></div>
+            <div className="flex items-center space-x-2"><Checkbox id="attr-dis" checked={disadvantage} onCheckedChange={(c) => { setDisadvantage(!!c); if(c) setAdvantage(false); }} /><Label htmlFor="attr-dis">Desvantagem</Label></div>
           </div>
       </div>
     </BaseRollDialog>

@@ -5,7 +5,7 @@ import { rollAttributeTest, formatAbilityTest, parseDiceRoll } from "@/lib/dice-
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, AlertOctagon, Hand } from "lucide-react";
-import { useCharacterSheet } from "@/features/character/CharacterSheetContext";
+import { useNpcSheet } from "@/features/npc/NpcSheetContext";
 import { useTableContext } from "@/features/table/TableContext";
 import { useCharacterCalculations } from "@/features/character/hooks/useCharacterCalculations";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -40,10 +40,10 @@ export const NpcAbilityRollDialog = ({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   
-  const context = useCharacterSheet();
+  const context = useNpcSheet();
   const form = context?.form;
   const programmaticSave = context?.programmaticSave;
-  const isSaving = context?.isSaving; 
+  const isSaving = context?.isSaving;
   
   const { corruptionThreshold } = useCharacterCalculations();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
@@ -90,14 +90,11 @@ export const NpcAbilityRollDialog = ({
     if (appliedCost > 0) {
       if (onApplyCorruption) {
           onApplyCorruption(appliedCost);
-          if (currentTempCorruption + appliedCost > corruptionThreshold) {
-             toast({ title: "LIMIAR EXCEDIDO!", description: "Verifique marcas de estigma.", variant: "destructive" });
-          }
       } else if (form && programmaticSave) {
           const newTotal = currentTempCorruption + appliedCost;
           form.setValue("corruption.temporary", newTotal, { shouldDirty: true });
           if (newTotal > corruptionThreshold) {
-            toast({ title: "LIMIAR DE CORRUPÇÃO EXCEDIDO!", description: `Novo total: ${newTotal}. Role 1d4 para marcas de estigma!`, variant: "destructive" });
+            toast({ title: "LIMIAR EXCEDIDO!", description: "Verifique marcas de estigma.", variant: "destructive" });
           }
           await programmaticSave(); 
       }
@@ -111,7 +108,7 @@ export const NpcAbilityRollDialog = ({
        chatMessage = `${characterName} usou <span class="text-primary-foreground font-bold">${abilityName}</span>.`;
        if (appliedCost > 0) chatMessage += `\n<span class="text-purple-400">(Recebeu +${appliedCost} Corrupção Temporária${costMessage})</span>`;
        
-       discordRollData = { rollType: "manual", command: `usou ${abilityName}`, result: { rolls: [], modifier: 0, total: 0 }, isHidden };
+       discordRollData = { rollType: "manual", command: `usou ${abilityName}`, result: { rolls: [], modifier: 0, total: 0 } };
        
        if (!isHidden || isMaster) {
            toast({ 
@@ -124,16 +121,16 @@ export const NpcAbilityRollDialog = ({
        const result = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: false });
        chatMessage = formatAbilityTest(characterName, abilityName, attributeName, result, appliedCost) + (costMessage ? `\n🎲 Corrupção: ${costMessage}` : "");
        
-       // --- CORREÇÃO: Verificação de Sucesso ---
+       const discordResult = { total: result.totalRoll, ...result };
        const isSuccess = result.totalRoll <= result.target;
-       
-       discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result, isHidden, isSuccess };
+
+       discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result: discordResult };
        
        if (!isHidden || isMaster) {
            toast({ 
-               title: isSuccess ? "Sucesso!" : "Falha!", 
-               description: `Rolagem: ${result.totalRoll} (Alvo: ${result.target})`,
-               variant: isSuccess ? "default" : "destructive"
+               title: isSuccess ? "Sucesso!" : "Falha!",
+               description: `Rolou ${result.totalRoll} vs ${result.target}`,
+               variant: isSuccess ? "default" : "destructive" 
            });
        }
     }
@@ -141,18 +138,20 @@ export const NpcAbilityRollDialog = ({
     const targetTableId = tableId || contextTableId;
 
     if (isHidden && isMaster) {
+      // 1. ESCONDIDO: Chat Privado (recipient_id = masterId)
       await supabase.from("chat_messages").insert([
           { table_id: targetTableId, user_id: user.id, message: `${characterName} usou ${abilityName} em segredo.`, message_type: "info" },
           { table_id: targetTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
       ]);
     } else {
+      // 2. PÚBLICO: Chat Público (sem is_hidden, sem recipient_id)
       await supabase.from("chat_messages").insert({ 
           table_id: targetTableId, 
           user_id: user.id, 
           message: chatMessage, 
-          message_type: "roll",
-          is_hidden: isHidden 
+          message_type: "roll"
       });
+      // Discord chamado apenas se público
       supabase.functions.invoke('discord-roll-handler', { 
           body: { tableId: targetTableId, rollData: discordRollData, userName: characterName, chatMessage: isNoRoll ? chatMessage : undefined } 
       }).catch(console.error);
@@ -167,7 +166,7 @@ export const NpcAbilityRollDialog = ({
       open={open}
       onOpenChange={onOpenChange}
       title={isNoRoll ? `Usar: ${abilityName}` : `Testar: ${abilityName}`}
-      description={isNoRoll ? "Esta habilidade não requer teste de atributo." : `Teste de ${attributeName} (Alvo: ${attributeValue}).`}
+      description={isNoRoll ? "Sem teste necessário." : `Teste de ${attributeName} (Alvo: ${attributeValue}).`}
       onRoll={handleRoll}
       loading={loading || isSaving}
       buttonLabel={isOverThreshold ? "Aceitar Risco e Usar" : (isNoRoll ? "Confirmar Uso" : buttonText)}
@@ -175,15 +174,14 @@ export const NpcAbilityRollDialog = ({
     >
       {parsedCost.type !== 'none' && (
         <div className="space-y-3">
-          {isOverThreshold && <Alert variant="destructive" className="border-red-600 bg-red-900/20 text-red-200"><AlertOctagon className="h-4 w-4" /><AlertTitle>PERIGO EXTREMO!</AlertTitle><AlertDescription>Limiar excedido.</AlertDescription></Alert>}
-          {isAtThreshold && <Alert variant="destructive" className="border-orange-600 bg-orange-900/20 text-orange-200"><AlertTriangle className="h-4 w-4" /><AlertTitle>Cuidado</AlertTitle><AlertDescription>Limiar atingido.</AlertDescription></Alert>}
-          {!isOverThreshold && !isAtThreshold && <div className="text-sm text-muted-foreground flex justify-between items-center px-2 border rounded py-2 bg-muted/30"><span>Custo: <span className="text-purple-400 font-bold">{corruptionCost}</span></span>{parsedCost.type === 'fixed' && <span>Novo: {projectedCorruption} / {corruptionThreshold}</span>}{parsedCost.type === 'dice' && <span>Atual: {currentTempCorruption} / {corruptionThreshold}</span>}</div>}
+          {isOverThreshold && <Alert variant="destructive" className="border-red-600 bg-red-900/20 text-red-200"><AlertOctagon className="h-4 w-4" /><AlertTitle>PERIGO!</AlertTitle><AlertDescription>Limiar excedido.</AlertDescription></Alert>}
+          {!isOverThreshold && !isAtThreshold && <div className="text-sm text-muted-foreground flex justify-between items-center px-2 border rounded py-2 bg-muted/30"><span>Custo: <span className="text-purple-400 font-bold">{corruptionCost}</span></span>{parsedCost.type === 'fixed' && <span>Novo: {projectedCorruption}</span>}</div>}
         </div>
       )}
       {!isNoRoll && (
           <div className="space-y-2">
-            <Label htmlFor="modifier-ability">Modificador (no alvo)</Label>
-            <Input id="modifier-ability" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="+0" />
+            <Label htmlFor="mod-npc">Modificador</Label>
+            <Input id="mod-npc" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="+0" />
           </div>
       )}
     </BaseRollDialog>

@@ -34,28 +34,24 @@ export const WeaponAttackDialog = ({
   onConfirm
 }: WeaponAttackDialogProps) => {
   const { toast } = useToast();
-  const { isMaster } = useTableContext(); 
+  const { isMaster, masterId } = useTableContext(); 
   
   const [modifier, setModifier] = useState("0");
   const [advantage, setAdvantage] = useState(false);
   const [disadvantage, setDisadvantage] = useState(false);
   const [isRolling, setIsRolling] = useState(false);
-  
   const [isHidden, setIsHidden] = useState(false);
 
   useEffect(() => {
       if (open) {
-          setIsHidden(isMaster); // Mestre começa escondido, Jogador público
+          setIsHidden(isMaster);
           setModifier("0");
       }
   }, [open, isMaster]);
 
   const handleRoll = async () => {
     setIsRolling(true);
-    
-    if (onConfirm) {
-        onConfirm();
-    }
+    if (onConfirm) onConfirm();
 
     const modValue = parseInt(modifier) || 0;
     const targetValue = attributeValue + modValue;
@@ -68,47 +64,54 @@ export const WeaponAttackDialog = ({
       const criticalSuccess = rollResult.total === 1;
       const criticalFailure = rollResult.total === 20;
 
-      // Feedback Local (Sempre aparece para quem rolou)
-      toast({
-        title: isSuccess ? "Sucesso!" : "Falha!",
-        description: `Rolou ${rollResult.total} vs ${targetValue} (${attributeName})`,
-        variant: isSuccess ? "default" : "destructive",
-      });
+      if (!isHidden || isMaster) {
+          toast({
+            title: isSuccess ? "Sucesso!" : "Falha!",
+            description: `Rolou ${rollResult.total} vs ${targetValue} (${attributeName})`,
+            variant: isSuccess ? "default" : "destructive",
+          });
+      }
 
       if (tableId) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-            await supabase.from("chat_messages").insert({
-                table_id: tableId,
-                user_id: user.id,
-                message: formatAttributeRoll(characterName, attributeName, rollResult, targetValue, weaponName),
-                message_type: "roll",
-                is_hidden: isHidden, // Usa o estado correto
-            });
+            if (isHidden && isMaster) {
+                // Escondido: Apenas Chat Privado
+                await supabase.from("chat_messages").insert([
+                    { table_id: tableId, user_id: user.id, message: `${characterName} realizou um ataque em segredo.`, message_type: "info" },
+                    { table_id: tableId, user_id: user.id, message: formatAttributeRoll(characterName, attributeName, rollResult, targetValue, weaponName), message_type: "roll", recipient_id: masterId }
+                ]);
+            } else {
+                // Público: Chat + Discord
+                await supabase.from("chat_messages").insert({
+                    table_id: tableId,
+                    user_id: user.id,
+                    message: formatAttributeRoll(characterName, attributeName, rollResult, targetValue, weaponName),
+                    message_type: "roll"
+                });
 
-            const discordData = {
-                rollType: "attack",
-                weaponName,
-                attributeName,
-                targetValue,
-                result: rollResult,
-                isSuccess,
-                isCrit: criticalSuccess,
-                isFumble: criticalFailure,
-                isHidden 
-            };
+                const discordData = {
+                    rollType: "attack",
+                    weaponName,
+                    attributeName,
+                    targetValue,
+                    result: rollResult,
+                    isSuccess,
+                    isCrit: criticalSuccess,
+                    isFumble: criticalFailure
+                };
 
-            supabase.functions.invoke('discord-roll-handler', {
-                body: { 
-                    tableId, 
-                    rollData: discordData, 
-                    userName: characterName 
-                }
-            }).catch(console.error);
+                supabase.functions.invoke('discord-roll-handler', {
+                    body: { 
+                        tableId, 
+                        rollData: discordData, 
+                        userName: characterName 
+                    }
+                }).catch(console.error);
+            }
         }
       }
     }
-
     setIsRolling(false);
     onOpenChange(false);
   };
@@ -122,56 +125,23 @@ export const WeaponAttackDialog = ({
             Teste de <strong>{attributeName}</strong> (Valor: {attributeValue})
           </DialogDescription>
         </DialogHeader>
-        
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="modifier" className="text-right">Modificador</Label>
-            <Input
-              id="modifier"
-              type="number"
-              value={modifier}
-              onChange={(e) => setModifier(e.target.value)}
-              className="col-span-3"
-              placeholder="+0"
-            />
+            <Input id="modifier" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} className="col-span-3" placeholder="+0" />
           </div>
-          
           <div className="flex justify-center gap-6">
-            <div className="flex items-center space-x-2">
-              <Checkbox id="advantage" checked={advantage} onCheckedChange={(c) => { setAdvantage(!!c); if(c) setDisadvantage(false); }} />
-              <Label htmlFor="advantage">Vantagem</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox id="disadvantage" checked={disadvantage} onCheckedChange={(c) => { setDisadvantage(!!c); if(c) setAdvantage(false); }} />
-              <Label htmlFor="disadvantage">Desvantagem</Label>
-            </div>
+            <div className="flex items-center space-x-2"><Checkbox id="advantage" checked={advantage} onCheckedChange={(c) => { setAdvantage(!!c); if(c) setDisadvantage(false); }} /><Label htmlFor="advantage">Vantagem</Label></div>
+            <div className="flex items-center space-x-2"><Checkbox id="disadvantage" checked={disadvantage} onCheckedChange={(c) => { setDisadvantage(!!c); if(c) setAdvantage(false); }} /><Label htmlFor="disadvantage">Desvantagem</Label></div>
           </div>
-
-          {/* CORREÇÃO: Visível APENAS para o Mestre */}
           {isMaster && (
             <div className="flex items-center justify-between border p-3 rounded-md bg-muted/20">
-                <div className="space-y-0.5">
-                    <Label className="flex items-center gap-2">
-                        {isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>}
-                        Rolar Publicamente?
-                    </Label>
-                    <p className="text-[10px] text-muted-foreground">{isHidden ? "Privado (GM)" : "Público"}</p>
-                </div>
-                <Switch
-                checked={!isHidden}
-                onCheckedChange={(checked) => setIsHidden(!checked)}
-                />
+                <div className="space-y-0.5"><Label className="flex items-center gap-2">{isHidden ? <EyeOff className="w-4 h-4 text-muted-foreground"/> : <Eye className="w-4 h-4 text-primary"/>} Rolar Publicamente?</Label></div>
+                <Switch checked={!isHidden} onCheckedChange={(checked) => setIsHidden(!checked)} />
             </div>
           )}
         </div>
-
-        <DialogFooter>
-          <Button type="button" variant="secondary" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button type="submit" onClick={handleRoll} disabled={isRolling}>
-            {isRolling ? <Dices className="mr-2 h-4 w-4 animate-spin" /> : <Dices className="mr-2 h-4 w-4" />}
-            Rolar Ataque
-          </Button>
-        </DialogFooter>
+        <DialogFooter><Button type="submit" onClick={handleRoll} disabled={isRolling}>{isRolling ? <Dices className="mr-2 h-4 w-4 animate-spin" /> : <Dices className="mr-2 h-4 w-4" />} Rolar Ataque</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

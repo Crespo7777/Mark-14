@@ -31,13 +31,10 @@ export const WeaponDamageDialog = ({
   const { toast } = useToast();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
 
-  // REMOVIDO: const [isHidden, setIsHidden] = useState...
-
   useEffect(() => {
       if (open) setModifier("");
   }, [open]);
 
-  // Agora recebe isHidden
   const handleRoll = async (isHidden: boolean) => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -58,7 +55,7 @@ export const WeaponDamageDialog = ({
     }
 
     const chatMessage = formatDamageRoll(characterName, weaponName, baseRoll, advantageRoll, modValue, totalDamage);
-    const discordRollData = { rollType: "damage", weaponName, baseRoll, advantageRoll, modifier: modValue, totalDamage, isHidden };
+    const discordRollData = { rollType: "damage", weaponName, baseRoll, advantageRoll, modifier: modValue, totalDamage };
 
     if (isHidden && isMaster) {
       await supabase.from("chat_messages").insert([
@@ -70,8 +67,7 @@ export const WeaponDamageDialog = ({
           table_id: contextTableId, 
           user_id: user.id, 
           message: chatMessage, 
-          message_type: "roll",
-          is_hidden: isHidden 
+          message_type: "roll"
       });
       supabase.functions.invoke('discord-roll-handler', { body: { tableId: contextTableId, rollData: discordRollData, userName: characterName } }).catch(console.error);
     }
@@ -98,7 +94,6 @@ export const WeaponDamageDialog = ({
         <Label htmlFor="mod-dmg">Modificador</Label>
         <Input id="mod-dmg" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="Ex: +1" />
       </div>
-      {/* REMOVIDO: Checkbox duplicado */}
     </BaseRollDialog>
   );
 };

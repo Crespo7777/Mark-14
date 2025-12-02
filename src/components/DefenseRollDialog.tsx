@@ -27,13 +27,10 @@ export const DefenseRollDialog = ({
   const { toast } = useToast();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
 
-  // REMOVIDO: const [isHidden, setIsHidden] = useState...
-
   useEffect(() => {
       if (open) setModifier("");
   }, [open]);
 
-  // Agora recebe isHidden
   const handleRoll = async (isHidden: boolean) => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -47,7 +44,8 @@ export const DefenseRollDialog = ({
     }
 
     const chatMessage = formatDefenseRoll(characterName, result);
-    const discordRollData = { rollType: "defense", result, isHidden };
+    const discordResult = { total: result.totalRoll, ...result };
+    const discordRollData = { rollType: "defense", result: discordResult };
 
     if (isHidden && isMaster) {
       await supabase.from("chat_messages").insert([
@@ -59,12 +57,10 @@ export const DefenseRollDialog = ({
           table_id: contextTableId, 
           user_id: user.id, 
           message: chatMessage, 
-          message_type: "roll",
-          is_hidden: isHidden 
+          message_type: "roll"
       });
       supabase.functions.invoke('discord-roll-handler', { body: { tableId: contextTableId, rollData: discordRollData, userName: characterName } }).catch(console.error);
     }
-
     setLoading(false);
     onOpenChange(false);
   };
@@ -84,7 +80,6 @@ export const DefenseRollDialog = ({
         <Label htmlFor="mod-def">Modificador (no alvo)</Label>
         <Input id="mod-def" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="Ex: -2" />
       </div>
-      {/* REMOVIDO: Checkbox duplicado */}
     </BaseRollDialog>
   );
 };

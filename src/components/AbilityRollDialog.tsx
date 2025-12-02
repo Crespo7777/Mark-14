@@ -21,7 +21,6 @@ interface AbilityRollDialogProps {
   characterName: string;
   tableId: string;
   buttonText?: string;
-  // Callback para aplicar a corrupção na ficha pai
   onApplyCorruption?: (amount: number) => void;
 }
 
@@ -41,16 +40,13 @@ export const AbilityRollDialog = ({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   
-  // Hooks de contexto
   const context = useCharacterSheet();
   const form = context?.form;
   const programmaticSave = context?.programmaticSave;
-  const isSaving = context?.isSaving; // <--- CORREÇÃO: Variável definida aqui
   
   const { corruptionThreshold } = useCharacterCalculations();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   
-  // Lê a corrupção atual (do form se disponível, senão assume 0)
   const currentTempCorruption = form ? (form.watch("corruption.temporary") || 0) : 0;
   const isNoRoll = attributeName === "Nenhum";
 
@@ -58,7 +54,6 @@ export const AbilityRollDialog = ({
       if (open) setModifier("");
   }, [open]);
 
-  // Analisa o custo (Fixo vs Dado)
   const parsedCost = useMemo(() => {
     const fixed = parseInt(corruptionCost);
     if (!isNaN(fixed) && String(fixed) === corruptionCost.trim()) {
@@ -69,7 +64,6 @@ export const AbilityRollDialog = ({
     return { type: 'none', value: 0 };
   }, [corruptionCost]);
 
-  // Cálculos de Projeção
   const projectedCorruption = parsedCost.type === 'fixed' ? currentTempCorruption + (parsedCost.value as number) : null;
   const isOverThreshold = projectedCorruption !== null && projectedCorruption > corruptionThreshold;
   const isAtThreshold = projectedCorruption !== null && projectedCorruption === corruptionThreshold;
@@ -79,7 +73,6 @@ export const AbilityRollDialog = ({
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    // 1. Calcular Custo Real
     let appliedCost = 0;
     let costMessage = "";
 
@@ -93,7 +86,6 @@ export const AbilityRollDialog = ({
         }
     }
 
-    // 2. Aplicar Corrupção
     if (appliedCost > 0) {
       if (onApplyCorruption) {
           onApplyCorruption(appliedCost);
@@ -110,7 +102,6 @@ export const AbilityRollDialog = ({
       }
     }
 
-    // 3. Executar Ação (Rolagem ou Uso Direto)
     const modValue = parseInt(modifier) || 0;
     let chatMessage = "";
     let discordRollData: any = null;
@@ -119,7 +110,7 @@ export const AbilityRollDialog = ({
        chatMessage = `${characterName} usou <span class="text-primary-foreground font-bold">${abilityName}</span>.`;
        if (appliedCost > 0) chatMessage += `\n<span class="text-purple-400">(Recebeu +${appliedCost} Corrupção Temporária${costMessage})</span>`;
        
-       discordRollData = { rollType: "manual", command: `usou ${abilityName}`, result: { rolls: [], modifier: 0, total: 0 }, isHidden };
+       discordRollData = { rollType: "manual", command: `usou ${abilityName}`, result: { rolls: [], modifier: 0, total: 0 } };
        
        if (!isHidden || isMaster) {
            toast({ 
@@ -131,29 +122,24 @@ export const AbilityRollDialog = ({
     } else {
        const result = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: false });
        chatMessage = formatAbilityTest(characterName, abilityName, attributeName, result, appliedCost) + (costMessage ? `\n🎲 Corrupção: ${costMessage}` : "");
-       discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result, isHidden };
+       discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result };
        
        if (!isHidden || isMaster) {
            toast({ title: `Teste de ${abilityName}`, description: `Resultado: ${result.totalRoll} (Alvo: ${result.target})` });
        }
     }
 
-    // 4. Enviar para Chat / Discord
     const targetTableId = tableId || contextTableId;
 
     if (isHidden && isMaster) {
+      // APENAS CHAT SECRETO - SEM DISCORD
       await supabase.from("chat_messages").insert([
           { table_id: targetTableId, user_id: user.id, message: `${characterName} usou ${abilityName} em segredo.`, message_type: "info" },
           { table_id: targetTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
       ]);
     } else {
-      await supabase.from("chat_messages").insert({ 
-          table_id: targetTableId, 
-          user_id: user.id, 
-          message: chatMessage, 
-          message_type: "roll",
-          is_hidden: isHidden 
-      });
+      // PÚBLICO - COM DISCORD
+      await supabase.from("chat_messages").insert({ table_id: targetTableId, user_id: user.id, message: chatMessage, message_type: "roll" });
       supabase.functions.invoke('discord-roll-handler', { 
           body: { tableId: targetTableId, rollData: discordRollData, userName: characterName, chatMessage: isNoRoll ? chatMessage : undefined } 
       }).catch(console.error);
@@ -170,34 +156,17 @@ export const AbilityRollDialog = ({
       title={isNoRoll ? `Usar: ${abilityName}` : `Testar: ${abilityName}`}
       description={isNoRoll ? "Esta habilidade não requer teste de atributo." : `Teste de ${attributeName} (Alvo: ${attributeValue}).`}
       onRoll={handleRoll}
-      loading={loading || isSaving} // Agora isSaving existe e não vai quebrar
+      loading={loading}
       buttonLabel={isOverThreshold ? "Aceitar Risco e Usar" : (isNoRoll ? "Confirmar Uso" : buttonText)}
       actionColorClass={isOverThreshold ? "bg-red-600 hover:bg-red-700" : ""}
     >
-      {/* Exibição do Custo de Corrupção */}
       {parsedCost.type !== 'none' && (
         <div className="space-y-3">
-          {isOverThreshold && (
-            <Alert variant="destructive" className="border-red-600 bg-red-900/20 text-red-200">
-                <AlertOctagon className="h-4 w-4" /><AlertTitle>PERIGO EXTREMO!</AlertTitle><AlertDescription>Limiar excedido.</AlertDescription>
-            </Alert>
-          )}
-          {isAtThreshold && (
-            <Alert variant="destructive" className="border-orange-600 bg-orange-900/20 text-orange-200">
-                <AlertTriangle className="h-4 w-4" /><AlertTitle>Cuidado</AlertTitle><AlertDescription>Limiar atingido.</AlertDescription>
-            </Alert>
-          )}
-          {!isOverThreshold && !isAtThreshold && (
-             <div className="text-sm text-muted-foreground flex justify-between items-center px-2 border rounded py-2 bg-muted/30">
-                <span>Custo: <span className="text-purple-400 font-bold">{corruptionCost}</span></span>
-                {parsedCost.type === 'fixed' && <span>Novo: {projectedCorruption} / {corruptionThreshold}</span>}
-                {parsedCost.type === 'dice' && <span>Atual: {currentTempCorruption} / {corruptionThreshold}</span>}
-             </div>
-          )}
+          {isOverThreshold && <Alert variant="destructive" className="border-red-600 bg-red-900/20 text-red-200"><AlertOctagon className="h-4 w-4" /><AlertTitle>PERIGO EXTREMO!</AlertTitle><AlertDescription>Limiar excedido.</AlertDescription></Alert>}
+          {isAtThreshold && <Alert variant="destructive" className="border-orange-600 bg-orange-900/20 text-orange-200"><AlertTriangle className="h-4 w-4" /><AlertTitle>Cuidado</AlertTitle><AlertDescription>Limiar atingido.</AlertDescription></Alert>}
+          {!isOverThreshold && !isAtThreshold && <div className="text-sm text-muted-foreground flex justify-between items-center px-2 border rounded py-2 bg-muted/30"><span>Custo: <span className="text-purple-400 font-bold">{corruptionCost}</span></span>{parsedCost.type === 'fixed' && <span>Novo: {projectedCorruption} / {corruptionThreshold}</span>}{parsedCost.type === 'dice' && <span>Atual: {currentTempCorruption} / {corruptionThreshold}</span>}</div>}
         </div>
       )}
-
-      {/* Input de Modificador (Apenas se tiver teste) */}
       {!isNoRoll && (
           <div className="space-y-2">
             <Label htmlFor="modifier-ability">Modificador (no alvo)</Label>
