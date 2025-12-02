@@ -5,22 +5,25 @@ import {
   abilitySchema,
   traitSchema,
   inventoryItemSchema,
-  projectileSchema, // IMPORTANTE: Importando o schema da munição
+  projectileSchema,
   simpleUUID,
   numeric,
 } from "@/features/character/character.schema";
 
-// ---
-// Schema para um item de atributo do NPC
-// ---
+// Helper para aceitar números negativos e strings vazias
+export const signedNumeric = z.union([z.string(), z.number()]).transform((val) => {
+  if (val === "" || val === undefined) return 0;
+  if (val === "-") return 0;
+  const n = Number(val);
+  return isNaN(n) ? 0 : n;
+});
+
+// --- ATRIBUTOS ---
 const attributeItemSchema = z.object({
-  value: numeric.default(0),
+  value: signedNumeric.default(0),
   note: z.string().default(""), 
 });
 
-// ---
-// Schema de Atributos específico para o NPC
-// ---
 const npcAttributesSchema = z.object({
   cunning: attributeItemSchema.default({}),
   discreet: attributeItemSchema.default({}),
@@ -32,83 +35,71 @@ const npcAttributesSchema = z.object({
   vigorous: attributeItemSchema.default({}),
 });
 
-// ---
-// SCHEMA DE COMBATE
-// ---
+// --- COMBATE ---
 const npcCombatSchema = z.object({
   toughness_current: numeric.default(0),
   toughness_max: numeric.default(0),
-  defense: numeric.default(0),
+  temporary: numeric.default(0), // Vida temporária
+  defense: signedNumeric.default(0),
   armor_rd: numeric.default(0),
   pain_threshold: numeric.default(0),
-  pain_threshold_bonus: numeric.default(0),
+  pain_threshold_bonus: signedNumeric.default(0),
 });
 
-// ---
-// SCHEMA DE ARMADURA
-// ---
+// --- ARMADURA (Igual PC) ---
 export const npcArmorSchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""),
-  protection: z.string().default(""),
+  name: z.string().default("Nova Armadura"),
+  protection: z.string().default("1d4"),
+  obstructive: numeric.default(0), // Adicionado
   quality: z.string().default(""),
+  quality_desc: z.string().default(""), // Adicionado
+  weight: numeric.default(0), // Adicionado
+  equipped: z.boolean().default(true), // Adicionado
 });
 
-// ---
-// Schema de Arma (Adicionado projectileId)
-// ---
+// --- ARMA (Igual PC) ---
 export const npcWeaponSchema = z.object({
   id: z.string().default(simpleUUID),
-  name: z.string().default(""),
+  name: z.string().default("Novo Ataque"),
+  damage: z.string().default("1d8"),
+  attackAttribute: z.string().default("vigorous"),
   quality: z.string().default(""),
-  damage: z.string().default(""),
-  attackAttribute: z.string().default(""),
-  projectileId: z.string().optional(), // Novo campo para ligar arma à munição
+  quality_desc: z.string().default(""), // Adicionado
+  weight: numeric.default(0), // Adicionado
+  projectileId: z.string().optional(),
 });
 
-// ---
-// 3. O SCHEMA PRINCIPAL DO NPC
-// ---
+// --- SCHEMA PRINCIPAL ---
 export const npcSheetSchema = z.object({
-  // Detalhes Básicos
   name: z.string().min(1, "Nome é obrigatório").default("Novo NPC"),
   race: z.string().default("Criatura"),
   occupation: z.string().default("Monstro"),
-
-  // --- NOVOS CAMPOS PARA A IMAGEM ---
   image_url: z.string().nullable().optional(), 
   data: z.any().optional(), 
 
-  // Campos da aba Detalhes
   shadow: z.string().default(""), 
   personalGoal: z.string().default(""), 
   importantAllies: z.string().default(""), 
   notes: z.string().default(""),
 
-  // Atributos
   attributes: npcAttributesSchema.default({}),
-
-  // Combate
   combat: npcCombatSchema.default({}),
-
-  // Corrupção
   corruption: z.object({
       temporary: numeric.default(0),
       permanent: numeric.default(0),
       stigma: z.string().default(""),
   }).default({}),
 
-  // Listas
   weapons: z.array(npcWeaponSchema).default([]), 
   abilities: z.array(abilitySchema).default([]),
   traits: z.array(traitSchema).default([]),
   armors: z.array(npcArmorSchema).default([]),
   inventory: z.array(inventoryItemSchema).default([]),
-  projectiles: z.array(projectileSchema).default([]), // Lista de Munição
+  projectiles: z.array(projectileSchema).default([]),
 
 }).passthrough();
 
-// Tipos e Valores Padrão
 export type NpcSheetData = z.infer<typeof npcSheetSchema>;
 export type NpcArmor = z.infer<typeof npcArmorSchema>;
 export type NpcWeapon = z.infer<typeof npcWeaponSchema>; 

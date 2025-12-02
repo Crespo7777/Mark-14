@@ -40,7 +40,6 @@ import { AbilitiesTraitsTab } from "./tabs/AbilitiesTraitsTab";
 import { CombatEquipmentTab } from "./tabs/CombatEquipmentTab";
 import { BackpackTab } from "./tabs/BackpackTab";
 import { CharacterJournalTab } from "./tabs/CharacterJournalTab";
-import { EntityJournalTab } from "./tabs/EntityJournalTab";
 import { useCharacterCalculations } from "./hooks/useCharacterCalculations";
 
 interface CharacterSheetProps {
@@ -51,7 +50,8 @@ interface CharacterSheetProps {
 export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetProps) => {
   const context = useCharacterSheet();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("combat");
+  // Alterado para 'details' para ser a primeira aba ativa por padrão
+  const [activeTab, setActiveTab] = useState("details");
   
   // Ref para controlar o debounce do auto-save
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -290,21 +290,20 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
             </div>
         </Card>
 
-        {/* NAVEGAÇÃO DE ABAS */}
+        {/* NAVEGAÇÃO DE ABAS REORDENADA */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
             <div className="px-4 overflow-x-auto pb-2 scrollbar-thin">
                 <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground w-full justify-start gap-1 min-w-max">
-                    <TabsTrigger value="combat" className="text-xs px-3"><Swords className="w-3.5 h-3.5 mr-1.5"/> Combate</TabsTrigger>
+                    <TabsTrigger value="details" className="text-xs px-3"><User className="w-3.5 h-3.5 mr-1.5"/> Detalhes</TabsTrigger>
                     <TabsTrigger value="attributes" className="text-xs px-3"><Sparkles className="w-3.5 h-3.5 mr-1.5"/> Atributos</TabsTrigger>
+                    <TabsTrigger value="combat" className="text-xs px-3"><Swords className="w-3.5 h-3.5 mr-1.5"/> Combate</TabsTrigger>
                     <TabsTrigger value="abilities" className="text-xs px-3"><Shield className="w-3.5 h-3.5 mr-1.5"/> Habilidades</TabsTrigger>
                     <TabsTrigger value="inventory" className="text-xs px-3"><Backpack className="w-3.5 h-3.5 mr-1.5"/> Mochila</TabsTrigger>
-                    <TabsTrigger value="details" className="text-xs px-3"><User className="w-3.5 h-3.5 mr-1.5"/> Detalhes</TabsTrigger>
                     <TabsTrigger value="journal" className="text-xs px-3"><Book className="w-3.5 h-3.5 mr-1.5"/> Diário</TabsTrigger>
-                    <TabsTrigger value="entities" className="text-xs px-3">Entidades</TabsTrigger>
                 </TabsList>
             </div>
 
-            {/* CONTEÚDO DAS ABAS */}
+            {/* CONTEÚDO DAS ABAS REORDENADO */}
             <div className="flex-1 overflow-y-auto px-4 pb-4">
                 <div className={isReadOnly ? "pointer-events-none opacity-90 h-full" : "h-full"}>
                     <TabsContent value="details" className="mt-0 h-full"><DetailsTab /></TabsContent>
@@ -313,7 +312,6 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
                     <TabsContent value="abilities" className="mt-0 h-full"><AbilitiesTraitsTab /></TabsContent>
                     <TabsContent value="inventory" className="mt-0 h-full"><BackpackTab /></TabsContent>
                     <TabsContent value="journal" className="mt-0 h-full"><CharacterJournalTab /></TabsContent>
-                    <TabsContent value="entities" className="mt-0 h-full"><EntityJournalTab /></TabsContent>
                 </div>
             </div>
         </Tabs>

@@ -2,125 +2,148 @@
 
 import { useState } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { cn } from "@/lib/utils";
-import { AttributeRollDialog } from "@/components/AttributeRollDialog";
+import { Button } from "@/components/ui/button";
+import { FormField, FormItem, FormControl } from "@/components/ui/form";
+import { Dices, StickyNote } from "lucide-react";
 import { attributesList } from "@/features/character/character.constants";
+import { AttributeRollDialog } from "@/components/AttributeRollDialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 
-type SelectedAttribute = {
+type RollData = {
   name: string;
   value: number;
 };
 
 export const NpcAttributesTab = () => {
-  const { form, npc, isReadOnly } = useNpcSheet();
-  const [selectedAttr, setSelectedAttr] = useState<SelectedAttribute | null>(
-    null,
-  );
+  const { form, isReadOnly } = useNpcSheet();
+  const [rollData, setRollData] = useState<RollData | null>(null);
 
-  const handleAttributeClick = (name: string, value: number) => {
-    setSelectedAttr({
-      name: name,
-      value: value,
-    });
+  // CORREÇÃO: Lógica Invertida (Symbaroum Style)
+  // 10 - Valor (Ex: 15 vira -5, 5 vira +5)
+  const getModifier = (value: number) => {
+    const mod = 10 - value; 
+    if (mod > 0) return `+${mod}`;
+    return `${mod}`;
+  };
+
+  // Cores ajustadas para a nova lógica
+  const getModifierColor = (value: number) => {
+    const mod = 10 - value;
+    
+    // Positivo (Verde) - Geralmente bom (bônus)
+    if (mod > 0) return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
+    
+    // Negativo (Vermelho) - Geralmente ruim (penalidade/dificuldade)
+    if (mod < 0) return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
+    
+    // Zero (Neutro)
+    return "bg-secondary text-secondary-foreground";
+  };
+
+  const handleRoll = (key: string, label: string) => {
+    const val = Number(form.getValues(`attributes.${key}.value`)) || 0;
+    setRollData({ name: label, value: val });
   };
 
   return (
-    <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Atributos</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {attributesList.map((attr) => {
-            const attributeName = `attributes.${
-              attr.key as keyof typeof form.getValues.attributes
-            }.value`;
-            // Garante número para o cálculo do modificador
-            const currentValue = Number(form.watch(attributeName));
-            
-            const modifier = 10 - (currentValue || 0);
-            const modString = modifier > 0 ? `+${modifier}` : `${modifier}`;
+    <div className="h-full p-2 overflow-y-auto">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {attributesList.map((attr) => {
+          const currentValue = form.watch(`attributes.${attr.key}.value`) || 0;
+          const hasNote = !!form.watch(`attributes.${attr.key}.note`);
 
-            return (
-              <div
-                key={attr.key}
-                className={cn(
-                  "space-y-1 rounded-lg p-2 transition-colors",
-                  "cursor-pointer hover:bg-muted/50",
-                )}
-                onClick={() =>
-                  handleAttributeClick(
-                    attr.label,
-                    Number(form.getValues(attributeName)) || 0,
-                  )
-                }
-              >
+          return (
+            <Card key={attr.key} className="relative overflow-hidden border-2 hover:border-primary/50 transition-colors">
+              <CardHeader className="p-2 pb-1 text-center bg-muted/20">
+                <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2">
+                  {attr.label}
+                  {/* Botão discreto de Nota */}
+                  <FormField
+                    control={form.control}
+                    name={`attributes.${attr.key}.note`}
+                    render={({ field }) => (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className={`h-5 w-5 absolute right-2 top-2 ${hasNote ? "text-primary animate-pulse" : "text-muted-foreground/30 hover:text-primary"}`}
+                          >
+                            <StickyNote className="w-3 h-3" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-64 p-3" align="end">
+                          <div className="space-y-2">
+                            <h4 className="font-medium text-xs text-muted-foreground mb-1">Notas para {attr.label}</h4>
+                            <Textarea 
+                                placeholder="Ex: Vantagem em testes de..." 
+                                className="text-xs min-h-[80px] resize-none" 
+                                {...field}
+                                readOnly={isReadOnly}
+                            />
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  />
+                </CardTitle>
+              </CardHeader>
+              
+              <CardContent className="p-3 flex flex-col items-center gap-3">
+                
+                {/* Input Gigante do Valor */}
                 <FormField
                   control={form.control}
-                  name={attributeName}
+                  name={`attributes.${attr.key}.value`}
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className={cn("text-lg", "cursor-pointer")}>
-                        {attr.label}
-                      </FormLabel>
+                    <FormItem className="w-full flex justify-center">
                       <FormControl>
-                        {/* CORREÇÃO: Input direto sem parseInt */}
                         <Input
                           type="number"
-                          className="text-2xl font-bold h-12 text-center"
+                          className="text-4xl font-black text-center h-16 w-24 border-0 bg-transparent focus-visible:ring-0 shadow-none p-0"
+                          placeholder="10"
                           {...field}
-                          onChange={(e) => field.onChange(e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
                           readOnly={isReadOnly}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
                         />
                       </FormControl>
-                      <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <div>
-                  <FormControl>
-                    <Input
-                      type="text"
-                      className={cn(
-                        "h-8 text-center text-sm font-bold border-none bg-transparent read-only:cursor-default focus-visible:ring-0 focus-visible:ring-offset-0",
-                        modifier > 0 && "text-primary",
-                        modifier < 0 && "text-destructive",
-                        modifier === 0 && "text-muted-foreground",
-                      )}
-                      value={modString}
-                      readOnly
-                      tabIndex={-1} 
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </FormControl>
-                </div>
-              </div>
-            );
-          })}
-        </CardContent>
-      </Card>
+                {/* Badge do Modificador Calculado (Lógica Invertida) */}
+                <Badge variant="outline" className={`text-xs font-mono px-3 py-1 border ${getModifierColor(currentValue)}`}>
+                  Mod: {getModifier(currentValue)}
+                </Badge>
 
-      <AttributeRollDialog
-        open={!!selectedAttr}
-        onOpenChange={(open) => {
-          if (!open) setSelectedAttr(null);
-        }}
-        attributeName={selectedAttr?.name || ""}
-        attributeValue={selectedAttr?.value || 0}
-        characterName={npc.name}
-        tableId={npc.table_id}
-      />
-    </>
+                {/* Botão de Rolar */}
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="w-full h-8 text-xs gap-2 mt-1"
+                  onClick={() => handleRoll(attr.key, attr.label)}
+                >
+                  <Dices className="w-3.5 h-3.5" />
+                  Testar
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {rollData && (
+        <AttributeRollDialog
+          open={!!rollData}
+          onOpenChange={(open) => !open && setRollData(null)}
+          attributeName={rollData.name}
+          attributeValue={rollData.value}
+        />
+      )}
+    </div>
   );
 };

@@ -1,10 +1,11 @@
+// src/features/character/hooks/useCharacterCalculations.ts
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useMemo, useEffect } from "react";
 
 export const useCharacterCalculations = () => {
   const { form } = useCharacterSheet();
 
-  // Observar campos para reatividade imediata
+  // --- Observar campos para reatividade imediata ---
   const attributes = form.watch("attributes");
   const toughnessMaxMod = form.watch("toughness.max_modifier");
   
@@ -14,6 +15,19 @@ export const useCharacterCalculations = () => {
   const experience = form.watch("experience");
   const corruption = form.watch("corruption");
   const painThresholdBonus = Number(form.watch("painThresholdBonus") || 0);
+
+  // --- Função Auxiliar de Tratamento de Peso ---
+  // Converte "0,5" ou "0.5" para number e garante que não retorne NaN
+  const parseWeight = (value: string | number | undefined): number => {
+    if (!value) return 0;
+    if (typeof value === "number") return value;
+    
+    // Troca vírgula por ponto e remove espaços
+    const cleanString = value.toString().replace(",", ".").trim();
+    const result = parseFloat(cleanString);
+    
+    return isNaN(result) ? 0 : result;
+  };
 
   const calculations = useMemo(() => {
     // 1. Atributos
@@ -37,17 +51,20 @@ export const useCharacterCalculations = () => {
     const bonusHp = Number(toughnessMaxMod) || 0;
     const toughnessMax = maxHpBase + bonusHp;
 
-    // 5. Carga e Peso (CORRIGIDO: Peso é o TOTAL da linha, não unitário)
+    // 5. Carga e Peso (AJUSTADO: Soma direta do peso declarado, SEM multiplicar por quantidade)
     const inventoryWeight = inventory.reduce((acc: number, item: any) => {
-      // Soma direta do peso definido pelo utilizador
-      return acc + (Number(item.weight) || 0);
+      const itemWeight = parseWeight(item.weight);
+      return acc + itemWeight;
     }, 0);
 
     const projectilesWeight = projectiles.reduce((acc: number, item: any) => {
-      return acc + (Number(item.weight) || 0);
+      const itemWeight = parseWeight(item.weight);
+      return acc + itemWeight;
     }, 0);
 
     const totalWeight = inventoryWeight + projectilesWeight;
+    
+    // Regra: Carga Máxima = Atributo Forte (Mínimo 10 se Forte for 0 ou bugado)
     const maxLoad = strong > 0 ? strong : 10;
     
     let encumbranceStatus = "Leve";
@@ -61,9 +78,9 @@ export const useCharacterCalculations = () => {
     const corruptionThreshold = Math.ceil(resolute / 2);
     const totalCorruption = (Number(corruption?.temporary) || 0) + (Number(corruption?.permanent) || 0);
 
-    // 8. Amoque
+    // 8. Amoque (Berserk)
     const abilities = form.getValues("abilities") || [];
-    const activeBerserk = abilities.find((a: any) => a.name.toLowerCase().includes("amoque") && a.isActive);
+    const activeBerserk = abilities.find((a: any) => a.name?.toLowerCase().includes("amoque") && a.isActive);
 
     return {
       strong,
@@ -92,7 +109,7 @@ export const useCharacterCalculations = () => {
     painThresholdBonus
   ]);
 
-  // Guardião da Vida
+  // --- Guardião da Vida (Impede que Vida Atual > Vida Máxima) ---
   useEffect(() => {
       const currentVal = Number(form.getValues("toughness.current")) || 0;
       if (currentVal > calculations.toughnessMax) {
