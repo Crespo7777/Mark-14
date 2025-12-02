@@ -19,28 +19,20 @@ type RollData = {
 };
 
 export const NpcAttributesTab = () => {
-  const { form, isReadOnly } = useNpcSheet();
+  // 1. ADICIONADO: 'npc' desestruturado do contexto para termos acesso ao table_id
+  const { form, npc, isReadOnly } = useNpcSheet(); 
   const [rollData, setRollData] = useState<RollData | null>(null);
 
-  // CORREÇÃO: Lógica Invertida (Symbaroum Style)
-  // 10 - Valor (Ex: 15 vira -5, 5 vira +5)
   const getModifier = (value: number) => {
     const mod = 10 - value; 
     if (mod > 0) return `+${mod}`;
     return `${mod}`;
   };
 
-  // Cores ajustadas para a nova lógica
   const getModifierColor = (value: number) => {
     const mod = 10 - value;
-    
-    // Positivo (Verde) - Geralmente bom (bônus)
     if (mod > 0) return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
-    
-    // Negativo (Vermelho) - Geralmente ruim (penalidade/dificuldade)
     if (mod < 0) return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
-    
-    // Zero (Neutro)
     return "bg-secondary text-secondary-foreground";
   };
 
@@ -61,7 +53,6 @@ export const NpcAttributesTab = () => {
               <CardHeader className="p-2 pb-1 text-center bg-muted/20">
                 <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2">
                   {attr.label}
-                  {/* Botão discreto de Nota */}
                   <FormField
                     control={form.control}
                     name={`attributes.${attr.key}.note`}
@@ -94,8 +85,6 @@ export const NpcAttributesTab = () => {
               </CardHeader>
               
               <CardContent className="p-3 flex flex-col items-center gap-3">
-                
-                {/* Input Gigante do Valor */}
                 <FormField
                   control={form.control}
                   name={`attributes.${attr.key}.value`}
@@ -115,12 +104,10 @@ export const NpcAttributesTab = () => {
                   )}
                 />
 
-                {/* Badge do Modificador Calculado (Lógica Invertida) */}
                 <Badge variant="outline" className={`text-xs font-mono px-3 py-1 border ${getModifierColor(currentValue)}`}>
                   Mod: {getModifier(currentValue)}
                 </Badge>
 
-                {/* Botão de Rolar */}
                 <Button
                   size="sm"
                   variant="secondary"
@@ -142,6 +129,8 @@ export const NpcAttributesTab = () => {
           onOpenChange={(open) => !open && setRollData(null)}
           attributeName={rollData.name}
           attributeValue={rollData.value}
+          characterName={npc.name} // ADICIONADO: Nome do NPC para o chat
+          tableId={npc.table_id}   // 2. CORREÇÃO CRÍTICA: Passando o ID da mesa
         />
       )}
     </div>
