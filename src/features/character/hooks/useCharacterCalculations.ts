@@ -17,7 +17,6 @@ export const useCharacterCalculations = () => {
   const painThresholdBonus = Number(form.watch("painThresholdBonus") || 0);
 
   // --- Função Auxiliar de Tratamento de Peso ---
-  // Converte "0,5" ou "0.5" para number e garante que não retorne NaN
   const parseWeight = (value: string | number | undefined): number => {
     if (!value) return 0;
     if (typeof value === "number") return value;
@@ -42,7 +41,9 @@ export const useCharacterCalculations = () => {
     // 3. Defesa
     const equippedArmors = armors.filter((a: any) => a.equipped);
     const armorImpeding = equippedArmors.reduce((acc: number, item: any) => {
-        return acc + (Number(item.obstructive) || 0);
+        // CORREÇÃO AQUI: Math.abs() garante que pegamos a magnitude (2) e não o valor negativo (-2)
+        // Assim, a conta 'Quick - Impeding' subtrai corretamente.
+        return acc + Math.abs(Number(item.obstructive) || 0);
     }, 0);
     const defense = quick - armorImpeding;
 
@@ -51,7 +52,7 @@ export const useCharacterCalculations = () => {
     const bonusHp = Number(toughnessMaxMod) || 0;
     const toughnessMax = maxHpBase + bonusHp;
 
-    // 5. Carga e Peso (AJUSTADO: Soma direta do peso declarado, SEM multiplicar por quantidade)
+    // 5. Carga e Peso
     const inventoryWeight = inventory.reduce((acc: number, item: any) => {
       const itemWeight = parseWeight(item.weight);
       return acc + itemWeight;
@@ -64,7 +65,7 @@ export const useCharacterCalculations = () => {
 
     const totalWeight = inventoryWeight + projectilesWeight;
     
-    // Regra: Carga Máxima = Atributo Forte (Mínimo 10 se Forte for 0 ou bugado)
+    // Regra: Carga Máxima = Atributo Forte
     const maxLoad = strong > 0 ? strong : 10;
     
     let encumbranceStatus = "Leve";
@@ -109,7 +110,7 @@ export const useCharacterCalculations = () => {
     painThresholdBonus
   ]);
 
-  // --- Guardião da Vida (Impede que Vida Atual > Vida Máxima) ---
+  // --- Guardião da Vida ---
   useEffect(() => {
       const currentVal = Number(form.getValues("toughness.current")) || 0;
       if (currentVal > calculations.toughnessMax) {
