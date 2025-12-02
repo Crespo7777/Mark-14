@@ -33,13 +33,11 @@ export const AttributeRollDialog = ({
   const { toast } = useToast();
   const { isMaster, masterId } = useTableContext();
 
-  // REMOVIDO: const [isHidden, setIsHidden] = useState... (O BaseRollDialog trata disso)
-
   useEffect(() => {
       if (open) setModifier("0");
   }, [open]);
 
-  // Agora recebe isHidden como argumento
+  // Recebe isHidden do BaseRollDialog
   const handleRoll = async (isHidden: boolean) => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -47,37 +45,38 @@ export const AttributeRollDialog = ({
 
     const modValue = parseInt(modifier) || 0;
     
-    // Cálculo da rolagem
-    let diceString = "1d20";
-    if (advantage) diceString = "2d20kl1";
-    if (disadvantage) diceString = "2d20kh1";
-
+    // Executa a rolagem
     const rollResult = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: advantage, withDisadvantage: disadvantage });
 
-    // Feedback local
+    // --- CORREÇÃO: Cálculo de Sucesso/Falha ---
+    const isSuccess = rollResult.totalRoll <= rollResult.target;
+    
+    // Feedback visual (Toast)
     if (!isHidden || isMaster) {
-        toast({ title: isMaster ? "Rolagem (Mestre)" : "Rolagem", description: `Resultado: ${rollResult.totalRoll}` });
+        toast({ 
+            title: isSuccess ? "Sucesso!" : "Falha!", 
+            description: `Rolou ${rollResult.totalRoll} vs ${rollResult.target} (${attributeName})`,
+            variant: isSuccess ? "default" : "destructive" // Verde (default) ou Vermelho (destructive)
+        });
     }
 
     const chatMessage = formatAttributeRoll(characterName, attributeName, { total: rollResult.totalRoll, rolls: rollResult.rolls } as any, rollResult.target);
     
-    // Discord Data
     const discordRollData = { 
         rollType: "attribute", 
         attributeName, 
         targetValue: rollResult.target, 
         result: { total: rollResult.totalRoll, rolls: rollResult.rolls },
+        isSuccess, // Passa info de sucesso
         isHidden 
     };
 
     if (isHidden && isMaster) {
-      // Mensagem Secreta
       await supabase.from("chat_messages").insert([
         { table_id: tableId, user_id: user.id, message: `${characterName} rolou ${attributeName} em segredo.`, message_type: "info" },
         { table_id: tableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
       ]);
     } else {
-      // Mensagem Pública
       await supabase.from("chat_messages").insert({ 
           table_id: tableId, 
           user_id: user.id, 
@@ -101,7 +100,7 @@ export const AttributeRollDialog = ({
       onOpenChange={onOpenChange}
       title={`Teste de ${attributeName}`}
       description={`Valor base: ${attributeValue}`}
-      onRoll={handleRoll} // Passa a função que aceita o argumento
+      onRoll={handleRoll}
       loading={loading}
       buttonLabel="Rolar Atributo"
     >
@@ -122,7 +121,6 @@ export const AttributeRollDialog = ({
             </div>
           </div>
       </div>
-      {/* REMOVIDO: O bloco de switch manual que estava aqui */}
     </BaseRollDialog>
   );
 };
