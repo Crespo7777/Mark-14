@@ -3,18 +3,22 @@ import { useNpcSheet } from "../NpcSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Sword, Dices, Trash2, Plus, Anchor } from "lucide-react";
+import { Shield, Sword, Dices, Trash2, Plus, Target, Database, PenTool } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { FormField, FormLabel, FormControl, FormItem } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast"; // Importante para o feedback visual
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; 
+import { useToast } from "@/hooks/use-toast";
 
 import { VitalityCard } from "@/features/combat/components/VitalityCard";
 import { CorruptionCard } from "@/features/combat/components/CorruptionCard";
 import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
 import { WeaponDamageDialog } from "@/components/WeaponDamageDialog";
+import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
+import { QualityInfoButton } from "@/components/QualityInfoButton";
 
 import { useCombatLogic } from "@/features/combat/hooks/useCombatLogic";
 import { useNpcCalculations } from "../hooks/useNpcCalculations";
@@ -22,118 +26,165 @@ import { useNpcCalculations } from "../hooks/useNpcCalculations";
 export const NpcCombatEquipmentTab = () => {
   const { form, npc } = useNpcSheet();
   const calculations = useNpcCalculations();
-  const { toast } = useToast(); // Hook de notificações
+  const { toast } = useToast();
   
   const [openWeapons, setOpenWeapons] = useState<string[]>([]);
+  
+  const [isWeaponSelectorOpen, setIsWeaponSelectorOpen] = useState(false);
+  const [isArmorSelectorOpen, setIsArmorSelectorOpen] = useState(false);
+  const [isProjectileSelectorOpen, setIsProjectileSelectorOpen] = useState(false);
 
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({ control: form.control, name: "weapons" });
   const { fields: armorFields, append: appendArmor, remove: removeArmor } = useFieldArray({ control: form.control, name: "armors" });
+  const { fields: projectileFields, append: appendProjectile, remove: removeProjectile } = useFieldArray({ control: form.control, name: "projectiles" });
 
   const combatLogic = useCombatLogic({
       form,
       fields: { currentToughness: "toughness.current", maxToughness: "toughness.max" }
   });
 
-  // --- NOVA LÓGICA DE DANO AUTOMÁTICO ---
+  // Funções Manuais (Fallback)
+  const addManualWeapon = () => appendWeapon({ name: "Nova Arma", damage: "1d6", attackAttribute: "vigorous", quality_desc: "", is_natural: false });
+  const addManualArmor = () => appendArmor({ name: "Nova Armadura", protection: "0", obstructive: 0, equipped: true, quality_desc: "" });
+  const addManualProjectile = () => appendProjectile({ id: crypto.randomUUID(), name: "Munição", amount: 10, damage_bonus: "0", quality_desc: "" });
+
+  // Funções do Banco de Dados
+  const handleAddWeapon = (item: any) => {
+      const stats = item.stats || {};
+      appendWeapon({ 
+          name: item.name, 
+          damage: stats.damage || "1d6", 
+          attackAttribute: stats.attribute || "vigorous", 
+          quality_desc: stats.qualities ? JSON.stringify(stats.qualities) : "",
+          is_natural: false
+      });
+      setIsWeaponSelectorOpen(false);
+      toast({ title: "Item Importado", description: `${item.name} equipado.` });
+  };
+
+  const handleAddArmor = (item: any) => {
+      const stats = item.stats || {};
+      appendArmor({
+          name: item.name,
+          protection: stats.protection || "0",
+          obstructive: stats.impeding || 0,
+          equipped: true,
+          quality_desc: stats.qualities ? JSON.stringify(stats.qualities) : ""
+      });
+      setIsArmorSelectorOpen(false);
+      toast({ title: "Item Importado", description: `${item.name} equipado.` });
+  };
+
+  const handleAddProjectile = (item: any) => {
+      const stats = item.stats || {};
+      appendProjectile({
+          id: crypto.randomUUID(),
+          name: item.name,
+          amount: 20, 
+          damage_bonus: stats.damage_bonus || "",
+          quality_desc: stats.qualities ? JSON.stringify(stats.qualities) : ""
+      });
+      setIsProjectileSelectorOpen(false);
+      toast({ title: "Item Importado", description: `${item.name} adicionado.` });
+  };
+
   const handleSmartDamage = (incomingDamage: number) => {
       const dr = calculations.damageReduction;
-      
-      // Se tiver redução de dano, subtrai
       if (dr > 0) {
           const finalDamage = Math.max(0, incomingDamage - dr);
-          
-          // Aplica o dano reduzido
           combatLogic.handleDamage(finalDamage);
-          
-          // Avisa o mestre visualmente
-          toast({
-              title: "Dano Reduzido pela Armadura",
-              description: `Recebido: ${incomingDamage} | Redução: ${dr} | Dano Real: ${finalDamage}`,
-              variant: "default", // Ou "info" se tiver configurado
-          });
+          toast({ title: "Dano Reduzido", description: `Recebido: ${incomingDamage} - DR: ${dr} = ${finalDamage}` });
       } else {
-          // Se não tiver armadura, aplica direto
           combatLogic.handleDamage(incomingDamage);
       }
   };
 
   const onHeal = (val: number) => combatLogic.handleHeal(val, calculations.toughnessMax);
 
-  const addBasicAttack = () => {
-      appendWeapon({ name: "Novo Ataque", damage: "1d6", attackAttribute: "vigorous", quality: "" });
-  };
-
-  const addBasicArmor = () => {
-      appendArmor({ name: "Armadura Natural", protection: "2", obstructive: 0, equipped: true });
+  const parseQualities = (qualityStr: string) => {
+      if (!qualityStr) return [];
+      try {
+          const parsed = JSON.parse(qualityStr);
+          if (Array.isArray(parsed)) return parsed;
+          return [qualityStr];
+      } catch (e) {
+          return [qualityStr];
+      }
   };
 
   return (
-    <div className="space-y-4 h-full flex flex-col">
-      {/* --- STATUS VITAIS --- */}
+    <div className="space-y-4 h-full flex flex-col overflow-y-auto pb-20"> 
+      
+      {/* STATUS VITAIS */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          
-          {/* 1. Defesa Manual */}
           <Card className="border-t-4 border-t-blue-500 shadow-sm">
              <CardHeader className="pb-2 pt-4 px-4 bg-muted/10">
                 <CardTitle className="flex items-center gap-2 text-base"><Shield className="w-4 h-4 text-blue-500" /> Defesa</CardTitle>
              </CardHeader>
              <CardContent className="p-4 flex flex-col items-center justify-center gap-2">
-                 {/* Input Manual para Defesa */}
-                 <FormField
-                    control={form.control}
-                    name="stats.defense"
-                    render={({ field }) => (
-                        <div className="relative w-24">
-                            <Input 
-                                {...field} 
-                                type="number" 
-                                className="text-4xl font-extrabold text-center h-16 tracking-tighter bg-transparent border-2 border-muted focus:border-primary"
-                                placeholder="0"
-                            />
-                        </div>
-                    )}
-                 />
-                 <div className="text-xs text-muted-foreground text-center px-2">
-                    Modificador de Defesa<br/>(Ex: -5 ou +3)
-                 </div>
+                 <FormField control={form.control} name="stats.defense" render={({ field }) => (
+                    <div className="relative w-24">
+                        <Input {...field} type="number" className="text-4xl font-extrabold text-center h-16 tracking-tighter bg-transparent border-2 border-muted focus:border-primary" placeholder="0"/>
+                    </div>
+                 )} />
+                 <div className="text-xs text-muted-foreground text-center">Modificador</div>
              </CardContent>
           </Card>
 
-          {/* 2. Vitalidade (Com Redução de Dano Automática) */}
-          <VitalityCard 
-            form={form}
-            max={calculations.toughnessMax}
-            painThreshold={calculations.painThreshold}
-            onDamage={handleSmartDamage} // <--- Aqui está a mágica
-            onHeal={onHeal}
-          />
+          <div className="flex flex-col gap-2">
+            <VitalityCard form={form} max={calculations.toughnessMax} painThreshold={calculations.painThreshold} onDamage={handleSmartDamage} onHeal={onHeal} />
+            <Card className="p-2 flex items-center justify-between bg-muted/20">
+                <span className="text-xs font-semibold text-muted-foreground ml-2">Limiar de Dor:</span>
+                <FormField control={form.control} name="stats.pain_threshold" render={({ field }) => (
+                    <Input {...field} type="number" className="w-20 h-8 text-center bg-background" placeholder="Pain"/>
+                )} />
+            </Card>
+          </div>
 
-          {/* 3. Corrupção */}
-          <CorruptionCard 
-            form={form} 
-            threshold={calculations.corruptionThreshold} 
-          />
+          <div className="flex flex-col gap-2">
+            <CorruptionCard form={form} threshold={calculations.corruptionThreshold} />
+            <Card className="p-2 flex items-center justify-between bg-muted/20">
+                <span className="text-xs font-semibold text-muted-foreground ml-2">Limiar Corrupção:</span>
+                <FormField control={form.control} name="stats.corruption_threshold" render={({ field }) => (
+                    <Input {...field} type="number" className="w-20 h-8 text-center bg-background" placeholder="Corr"/>
+                )} />
+            </Card>
+          </div>
       </div>
 
-      {/* --- LISTAS --- */}
+      {/* ÁREA DE COMBATE */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
-          
-          {/* ATAQUES */}
+          {/* ARMAS */}
           <Card className="flex flex-col border-t-4 border-t-orange-500 shadow-sm">
             <CardHeader className="py-3 px-4 bg-muted/10 border-b flex flex-row items-center justify-between">
-                <CardTitle className="text-base flex items-center gap-2"><Sword className="w-4 h-4 text-orange-500" /> Ataques</CardTitle>
-                <Button type="button" size="icon" variant="ghost" className="h-6 w-6" onClick={addBasicAttack}><Plus className="w-4 h-4" /></Button>
+                <CardTitle className="text-base flex items-center gap-2"><Sword className="w-4 h-4 text-orange-500" /> Armas</CardTitle>
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="outline" size="sm" className="h-8 gap-2"><Plus className="w-4 h-4" /> Adicionar</Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => setIsWeaponSelectorOpen(true)}><Database className="w-4 h-4 mr-2" /> Buscar no Banco</DropdownMenuItem>
+                        <DropdownMenuItem onClick={addManualWeapon}><PenTool className="w-4 h-4 mr-2" /> Criar Manualmente</DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </CardHeader>
-            <CardContent className="p-2 flex-1 overflow-y-auto max-h-[400px]">
-                {/* ... (Conteúdo da lista de armas igual ao anterior) ... */}
+            <CardContent className="p-2 flex-1 space-y-2">
+                {weaponFields.length === 0 && <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-lg m-2">Nenhuma arma equipada</div>}
                 <Accordion type="multiple" className="space-y-2" value={openWeapons} onValueChange={setOpenWeapons}>
-                    {weaponFields.map((field, index) => (
+                    {weaponFields.map((field, index) => {
+                        const qualities = parseQualities(form.watch(`weapons.${index}.quality_desc`));
+                        return (
                         <AccordionItem key={field.id} value={field.id} className="border rounded bg-card px-2">
                             <div className="flex items-center justify-between py-2">
                                 <AccordionTrigger className="p-0 hover:no-underline flex-1 py-1">
                                     <div className="flex flex-col items-start text-left gap-1">
-                                        <span className="font-semibold text-sm">{form.watch(`weapons.${index}.name`)}</span>
-                                        <Badge variant="outline" className="text-[10px] h-4 px-1 bg-muted">{form.watch(`weapons.${index}.damage`)}</Badge>
+                                        <span className="font-semibold text-sm">{form.watch(`weapons.${index}.name`) || "Nova Arma"}</span>
+                                        <div className="flex items-center gap-1 flex-wrap">
+                                            <Badge variant="outline" className="text-[10px] h-4 px-1 bg-muted">{form.watch(`weapons.${index}.damage`)}</Badge>
+                                            {qualities.slice(0, 2).map((q: any, i: number) => (
+                                                <Badge key={i} variant="secondary" className="text-[9px] h-4 px-1">{typeof q === 'string' ? q : q.name}</Badge>
+                                            ))}
+                                        </div>
                                     </div>
                                 </AccordionTrigger>
                                 <div className="flex items-center gap-1">
@@ -142,7 +193,7 @@ export const NpcCombatEquipmentTab = () => {
                                     <Button type="button" size="icon" variant="ghost" className="h-7 w-7 opacity-50 hover:opacity-100" onClick={() => removeWeapon(index)}><Trash2 className="w-3 h-3" /></Button>
                                 </div>
                             </div>
-                            <AccordionContent className="border-t pt-2 space-y-2">
+                            <AccordionContent className="border-t pt-2 space-y-3">
                                 <div className="grid grid-cols-2 gap-2">
                                     <FormField control={form.control} name={`weapons.${index}.name`} render={({ field }) => (
                                         <div className="space-y-1"><FormLabel className="text-[10px]">Nome</FormLabel><Input {...field} className="h-7 text-xs" /></div>
@@ -151,57 +202,121 @@ export const NpcCombatEquipmentTab = () => {
                                         <div className="space-y-1"><FormLabel className="text-[10px]">Dano</FormLabel><Input {...field} className="h-7 text-xs" /></div>
                                     )} />
                                 </div>
-                                <FormField control={form.control} name={`weapons.${index}.quality_desc`} render={({ field }) => (
-                                    <FormItem><FormLabel className="text-[10px]">Efeitos</FormLabel><FormControl><Textarea {...field} className="min-h-[40px] text-xs bg-muted/20" /></FormControl></FormItem>
-                                )}/>
+                                <div className="flex gap-2 items-end">
+                                    <FormField control={form.control} name={`weapons.${index}.projectileId`} render={({ field }) => (
+                                        <FormItem className="flex-1 space-y-1">
+                                            <FormLabel className="text-[10px]">Munição</FormLabel>
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <FormControl><SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Sem munição" /></SelectTrigger></FormControl>
+                                                <SelectContent>
+                                                    <SelectItem value="none">Nenhuma</SelectItem>
+                                                    {projectileFields.map((proj: any) => (
+                                                        <SelectItem key={proj.id} value={proj.id}>{proj.name} ({proj.amount})</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </FormItem>
+                                    )} />
+                                </div>
+                                <div>
+                                    <FormLabel className="text-[10px] mb-1 block">Qualidades</FormLabel>
+                                    <div className="flex flex-wrap gap-1 mb-2">
+                                        {qualities.map((q: any, i: number) => (
+                                            <div key={i}><QualityInfoButton qualityName={typeof q === 'string' ? q : q.name} /></div>
+                                        ))}
+                                    </div>
+                                    <FormField control={form.control} name={`weapons.${index}.quality_desc`} render={({ field }) => (
+                                       <Textarea {...field} className="h-10 text-xs resize-none" placeholder="Qualidades (JSON)" />
+                                    )} />
+                                </div>
                             </AccordionContent>
                         </AccordionItem>
-                    ))}
+                    )})}
                 </Accordion>
             </CardContent>
           </Card>
 
-          {/* ARMADURA / PROTEÇÃO (Mostra Total Calculado) */}
-          <Card className="flex flex-col border-t-4 border-t-slate-500 shadow-sm">
-            <CardHeader className="py-3 px-4 bg-muted/10 border-b flex flex-row items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <CardTitle className="text-base flex items-center gap-2"><Shield className="w-4 h-4 text-slate-500" /> Proteção</CardTitle>
-                    {calculations.damageReduction > 0 && (
-                        <Badge variant="secondary" className="ml-2 bg-slate-200 text-slate-800 hover:bg-slate-300">
-                            DR: {calculations.damageReduction}
-                        </Badge>
-                    )}
-                </div>
-                <Button type="button" size="icon" variant="ghost" className="h-6 w-6" onClick={addBasicArmor}><Plus className="w-4 h-4" /></Button>
-            </CardHeader>
-            <CardContent className="p-2 flex-1 overflow-y-auto max-h-[400px]">
-                {/* ... (Lista de armaduras) ... */}
-                <div className="space-y-2">
-                    {armorFields.map((field, index) => (
-                        <div key={field.id} className="border rounded bg-card p-2 space-y-2 relative group">
-                            <div className="flex items-center justify-between">
-                                <span className="font-semibold text-xs text-muted-foreground">Item #{index + 1}</span>
-                                <Button type="button" size="icon" variant="ghost" className="h-5 w-5 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => removeArmor(index)}><Trash2 className="w-3 h-3" /></Button>
+          {/* ARMADURAS E MUNIÇÃO */}
+          <div className="flex flex-col gap-4">
+              <Card className="flex flex-col border-t-4 border-t-slate-500 shadow-sm">
+                <CardHeader className="py-3 px-4 bg-muted/10 border-b flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <CardTitle className="text-base flex items-center gap-2"><Shield className="w-4 h-4 text-slate-500" /> Armaduras</CardTitle>
+                        {calculations.damageReduction > 0 && <Badge variant="secondary">DR: {calculations.damageReduction}</Badge>}
+                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-2"><Plus className="w-4 h-4" /> Adicionar</Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setIsArmorSelectorOpen(true)}><Database className="w-4 h-4 mr-2" /> Buscar no Banco</DropdownMenuItem>
+                            <DropdownMenuItem onClick={addManualArmor}><PenTool className="w-4 h-4 mr-2" /> Criar Manualmente</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </CardHeader>
+                <CardContent className="p-2 flex-1">
+                    {armorFields.length === 0 && <div className="text-center py-4 text-muted-foreground text-xs">Sem proteção</div>}
+                    <div className="space-y-2">
+                        {armorFields.map((field, index) => {
+                            const qualities = parseQualities(form.watch(`armors.${index}.quality_desc`));
+                            return (
+                            <div key={field.id} className="border rounded bg-card p-2 space-y-2 relative group">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex gap-2 items-center">
+                                        <span className="font-semibold text-xs text-muted-foreground">#{index + 1}</span>
+                                        {qualities.map((q: any, i: number) => (
+                                             <Badge key={i} variant="secondary" className="text-[9px] h-3 px-1">{typeof q === 'string' ? q : q.name}</Badge>
+                                        ))}
+                                    </div>
+                                    <Button type="button" size="icon" variant="ghost" className="h-5 w-5 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => removeArmor(index)}><Trash2 className="w-3 h-3" /></Button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <FormField control={form.control} name={`armors.${index}.name`} render={({ field }) => (
+                                        <div className="space-y-1 flex-[2]"><FormLabel className="text-[10px]">Nome</FormLabel><Input {...field} className="h-7 text-xs" /></div>
+                                    )} />
+                                    <FormField control={form.control} name={`armors.${index}.protection`} render={({ field }) => (
+                                        <div className="space-y-1 flex-1"><FormLabel className="text-[10px]">Defesa</FormLabel><Input {...field} className="h-7 text-xs" type="number" /></div>
+                                    )} />
+                                </div>
                             </div>
-                            <div className="flex gap-2">
-                                <FormField control={form.control} name={`armors.${index}.name`} render={({ field }) => (
-                                    <div className="space-y-1 flex-[2]"><FormLabel className="text-[10px]">Nome</FormLabel><Input {...field} className="h-7 text-xs" placeholder="Ex: Casca Grossa" /></div>
-                                )} />
-                                <FormField control={form.control} name={`armors.${index}.protection`} render={({ field }) => (
-                                    <div className="space-y-1 flex-1"><FormLabel className="text-[10px]">Valor (Fixo)</FormLabel><Input {...field} className="h-7 text-xs" placeholder="2" type="number" /></div>
-                                )} />
-                            </div>
-                             <div className="text-[10px] text-muted-foreground">
-                                Use números fixos para redução automática (Ex: 2). Se usar dados (Ex: 1d4), a redução será 0.
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </CardContent>
-          </Card>
+                        )})}
+                    </div>
+                </CardContent>
+              </Card>
+
+              <Card className="flex flex-col border-t-4 border-t-yellow-600 shadow-sm flex-1">
+                <CardHeader className="py-2 px-4 bg-muted/10 border-b flex flex-row items-center justify-between">
+                    <CardTitle className="text-sm flex items-center gap-2"><Target className="w-4 h-4 text-yellow-600" /> Munição</CardTitle>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="h-6 w-6 p-0"><Plus className="w-4 h-4" /></Button></DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setIsProjectileSelectorOpen(true)}><Database className="w-4 h-4 mr-2" /> Buscar no Banco</DropdownMenuItem>
+                            <DropdownMenuItem onClick={addManualProjectile}><PenTool className="w-4 h-4 mr-2" /> Criar Manualmente</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </CardHeader>
+                <CardContent className="p-2 space-y-1 overflow-y-auto max-h-[150px]">
+                     {projectileFields.length === 0 && <div className="text-center text-xs text-muted-foreground py-2">Sem munição</div>}
+                     {projectileFields.map((field, index) => (
+                         <div key={field.id} className="flex items-center gap-2 border rounded p-1 bg-card">
+                             <div className="flex-1 min-w-0">
+                                 <div className="text-xs font-medium truncate">{form.watch(`projectiles.${index}.name`)}</div>
+                                 <div className="text-[10px] text-muted-foreground flex gap-2"><span>Qtd: {form.watch(`projectiles.${index}.amount`)}</span></div>
+                             </div>
+                             <Button type="button" size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => removeProjectile(index)}><Trash2 className="w-3 h-3" /></Button>
+                         </div>
+                     ))}
+                </CardContent>
+              </Card>
+          </div>
       </div>
 
-      {/* Diálogos de Combate */}
+      {/* --- AQUI ESTAVA O ERRO: NOMES EM PORTUGUÊS --- */}
+      <ItemSelectorDialog open={isWeaponSelectorOpen} onOpenChange={setIsWeaponSelectorOpen} type="Arma" tableId={npc.table_id} onSelect={handleAddWeapon} />
+      <ItemSelectorDialog open={isArmorSelectorOpen} onOpenChange={setIsArmorSelectorOpen} type="Armadura" tableId={npc.table_id} onSelect={handleAddArmor} />
+      <ItemSelectorDialog open={isProjectileSelectorOpen} onOpenChange={setIsProjectileSelectorOpen} type="Munição" tableId={npc.table_id} onSelect={handleAddProjectile} />
+
+      {/* Rolagens */}
       {combatLogic.attackRollData && <WeaponAttackDialog open={!!combatLogic.attackRollData} onOpenChange={(o) => !o && combatLogic.setAttackRollData(null)} characterName={npc.name} tableId={npc.table_id} {...combatLogic.attackRollData} />}
       {combatLogic.damageRollData && <WeaponDamageDialog open={!!combatLogic.damageRollData} onOpenChange={(o) => !o && combatLogic.setDamageRollData(null)} characterName={npc.name} tableId={npc.table_id} {...combatLogic.damageRollData} />}
     </div>
