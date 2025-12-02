@@ -26,7 +26,7 @@ type AbilityRollData = {
 };
 
 export const NpcAbilitiesTraitsTab = () => {
-  // CORREÇÃO: Garantir que 'npc' é extraído do contexto
+  // CORREÇÃO: Garantir que 'npc' é extraído do contexto para usar o table_id
   const { form, npc, isReadOnly } = useNpcSheet();
   const [selectedAbilityRoll, setSelectedAbilityRoll] = useState<AbilityRollData | null>(null);
   const { toast } = useToast();
@@ -363,7 +363,7 @@ export const NpcAbilitiesTraitsTab = () => {
         onSelect={handleAddAbilityFromDb}
         category="ability" 
         title="Selecionar Habilidade"
-        tableId={npc.table_id} // CORREÇÃO: Usando npc.table_id
+        tableId={npc.table_id} 
       />
 
       {/* Seletor de Traços */}
@@ -373,7 +373,7 @@ export const NpcAbilitiesTraitsTab = () => {
         onSelect={handleAddTraitFromDb}
         category="trait" 
         title="Selecionar Traço ou Dádiva"
-        tableId={npc.table_id} // CORREÇÃO: Usando npc.table_id
+        tableId={npc.table_id} 
       />
 
       {/* Rolagem de Dados */}
@@ -383,6 +383,8 @@ export const NpcAbilitiesTraitsTab = () => {
           onOpenChange={(open) => !open && setSelectedAbilityRoll(null)}
           {...selectedAbilityRoll}
           attributeName={selectedAbilityRoll.attributeName}
+          characterName={npc.name} // CORREÇÃO: Passando o nome
+          tableId={npc.table_id}   // CORREÇÃO: Passando o ID da mesa
         />
       )}
     </div>
