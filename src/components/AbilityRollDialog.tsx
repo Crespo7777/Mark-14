@@ -21,7 +21,7 @@ interface AbilityRollDialogProps {
   characterName: string;
   tableId: string;
   buttonText?: string;
-  // NOVO: Callback para aplicar a corrupção na ficha pai
+  // Callback para aplicar a corrupção na ficha pai
   onApplyCorruption?: (amount: number) => void;
 }
 
@@ -41,17 +41,16 @@ export const AbilityRollDialog = ({
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   
-  // Hooks de contexto (Opcionais se o callback for usado, mas mantidos para compatibilidade)
+  // Hooks de contexto
   const context = useCharacterSheet();
   const form = context?.form;
   const programmaticSave = context?.programmaticSave;
+  const isSaving = context?.isSaving; // <--- CORREÇÃO: Variável definida aqui
   
   const { corruptionThreshold } = useCharacterCalculations();
   const { isMaster, masterId, tableId: contextTableId } = useTableContext();
   
-  // REMOVED: const [isHidden, setIsHidden] = useState(false); - Managed by BaseRollDialog
-
-  // Lê a corrupção atual (do form se disponível, senão assume 0 para não quebrar)
+  // Lê a corrupção atual (do form se disponível, senão assume 0)
   const currentTempCorruption = form ? (form.watch("corruption.temporary") || 0) : 0;
   const isNoRoll = attributeName === "Nenhum";
 
@@ -70,12 +69,11 @@ export const AbilityRollDialog = ({
     return { type: 'none', value: 0 };
   }, [corruptionCost]);
 
-  // Cálculos de Projeção (Alerta visual)
+  // Cálculos de Projeção
   const projectedCorruption = parsedCost.type === 'fixed' ? currentTempCorruption + (parsedCost.value as number) : null;
   const isOverThreshold = projectedCorruption !== null && projectedCorruption > corruptionThreshold;
   const isAtThreshold = projectedCorruption !== null && projectedCorruption === corruptionThreshold;
 
-  // UPDATED: Accepts isHidden from BaseRollDialog
   const handleRoll = async (isHidden: boolean) => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -95,11 +93,10 @@ export const AbilityRollDialog = ({
         }
     }
 
-    // 2. Aplicar Corrupção (Prioriza o callback novo, fallback para o método antigo)
+    // 2. Aplicar Corrupção
     if (appliedCost > 0) {
       if (onApplyCorruption) {
           onApplyCorruption(appliedCost);
-          // O alerta de Limiar é feito pelo componente pai ou aqui visualmente
           if (currentTempCorruption + appliedCost > corruptionThreshold) {
              toast({ title: "LIMIAR EXCEDIDO!", description: "Verifique marcas de estigma.", variant: "destructive" });
           }
@@ -142,7 +139,7 @@ export const AbilityRollDialog = ({
     }
 
     // 4. Enviar para Chat / Discord
-    const targetTableId = tableId || contextTableId; // Garante que temos um ID de mesa
+    const targetTableId = tableId || contextTableId;
 
     if (isHidden && isMaster) {
       await supabase.from("chat_messages").insert([
@@ -172,8 +169,8 @@ export const AbilityRollDialog = ({
       onOpenChange={onOpenChange}
       title={isNoRoll ? `Usar: ${abilityName}` : `Testar: ${abilityName}`}
       description={isNoRoll ? "Esta habilidade não requer teste de atributo." : `Teste de ${attributeName} (Alvo: ${attributeValue}).`}
-      onRoll={handleRoll} // Passes function receiving isHidden
-      loading={loading} // Removed isSaving check here as it might be undefined if not used within context
+      onRoll={handleRoll}
+      loading={loading || isSaving} // Agora isSaving existe e não vai quebrar
       buttonLabel={isOverThreshold ? "Aceitar Risco e Usar" : (isNoRoll ? "Confirmar Uso" : buttonText)}
       actionColorClass={isOverThreshold ? "bg-red-600 hover:bg-red-700" : ""}
     >
@@ -207,8 +204,6 @@ export const AbilityRollDialog = ({
             <Input id="modifier-ability" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="+0" />
           </div>
       )}
-
-      {/* REMOVED: Manual hidden roll checkbox section */}
     </BaseRollDialog>
   );
 };
