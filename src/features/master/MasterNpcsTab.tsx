@@ -44,7 +44,8 @@ const fetchFolders = async (tableId: string) => {
 };
 
 export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
-  const { members } = useTableContext();
+  // --- 1. AQUI: Recuperamos isMaster, isHelper e userId do contexto ---
+  const { members, isMaster, isHelper, userId } = useTableContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -115,15 +116,51 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
     setItemToShare(null);
   };
 
-  const displayedNpcs = npcs.filter(npc => 
-    showArchivedNpcs ? npc.is_archived : !npc.is_archived
-  );
+  // --- 2. LÓGICA DE FILTRO DE NPCS ---
+  const displayedNpcs = npcs
+    .filter(npc => showArchivedNpcs ? npc.is_archived : !npc.is_archived) // Filtro de Arquivo
+    .filter(npc => {
+      // Se for Mestre, vê tudo
+      if (isMaster) return true;
+
+      // Se for Ajudante, aplica regras de segurança
+      if (isHelper) {
+          // É o dono? (Nota: na tabela NPCs às vezes não há player_id definido, se for criado pelo mestre. O mestre é dono da mesa.)
+          const isOwner = npc.player_id === userId;
+          
+          // Foi partilhado especificamente com este ID?
+          // Usamos o operador ?. para evitar erro se o array for null
+          const isSharedWithMe = npc.shared_with_players?.includes(userId || '');
+          
+          // É público globalmente?
+          const isGloballyShared = npc.is_shared;
+          
+          return isOwner || isSharedWithMe || isGloballyShared;
+      }
+      
+      // Fallback para segurança
+      return false;
+    });
+
+  // --- 3. LÓGICA DE FILTRO DE PASTAS (NOVO) ---
+  const displayedFolders = folders.filter(folder => {
+      // Mestre vê todas as pastas
+      if (isMaster) return true;
+
+      // Ajudante só vê a pasta SE ela contiver algum NPC visível para ele
+      if (isHelper) {
+         return displayedNpcs.some(npc => npc.folder_id === folder.id);
+      }
+      
+      return false;
+  });
 
   return (
     <div className="flex flex-col h-full space-y-4">
         {/* BARRA DE TOPO */}
         <div className="flex flex-wrap items-center justify-between gap-4 p-1">
             <div className="flex items-center gap-2">
+                {/* Nota: As pastas na gestão aparecem todas, mas no visualizador filtramos */}
                 <ManageFoldersDialog tableId={tableId} folders={folders} tableName="npc_folders" title="NPCs" />
                 <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
                     <Switch id="show-archived-npc" checked={showArchivedNpcs} onCheckedChange={setShowArchivedNpcs} />
@@ -139,11 +176,10 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
             <EntityListManager
                 title="NPCs"
                 type="npc"
-                items={displayedNpcs}
-                folders={folders}
+                items={displayedNpcs}      // <-- Usamos a lista filtrada de NPCs
+                folders={displayedFolders} // <-- Usamos a lista filtrada de Pastas
                 isLoading={isLoadingNpcs}
                 
-                // --- AQUI ESTÁ A CORREÇÃO: onEdit e botão customizado ---
                 onEdit={(id) => setSelectedNpcId(id)}
                 onDelete={(id) => {
                     const npc = npcs.find(n => n.id === id);
@@ -154,7 +190,6 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
                 onMove={handleMove}
                 onShare={(item) => setItemToShare(item)}
                 
-                // Botão de Criar customizado
                 actions={
                     <Suspense fallback={<Button size="sm" disabled>...</Button>}>
                         <CreateNpcDialog tableId={tableId} onNpcCreated={invalidateNpcs}>
