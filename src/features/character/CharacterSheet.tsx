@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { useCharacterSheet } from "./CharacterSheetContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,12 @@ import {
   Move,
   ArrowLeft
 } from "lucide-react";
-import { Form } from "@/components/ui/form"; // Importante: usar o Form do shadcn para o contexto
+
+// --- CORREÇÃO DAS IMPORTAÇÕES ---
+import { useFormContext } from "react-hook-form"; // Importado da biblioteca correta
+import { Form } from "@/components/ui/form";      // Componente de UI
+// --------------------------------
+
 import { useToast } from "@/hooks/use-toast";
 import { ShareDialog } from "@/components/ShareDialog";
 import { supabase } from "@/integrations/supabase/client";
@@ -44,137 +49,72 @@ import { useCharacterCalculations } from "./hooks/useCharacterCalculations";
 
 interface CharacterSheetProps {
   isReadOnly?: boolean;
-  onBack?: () => void; // Opcional, para quando usado em página cheia
+  onBack?: () => void;
 }
 
-export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetProps) => {
-  const context = useCharacterSheet();
-  const { toast } = useToast();
-  // Alterado para 'details' para ser a primeira aba ativa por padrão
-  const [activeTab, setActiveTab] = useState("details");
-  
-  // Ref para controlar o debounce do auto-save
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
-  // Estados de Upload
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+// --- SUB-COMPONENTE: CABEÇALHO (Isolado para Performance) ---
+const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, sharedWith }: any) => {
+    // Agora usa o contexto corretamente importado
+    const { register, watch, setValue, formState: { isDirty } } = useFormContext();
+    const { toast } = useToast();
+    const calculations = useCharacterCalculations(); 
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const { isSaving, saveSheet } = useCharacterSheet(); 
 
-  // Hook de cálculos
-  const calculations = useCharacterCalculations(); 
+    // Watches locais
+    const race = watch("race") || "Humano";
+    const occupation = watch("occupation") || "Vagabundo";
+    const imageUrl = watch("image_url");
+    const imageSettings = watch("data.image_settings") || { x: 50, y: 50, scale: 100 };
+    const currentHp = watch("toughness.current") || 0;
+    
+    // Cálculos
+    const currentXp = calculations.currentExperience; 
+    const nextLevelXp = 100;
+    const xpPercentage = Math.min(100, Math.max(0, (currentXp / nextLevelXp) * 100));
+    const maxHp = calculations.toughnessMax; 
 
-  // 1. Proteção: Se o contexto não existir (ex: erro de carregamento), mostra loading
-  if (!context || !context.character) {
-      return (
-          <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4 text-muted-foreground">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p>A carregar dados do personagem...</p>
-          </div>
-      );
-  }
-
-  const { form, character, isDirty, isSaving, saveSheet } = context;
-  
-  // Garante que temos dados válidos para evitar erros de "undefined"
-  const data = character.data || defaultCharacterData;
-
-  // 2. Sincronização: Se o banco atualizar (via realtime), atualiza o formulário
-  useEffect(() => {
-    if (character?.data) {
-        // Só atualiza se o utilizador NÃO estiver a mexer no momento (form !dirty)
-        if (!form.formState.isDirty) {
-            const syncedData = { ...defaultCharacterData, ...character.data };
-            form.reset(syncedData, { keepDirty: false });
-        }
-    }
-  }, [character?.data, form]);
-
-  // 3. AUTO-SAVE SILENCIOSO (Debounce 2s)
-  useEffect(() => {
-    const subscription = form.watch(() => {
-      if (isReadOnly) return;
-
-      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
-
-      autoSaveTimeoutRef.current = setTimeout(() => {
-        if (form.formState.isDirty) {
-            saveSheet(); // Chama a função do contexto
-        }
-      }, 2000);
-    });
-
-    return () => {
-        subscription.unsubscribe();
-        if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    const updateImageSettings = (key: string, value: number[]) => {
+        const newSettings = { ...imageSettings, [key]: value[0] };
+        setValue("data.image_settings", newSettings, { shouldDirty: true });
     };
-  }, [form, saveSheet, isReadOnly]);
 
-  // Leitura dos Dados (Segura)
-  const currentXp = calculations.currentExperience; 
-  const nextLevelXp = 100;
-  const xpPercentage = Math.min(100, Math.max(0, (currentXp / nextLevelXp) * 100));
-  
-  const currentHp = form.watch("toughness.current") || 0;
-  // Usa o cálculo corrigido de Vida Máxima
-  const maxHp = calculations.toughnessMax; 
+    const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file || isReadOnly) return;
+    
+        setIsUploading(true);
+        try {
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${characterId}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+          const filePath = `character-portraits/${fileName}`;
+    
+          const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file, { upsert: true });
+          if (uploadError) throw uploadError;
+    
+          const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
+          setValue("image_url", publicUrl, { shouldDirty: true });
+          toast({ title: "Imagem atualizada!" });
+    
+        } catch (error: any) {
+          toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
+        } finally {
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
 
-  const name = form.watch("name") || "Sem Nome";
-  const archetype = form.watch("archetype") || "Aventureiro";
-  const occupation = form.watch("occupation") || "Vagabundo";
-  const imageUrl = form.watch("image_url");
-  const race = form.watch("race") || "Humano";
+    const triggerFileInput = () => {
+        if (!isReadOnly && fileInputRef.current) fileInputRef.current.click();
+    };
 
-  // Configurações de Imagem
-  const imageSettings = form.watch("data.image_settings") || { x: 50, y: 50, scale: 100 };
-
-  const updateImageSettings = (key: string, value: number[]) => {
-      const newSettings = { ...imageSettings, [key]: value[0] };
-      form.setValue("data.image_settings", newSettings, { shouldDirty: true });
-  };
-
-  // Upload
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || isReadOnly) return;
-
-    setIsUploading(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${character.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
-      const filePath = `character-portraits/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(filePath);
-      form.setValue("image_url", publicUrl, { shouldDirty: true });
-      toast({ title: "Imagem atualizada!" });
-
-    } catch (error: any) {
-      console.error("Erro no upload:", error);
-      toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
-  };
-
-  const triggerFileInput = () => {
-      if (!isReadOnly && fileInputRef.current) fileInputRef.current.click();
-  };
-
-  return (
-    <Form {...form}>
-      <form onSubmit={(e) => { e.preventDefault(); saveSheet(); }} className="h-full flex flex-col space-y-4">
-        
-        {/* HEADER RICO (Estilo Foundry) */}
+    return (
         <Card className="p-4 border-l-4 border-l-primary bg-card/50 m-4 mb-0 shrink-0">
             <div className="flex flex-col md:flex-row gap-4 items-center md:items-start">
-                
-                {/* Input de Arquivo (Escondido) */}
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/png, image/jpeg, image/gif, image/webp" onChange={handleImageUpload} />
 
-                {/* FOTO E ENQUADRAMENTO */}
+                {/* Avatar */}
                 <div className="relative group shrink-0">
                     <div className="w-24 h-24 rounded-lg border-2 border-primary shadow-lg overflow-hidden bg-muted flex items-center justify-center relative">
                         {isUploading ? (
@@ -182,7 +122,7 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
                         ) : imageUrl ? (
                             <img 
                                 src={imageUrl} 
-                                alt={name} 
+                                alt="Retrato" 
                                 className="w-full h-full object-cover transition-all duration-200"
                                 style={{ objectPosition: `${imageSettings.x}% ${imageSettings.y}%`, transform: `scale(${imageSettings.scale / 100})` }}
                             />
@@ -199,7 +139,6 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
                         )}
                     </div>
 
-                    {/* Menu de Zoom */}
                     {!isReadOnly && imageUrl && (
                         <Popover>
                             <PopoverTrigger asChild>
@@ -213,20 +152,19 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
                                     <div className="space-y-1.5"><div className="flex justify-between text-xs text-muted-foreground"><Label>Zoom</Label><span>{imageSettings.scale}%</span></div><Slider value={[imageSettings.scale]} min={100} max={300} step={5} onValueChange={(val) => updateImageSettings("scale", val)} /></div>
                                     <div className="space-y-1.5"><div className="flex justify-between text-xs text-muted-foreground"><Label>X</Label><span>{imageSettings.x}%</span></div><Slider value={[imageSettings.x]} min={0} max={100} step={1} onValueChange={(val) => updateImageSettings("x", val)} /></div>
                                     <div className="space-y-1.5"><div className="flex justify-between text-xs text-muted-foreground"><Label>Y</Label><span>{imageSettings.y}%</span></div><Slider value={[imageSettings.y]} min={0} max={100} step={1} onValueChange={(val) => updateImageSettings("y", val)} /></div>
-                                    <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => form.setValue("data.image_settings", { x: 50, y: 50, scale: 100 }, { shouldDirty: true })}>Resetar</Button>
+                                    <Button variant="outline" size="sm" className="w-full text-xs h-7" onClick={() => setValue("data.image_settings", { x: 50, y: 50, scale: 100 }, { shouldDirty: true })}>Resetar</Button>
                                 </div>
                             </PopoverContent>
                         </Popover>
                     )}
                 </div>
 
-                {/* INFO E STATUS */}
+                {/* Info */}
                 <div className="flex-1 text-center md:text-left space-y-1 w-full">
                     <div className="flex flex-col md:flex-row justify-between items-center">
                         <div className="w-full">
-                            {/* Nome Editável */}
                             <Input 
-                                {...form.register("name")} 
+                                {...register("name")} 
                                 className="text-2xl font-bold tracking-tight text-primary border-none bg-transparent hover:bg-muted/30 px-0 h-auto focus-visible:ring-0 text-center md:text-left shadow-none" 
                                 placeholder="Nome do Personagem" 
                                 readOnly={isReadOnly} 
@@ -237,17 +175,12 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
                             </div>
                         </div>
                         
-                        {/* AÇÕES (Voltar, Partilhar, Salvar) */}
                         <div className="flex gap-2 mt-2 md:mt-0 shrink-0">
-                            {onBack && (
-                                <Button variant="ghost" size="icon" onClick={onBack} title="Voltar">
-                                    <ArrowLeft className="w-4 h-4"/>
-                                </Button>
-                            )}
+                            {onBack && <Button variant="ghost" size="icon" onClick={onBack} title="Voltar"><ArrowLeft className="w-4 h-4"/></Button>}
                             
                             {!isReadOnly && (
                                 <>
-                                    <ShareDialog itemTitle={character.name} currentSharedWith={character.shared_with_players || []} onSave={async () => {}}> 
+                                    <ShareDialog itemTitle={characterName} currentSharedWith={sharedWith || []} onSave={async () => {}}> 
                                         <Button variant="ghost" size="icon" type="button"><Share2 className="w-4 h-4"/></Button>
                                     </ShareDialog>
                                     
@@ -269,7 +202,6 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
 
                     <Separator className="my-2" />
 
-                    {/* BARRAS DE STATUS (HP / XP) */}
                     <div className="grid grid-cols-2 gap-4 text-xs">
                         <div className="space-y-1">
                             <div className="flex justify-between">
@@ -289,10 +221,64 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
                 </div>
             </div>
         </Card>
+    );
+});
+CharacterHeader.displayName = "CharacterHeader";
 
-        {/* NAVEGAÇÃO DE ABAS REORDENADA */}
+// --- COMPONENTE PRINCIPAL ---
+export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetProps) => {
+  const context = useCharacterSheet();
+  const [activeTab, setActiveTab] = useState("details");
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  if (!context || !context.character) {
+      return (
+          <div className="flex flex-col items-center justify-center h-full min-h-[400px] gap-4 text-muted-foreground animate-in fade-in">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p>A abrir grimório...</p>
+          </div>
+      );
+  }
+
+  const { form, character, saveSheet } = context;
+
+  // Sincronização em tempo real
+  useEffect(() => {
+    if (character?.data && !form.formState.isDirty) {
+        const syncedData = { ...defaultCharacterData, ...character.data };
+        form.reset(syncedData, { keepDirty: false });
+    }
+  }, [character?.data, form]);
+
+  // Auto-save Otimizado
+  useEffect(() => {
+    if (isReadOnly) return;
+    const subscription = form.watch(() => {
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = setTimeout(() => {
+        if (form.formState.isDirty) saveSheet();
+      }, 3000);
+    });
+    return () => {
+        subscription.unsubscribe();
+        if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+    };
+  }, [form, saveSheet, isReadOnly]);
+
+  return (
+    <Form {...form}>
+      <form onSubmit={(e) => { e.preventDefault(); saveSheet(); }} className="h-full flex flex-col space-y-4">
+        
+        <CharacterHeader 
+            isReadOnly={isReadOnly} 
+            onBack={onBack} 
+            characterName={character.name} 
+            characterId={character.id}
+            sharedWith={character.shared_with_players}
+        />
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
-            <div className="px-4 overflow-x-auto pb-2 scrollbar-thin">
+            <div className="px-4 overflow-x-auto pb-2 scrollbar-thin shrink-0">
                 <TabsList className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground w-full justify-start gap-1 min-w-max">
                     <TabsTrigger value="details" className="text-xs px-3"><User className="w-3.5 h-3.5 mr-1.5"/> Detalhes</TabsTrigger>
                     <TabsTrigger value="attributes" className="text-xs px-3"><Sparkles className="w-3.5 h-3.5 mr-1.5"/> Atributos</TabsTrigger>
@@ -303,7 +289,6 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
                 </TabsList>
             </div>
 
-            {/* CONTEÚDO DAS ABAS REORDENADO */}
             <div className="flex-1 overflow-y-auto px-4 pb-4">
                 <div className={isReadOnly ? "pointer-events-none opacity-90 h-full" : "h-full"}>
                     <TabsContent value="details" className="mt-0 h-full"><DetailsTab /></TabsContent>

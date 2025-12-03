@@ -12,45 +12,39 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import {
+  User,
   Users,
-  UserCog,
-  Database,
   BookOpen,
   Store,
-  ScrollText,
-  Image as ImageIcon,
-  UserCheck,
+  Book,
   Settings
 } from "lucide-react";
 import { GlobalSearchDialog } from "@/components/GlobalSearchDialog";
 import { Separator } from "@/components/ui/separator";
 
-interface MasterSidebarProps {
+interface PlayerSidebarProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   tableId: string; // <--- NOVO PROP OBRIGATÓRIO
 }
 
-export function MasterSidebar({ currentTab, onTabChange, tableId }: MasterSidebarProps) {
+export function PlayerSidebar({ currentTab, onTabChange, tableId }: PlayerSidebarProps) {
   
-  const manageItems = [
-    { title: "Personagens (PCs)", id: "characters", icon: Users },
-    { title: "NPCs & Bestiário", id: "npcs", icon: UserCog },
-    { title: "Jogadores", id: "players", icon: UserCheck },
+  const mainItems = [
+    { title: "Meus Personagens", id: "characters", icon: User },
+    { title: "NPCs & Aliados", id: "npcs", icon: Users },
+    { title: "Diário de Aventuras", id: "journal", icon: BookOpen },
   ];
 
   const worldItems = [
-    { title: "Base de Dados", id: "database", icon: Database },
-    { title: "Lojas", id: "shops", icon: Store },
-    { title: "Diário & Lore", id: "journal", icon: ScrollText },
-    { title: "Regras", id: "rules", icon: BookOpen },
-    { title: "Multimédia", id: "media", icon: ImageIcon },
+    { title: "Lojas & Mercado", id: "shops", icon: Store },
+    { title: "Regras do Sistema", id: "rules", icon: Book },
   ];
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4 pb-2">
-        {/* Passamos o tableId para restringir a busca */}
+        {/* Passamos o tableId aqui também */}
         <GlobalSearchDialog tableId={tableId} />
       </SidebarHeader>
 
@@ -58,10 +52,10 @@ export function MasterSidebar({ currentTab, onTabChange, tableId }: MasterSideba
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Campanha</SidebarGroupLabel>
+          <SidebarGroupLabel>Aventura</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {manageItems.map((item) => (
+              {mainItems.map((item) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton 
                     isActive={currentTab === item.id}
@@ -101,9 +95,9 @@ export function MasterSidebar({ currentTab, onTabChange, tableId }: MasterSideba
       <SidebarFooter>
          <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => console.log("Configurações")}>
+              <SidebarMenuButton onClick={() => console.log("Abrir Preferências")}>
                 <Settings />
-                <span>Configurações</span>
+                <span>Preferências</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
          </SidebarMenu>

@@ -14,14 +14,14 @@ import {
   PawPrint, Zap, Dna, Star, Save, X, Search, 
   Castle, Box, CircleDot, Wheat, Coins, 
   Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music,
-  Loader2, Image as ImageIcon
+  Loader2, Image as ImageIcon, Globe, Lock, Copy // Novos ícones
 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea"; 
 import { QualitySelector } from "@/components/QualitySelector"; 
-import { ItemIconUploader } from "@/components/ItemIconUploader"; // NOVO: Importação do Uploader
+import { ItemIconUploader } from "@/components/ItemIconUploader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,14 +66,16 @@ const WEAPON_SUBCATEGORIES = ["Arma de uma Mão", "Arma Curta", "Arma Longa", "A
 const ARMOR_SUBCATEGORIES = ["Leve", "Média", "Pesada"];
 const FOOD_SUBCATEGORIES = ["Bebidas", "Carne", "Chás", "Ensopados", "Mingau", "Peixe", "Sobremesas", "Sopas", "Tortas"];
 
-// Atualizado para usar a tabela 'items' e coluna 'type'
+// --- FETCH CORRIGIDO ---
 const fetchItems = async (tableId: string, category: string) => {
   const { data, error } = await supabase
     .from("items")
     .select("*")
-    .eq("table_id", tableId)
     .eq("type", category)
+    // AQUI ESTÁ A CORREÇÃO: Traz itens da mesa OU itens globais (null)
+    .or(`table_id.eq.${tableId},table_id.is.null`)
     .order("name");
+    
   if (error) throw error;
   return data;
 };
@@ -114,7 +116,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
-  // Incluído icon_url no estado inicial
   const defaultState = { name: "", description: "", icon_url: null, weight: "", data: {} };
   const [newItem, setNewItem] = useState<any>(defaultState);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -128,12 +129,12 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
     setSearchQuery("");
   }, [category]);
 
-  // QueryKey atualizada para 'items'
   const queryKey = ['items', tableId, category];
 
-  const { data: items = [] } = useQuery({
+  const { data: items = [], isLoading } = useQuery({
     queryKey: queryKey,
     queryFn: () => fetchItems(tableId, category),
+    staleTime: 1000 * 60 * 5, // CACHE: 5 minutos para carregar instantaneamente ao voltar
   });
 
   const filteredItems = items.filter((item: any) => {
@@ -155,14 +156,13 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
     }
 
     setIsSaving(true);
-    // Payload atualizado para tabela 'items'
     const payload = {
         table_id: tableId,
-        type: category, // Mapeia category -> type
+        type: category,
         name: newItem.name,
         description: newItem.description,
         weight: parseFloat(newItem.weight) || 0,
-        icon_url: newItem.icon_url, // Salva a imagem
+        icon_url: newItem.icon_url,
         data: newItem.data
     };
 
@@ -172,6 +172,8 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
             const { data, error } = await supabase.from("items").update(payload).eq("id", editingId).select().single();
             if (error) throw error;
             savedData = data;
+            
+            // Atualização Otimista
             queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
                 return old ? old.map(i => i.id === editingId ? savedData : i) : [savedData];
             });
@@ -180,6 +182,8 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
             const { data, error } = await supabase.from("items").insert(payload).select().single();
             if (error) throw error;
             savedData = data;
+            
+            // Atualização Otimista
             queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
                 return old ? [...old, savedData].sort((a,b) => a.name.localeCompare(b.name)) : [savedData];
             });
@@ -194,16 +198,46 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   };
 
   const handleEdit = (item: any) => {
+      // Proteção: Se for item global (sem table_id), avisa que não pode editar direto
+      if (!item.table_id) {
+          toast({ title: "Item do Sistema", description: "Itens globais não podem ser editados. Use o botão de copiar.", variant: "default" });
+          return;
+      }
+
       setEditingId(item.id);
       setNewItem({
           name: item.name,
           description: item.description || "",
           weight: String(item.weight || ""), 
-          icon_url: item.icon_url, // Carrega a imagem existente
+          icon_url: item.icon_url,
           data: item.data || {}
       });
       setEditorKey(prev => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDuplicate = async (item: any) => {
+      // Remove ID e datas para criar novo
+      const { id, created_at, table_id, ...itemData } = item;
+      
+      const newItemPayload = {
+          ...itemData,
+          table_id: tableId, // Associa à mesa atual
+          name: `${item.name} (Cópia)`
+      };
+
+      try {
+          const { data, error } = await supabase.from("items").insert(newItemPayload).select().single();
+          if(error) throw error;
+          
+          toast({ title: "Item Duplicado", description: "Agora você pode editar a cópia." });
+          // Atualiza a lista localmente
+          queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
+              return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
+          });
+      } catch (error: any) {
+          toast({ title: "Erro ao duplicar", description: error.message, variant: "destructive" });
+      }
   };
 
   const cancelEdit = () => {
@@ -215,13 +249,16 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const confirmDelete = async () => {
      if (!itemToDelete) return;
      const previousData = queryClient.getQueryData<any[]>(queryKey);
+     
+     // Atualização Otimista
      queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
          return old ? old.filter(i => i.id !== itemToDelete) : [];
      });
-     // Atualizado para deletar de 'items'
+
      const { error } = await supabase.from("items").delete().eq("id", itemToDelete);
+     
      if (error) {
-        queryClient.setQueryData(queryKey, previousData);
+        queryClient.setQueryData(queryKey, previousData); // Reverte se falhar
         toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
      } else {
         toast({ title: "Item apagado" });
@@ -307,10 +344,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                   {editingId && <Button variant="ghost" size="sm" onClick={cancelEdit}><X className="w-4 h-4 mr-1"/> Cancelar Edição</Button>}
               </div>
               
-              {/* LAYOUT DE EDIÇÃO COM ÍCONE */}
               <div className="flex flex-col md:flex-row gap-6">
-                 
-                 {/* Lado Esquerdo: Upload */}
                  <div className="shrink-0 flex justify-center md:justify-start">
                     <ItemIconUploader 
                         currentUrl={newItem.icon_url}
@@ -319,7 +353,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     />
                  </div>
 
-                 {/* Lado Direito: Campos */}
                  <div className="flex-1 space-y-4">
                      <div className="grid grid-cols-12 gap-3">
                         <div className="col-span-8 space-y-2">
@@ -338,7 +371,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                  </div>
               </div>
 
-              {/* Editor de Texto (Full Width) */}
               <div className="space-y-2">
                  <Label>Descrição Completa / Regras</Label>
                  <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
@@ -363,51 +395,82 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
        <div className="relative">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input 
-             placeholder="Pesquisar..." 
-             value={searchQuery} 
-             onChange={(e) => setSearchQuery(e.target.value)} 
-             className="pl-8 bg-background"
+              placeholder="Pesquisar nesta categoria..." 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              className="pl-8 bg-background"
           />
        </div>
 
-       <div className="grid grid-cols-1 gap-2 pb-10">
-          {filteredItems.map((item: any) => (
-             <div key={item.id} className="flex gap-3 p-3 border rounded-md bg-card hover:bg-accent/50 group cursor-pointer transition-all items-start" onClick={() => handleEdit(item)}>
-                
-                {/* ÍCONE NA LISTA */}
-                <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center shrink-0 border border-border/50 overflow-hidden">
-                    {item.icon_url ? (
-                        <img src={item.icon_url} alt={item.name} className="w-full h-full object-cover" />
-                    ) : (
-                        <ImageIcon className="w-5 h-5 text-muted-foreground/30" />
-                    )}
-                </div>
+       {isLoading ? (
+           <div className="text-center py-10 text-muted-foreground">
+               <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+               Carregando grimório...
+           </div>
+       ) : (
+           <div className="grid grid-cols-1 gap-2 pb-10">
+              {filteredItems.map((item: any) => {
+                  const isGlobal = !item.table_id;
+                  return (
+                      <div key={item.id} className="flex gap-3 p-3 border rounded-md bg-card hover:bg-accent/50 group cursor-pointer transition-all items-start relative overflow-hidden" onClick={() => handleEdit(item)}>
+                        
+                        {/* Indicador de Item Global */}
+                        {isGlobal && (
+                            <div className="absolute top-0 right-0 bg-blue-500/10 text-blue-500 p-1 rounded-bl-md z-10" title="Item do Sistema (Global)">
+                                <Globe className="w-3 h-3" />
+                            </div>
+                        )}
 
-                <div className="flex-1 min-w-0">
-                    <div className="font-bold flex items-center gap-2 flex-wrap">
-                        {item.name}
-                        {item.data.subcategory && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-primary/10 text-primary border-primary/20">{item.data.subcategory}</span>}
-                        {item.data.reloadAction && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-accent/10 text-accent border-accent/20">Recarga: {item.data.reloadAction}</span>}
-                    </div>
-                    <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                        {item.description?.replace(/<[^>]*>?/gm, '') || "Sem descrição."}
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-center">
-                    {item.weight > 0 && (
-                        <div className="text-xs text-muted-foreground border px-2 py-1 rounded bg-muted/30 whitespace-nowrap">
-                             {item.weight} peso
+                        <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center shrink-0 border border-border/50 overflow-hidden">
+                            {item.icon_url ? (
+                                <img src={item.icon_url} alt={item.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <ImageIcon className="w-5 h-5 text-muted-foreground/30" />
+                            )}
                         </div>
-                    )}
-                    <Button variant="ghost" size="icon" className="text-destructive opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all" onClick={(e) => { e.stopPropagation(); setItemToDelete(item.id); }}>
-                        <Trash2 className="w-4 h-4" />
-                    </Button>
-                </div>
-             </div>
-           ))}
-          {filteredItems.length === 0 && <p className="text-center text-muted-foreground py-8 italic">Nenhum item encontrado nesta categoria.</p>}
-       </div>
+
+                        <div className="flex-1 min-w-0">
+                            <div className="font-bold flex items-center gap-2 flex-wrap">
+                                {item.name}
+                                {item.data.subcategory && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-primary/10 text-primary border-primary/20">{item.data.subcategory}</span>}
+                                {item.data.reloadAction && <span className="text-[10px] font-normal uppercase tracking-wider border px-1 rounded bg-accent/10 text-accent border-accent/20">Recarga: {item.data.reloadAction}</span>}
+                            </div>
+                            <div className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                                {item.description?.replace(/<[^>]*>?/gm, '') || "Sem descrição."}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 self-center mr-4">
+                            {item.weight > 0 && (
+                                <div className="text-xs text-muted-foreground border px-2 py-1 rounded bg-muted/30 whitespace-nowrap">
+                                     {item.weight} peso
+                                </div>
+                            )}
+                            
+                            <div className="flex gap-1">
+                                {/* Botão Duplicar */}
+                                <Button variant="ghost" size="icon" className="text-primary opacity-0 group-hover:opacity-100 transition-all" onClick={(e) => { e.stopPropagation(); handleDuplicate(item); }} title="Duplicar item">
+                                    <Copy className="w-4 h-4" />
+                                </Button>
+
+                                {/* Botão Apagar (Só aparece se não for Global) */}
+                                {isGlobal ? (
+                                    <div className="p-2 opacity-0 group-hover:opacity-100 transition-all text-muted-foreground/50" title="Item protegido do sistema">
+                                        <Lock className="w-4 h-4" />
+                                    </div>
+                                ) : (
+                                    <Button variant="ghost" size="icon" className="text-destructive opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all" onClick={(e) => { e.stopPropagation(); setItemToDelete(item.id); }}>
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+                      </div>
+                  );
+              })}
+              {filteredItems.length === 0 && <p className="text-center text-muted-foreground py-8 italic">Nenhum item encontrado nesta categoria.</p>}
+           </div>
+       )}
        
        <AlertDialog open={!!itemToDelete} onOpenChange={() => setItemToDelete(null)}>
             <AlertDialogContent>

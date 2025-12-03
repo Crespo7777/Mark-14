@@ -1,5 +1,3 @@
-// src/App.tsx
-
 import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -17,7 +15,8 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: false, 
-      // Aumentamos o tempo de "stale" porque agora confiamos nas nossas atualizações manuais
+      // Mantemos o staleTime alto para performance geral, 
+      // mas os componentes específicos (como a Pesquisa) agora ignoram isso quando necessário.
       staleTime: 1000 * 60 * 5, // 5 minutos
       retry: 1,
     },
@@ -57,7 +56,11 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      {/* CORREÇÃO AQUI: 
+          Adicionadas as flags 'future' para remover os avisos amarelos do console.
+          Isto prepara a app para a próxima versão do React Router.
+      */}
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <AppRoutes />
       </BrowserRouter>
     </TooltipProvider>

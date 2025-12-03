@@ -50,14 +50,17 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
   const [itemToShare, setItemToShare] = useState<CharacterWithRelations | null>(null);
 
+  // OTIMIZAÇÃO: staleTime adicionado
   const { data: characters = [], isLoading: isLoadingChars } = useQuery({
     queryKey: ['characters', tableId],
     queryFn: () => fetchCharacters(tableId),
+    staleTime: 1000 * 60 * 5, // Cache de 5 min para navegação rápida
   });
 
   const { data: folders = [] } = useQuery({
     queryKey: ['character_folders', tableId],
     queryFn: () => fetchFolders(tableId),
+    staleTime: 1000 * 60 * 10,
   });
 
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
@@ -119,7 +122,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
 
   return (
     <div className="flex flex-col h-full space-y-4">
-      {/* BARRA DE FILTROS SUPERIOR */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-1">
         <div className="flex items-center gap-2">
             <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Personagens" />
@@ -133,7 +135,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
         </div>
       </div>
 
-      {/* LISTA */}
       <div className="flex-1 min-h-0">
           <EntityListManager
             title="Personagens"
@@ -141,8 +142,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
             items={displayedCharacters}
             folders={folders}
             isLoading={isLoadingChars}
-            
-            // --- AQUI ESTÁ A CORREÇÃO: Passando onEdit em vez de renderItem ---
             onEdit={(id) => setSelectedCharId(id)}
             onDelete={(id) => {
                 const char = characters.find(c => c.id === id);
@@ -152,8 +151,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
             onArchive={handleArchive}
             onMove={handleMove}
             onShare={(item) => setItemToShare(item)}
-            
-            // Botão de Criar customizado para abrir o Dialog corretamente
             actions={
                 <CreateCharacterDialog 
                     tableId={tableId} 
@@ -161,15 +158,14 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
                     members={members} 
                     onCharacterCreated={invalidateCharacters}
                 >
-                    <Button size="sm" className="h-9 shadow-sm">
-                        <Plus className="h-4 w-4 mr-1" /> Novo Personagem
+                    <Button size="sm" className="h-9 shadow-sm gap-1">
+                        <Plus className="h-4 w-4" /> Novo Personagem
                     </Button>
                 </CreateCharacterDialog>
             }
           />
       </div>
 
-      {/* MODAIS */}
       <CharacterSheetSheet 
         characterId={selectedCharId} 
         open={!!selectedCharId} 
@@ -196,7 +192,9 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
               </AlertDialogHeader>
               <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction>
+                  <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>
+                    <Trash2 className="w-4 h-4 mr-2"/> Excluir
+                  </AlertDialogAction>
               </AlertDialogFooter>
           </AlertDialogContent>
       </AlertDialog>

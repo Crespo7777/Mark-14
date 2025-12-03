@@ -1,13 +1,16 @@
-// src/components/MasterView.tsx
-
 import { useState, useEffect, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
-import { Store, Clapperboard, Database, Maximize, Minimize, UserSquare, Users, BookOpen, LogOut, MessageSquare, X, Book } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Maximize, Minimize, LogOut, MessageSquare, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-// Imports das tabs do Dashboard
+import { MasterSidebar } from "@/features/master/MasterSidebar"; 
+import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
+import { GlobalSearchDialog } from "@/components/GlobalSearchDialog";
+
+// Tabs
 import { MasterCharactersTab } from "@/features/master/MasterCharactersTab";
 import { MasterNpcsTab } from "@/features/master/MasterNpcsTab";
 import { MasterJournalTab } from "@/features/master/MasterJournalTab";
@@ -17,7 +20,7 @@ import { MasterMediaTab } from "@/features/master/MasterMediaTab";
 import { MasterDatabaseTab } from "@/features/master/MasterDatabaseTab";
 import { MasterRulesTab } from "@/features/master/MasterRulesTab";
 
-// Imports do VTT (Mesa Virtual)
+// VTT
 import { SceneBoard } from "@/features/map/SceneBoard";
 import { VttGridBackground } from "@/components/VttGridBackground";
 import { MasterRightPanel } from "@/features/master/MasterRightPanel";
@@ -32,54 +35,20 @@ import { ImmersiveOverlay } from "@/components/ImmersiveOverlay";
 
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-interface MasterViewProps {
-  tableId: string;
-  masterId: string;
-}
-
-const MasterDashboardTabs = ({ tableId }: { tableId: string }) => (
-    <Tabs defaultValue="characters" className="w-full h-full flex flex-col">
-        <div className="px-4 pt-2 border-b border-border/40 bg-muted/20">
-            <TabsList className="grid w-full grid-cols-8 h-auto p-1 gap-1 bg-transparent">
-                <TabsTrigger value="characters" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><UserSquare className="w-4 h-4"/> PCs</TabsTrigger>
-                <TabsTrigger value="npcs" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> NPCs</TabsTrigger>
-                <TabsTrigger value="journal" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><BookOpen className="w-4 h-4"/> Diário</TabsTrigger>
-                <TabsTrigger value="shops" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Store className="w-4 h-4"/> Lojas</TabsTrigger>
-                <TabsTrigger value="database" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Database className="w-4 h-4"/> DB</TabsTrigger>
-                <TabsTrigger value="rules" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Book className="w-4 h-4"/> Regras</TabsTrigger> 
-                <TabsTrigger value="media" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Clapperboard className="w-4 h-4"/> Studio</TabsTrigger>
-                <TabsTrigger value="players" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4"/> Jog.</TabsTrigger>
-            </TabsList>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 bg-background/50">
-            <TabsContent value="characters" className="mt-0 h-full"><MasterCharactersTab tableId={tableId} /></TabsContent>
-            <TabsContent value="npcs" className="mt-0 h-full"><MasterNpcsTab tableId={tableId} /></TabsContent>
-            <TabsContent value="journal" className="mt-0 h-full"><MasterJournalTab tableId={tableId} /></TabsContent>
-            <TabsContent value="shops" className="mt-0 h-full"><MasterShopsTab tableId={tableId} /></TabsContent>
-            <TabsContent value="database" className="mt-0 h-full"><MasterDatabaseTab tableId={tableId} /></TabsContent>
-            <TabsContent value="rules" className="mt-0 h-full"><MasterRulesTab tableId={tableId} /></TabsContent>
-            <TabsContent value="media" className="mt-0 h-full"><MasterMediaTab tableId={tableId} /></TabsContent>
-            <TabsContent value="players" className="mt-0 h-full"><MasterPlayersTab tableId={tableId} /></TabsContent>
-        </div>
-    </Tabs>
-);
+interface MasterViewProps { tableId: string; masterId: string; }
 
 export const MasterView = ({ tableId }: MasterViewProps) => {
-  const { toast } = useToast();
   const navigate = useNavigate();
-  
-  // Estado do Modo (Dashboard vs Imersivo) com Persistência
   const [mode, setMode] = useState<'dashboard' | 'immersive'>(() => {
       const saved = localStorage.getItem(`table-mode-${tableId}`);
       return (saved === 'immersive' || saved === 'dashboard') ? saved : 'dashboard';
   });
 
+  const [activeTab, setActiveTab] = useState("characters");
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
   
-  // Estados de Interface do VTT
+  // VTT States
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isCombatOpen, setIsCombatOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -88,27 +57,18 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
   const [isMasterPanelOpen, setIsMasterPanelOpen] = useState(false);
   const [isQuickAccessOpen, setIsQuickAccessOpen] = useState(false);
   
-  // Estado para Visualizar Ficha (Acesso Rápido ou Dock)
-  const [inspectingEntity, setInspectingEntity] = useState<{ type: 'character'|'npc', id: string, name: string } | null>(null);
+  // SheetViewer agora usado APENAS para inspeção via mapa/dock, não pela pesquisa
+  const [inspectingEntity, setInspectingEntity] = useState<{ type: string, id: string, name: string } | null>(null);
 
   useTableRealtime(tableId);
 
-  // Salvar preferência de modo
-  useEffect(() => {
-      localStorage.setItem(`table-mode-${tableId}`, mode);
-  }, [mode, tableId]);
+  useEffect(() => { localStorage.setItem(`table-mode-${tableId}`, mode); }, [mode, tableId]);
 
   useEffect(() => {
-      // 1. Sincronizar Cena Ativa (CORREÇÃO: usa maybeSingle e insert se necessário)
       const fetchState = async () => {
           const { data, error } = await supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).maybeSingle();
-          
-          if (data) {
-              setActiveSceneId(data.current_scene_id);
-          } else if (!error) {
-              // Se não houver estado (primeira vez), cria um
-              await supabase.from("game_states").insert({ table_id: tableId });
-          }
+          if (data) setActiveSceneId(data.current_scene_id);
+          else if (!error) await supabase.from("game_states").insert({ table_id: tableId });
       };
       fetchState();
 
@@ -117,7 +77,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
         (payload: any) => setActiveSceneId(payload.new.current_scene_id))
         .subscribe();
         
-      // 2. Listeners para os botões da Dock
       const handleToggleCombat = () => setIsCombatOpen(prev => !prev);
       const handleToggleSettings = () => setIsSettingsOpen(prev => !prev);
       const handleToggleBard = () => setIsBardOpen(prev => !prev);
@@ -125,12 +84,30 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
       const handleToggleMasterPanel = () => setIsMasterPanelOpen(prev => !prev);
       const handleToggleQuickAccess = () => setIsQuickAccessOpen(prev => !prev);
       
+      // NOVA LÓGICA DE NAVEGAÇÃO
+      const handleNavigation = (e: CustomEvent) => {
+          const { type } = e.detail;
+          if (mode === 'immersive') {
+              // Se estiver no jogo, volta ao painel para mostrar o conteúdo (opcional, ou abre sheet)
+              setMode('dashboard');
+          }
+          
+          // Redireciona para a aba correta
+          if (type === 'character') setActiveTab('characters');
+          if (type === 'npc') setActiveTab('npcs');
+          if (type === 'journal') setActiveTab('journal');
+          if (type === 'shop') setActiveTab('shops');
+          if (type === 'rule') setActiveTab('rules');
+          if (type === 'item') setActiveTab('database'); // Mestre tem aba Database
+      };
+
       document.addEventListener('toggle-combat-tracker', handleToggleCombat);
       document.addEventListener('toggle-vtt-settings', handleToggleSettings);
       document.addEventListener('toggle-bard-panel', handleToggleBard);
       document.addEventListener('toggle-prios-panel', handleTogglePrios);
       document.addEventListener('toggle-master-panel', handleToggleMasterPanel);
       document.addEventListener('toggle-quick-access', handleToggleQuickAccess);
+      document.addEventListener('navigate-to-content', handleNavigation as EventListener);
 
       return () => { 
           supabase.removeChannel(channel); 
@@ -140,137 +117,85 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
           document.removeEventListener('toggle-prios-panel', handleTogglePrios);
           document.removeEventListener('toggle-master-panel', handleToggleMasterPanel);
           document.removeEventListener('toggle-quick-access', handleToggleQuickAccess);
+          document.removeEventListener('navigate-to-content', handleNavigation as EventListener);
       };
-  }, [tableId]);
+  }, [tableId, mode]);
+
+  const renderDashboardContent = () => {
+    switch (activeTab) {
+      case "characters": return <MasterCharactersTab tableId={tableId} />;
+      case "npcs": return <MasterNpcsTab tableId={tableId} />;
+      case "journal": return <MasterJournalTab tableId={tableId} />;
+      case "shops": return <MasterShopsTab tableId={tableId} />;
+      case "database": return <MasterDatabaseTab tableId={tableId} />;
+      case "rules": return <MasterRulesTab tableId={tableId} />;
+      case "media": return <MasterMediaTab tableId={tableId} />;
+      case "players": return <MasterPlayersTab tableId={tableId} />;
+      default: return <MasterCharactersTab tableId={tableId} />;
+    }
+  };
+
+  const getPageTitle = () => {
+      const titles: Record<string, string> = {
+          characters: "Personagens", npcs: "Bestiário & NPCs", journal: "Diário",
+          shops: "Mercado", database: "Base de Dados", rules: "Regras",
+          media: "Estúdio", players: "Jogadores"
+      };
+      return titles[activeTab] || "Campanha";
+  };
 
   if (mode === 'dashboard') {
     return (
-      <div className="space-y-6 p-6 pb-20 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
-        <div className="flex flex-wrap justify-between items-center gap-4 bg-card p-6 rounded-xl border shadow-sm"> 
-          <div>
-              <h2 className="text-3xl font-bold tracking-tight">Painel do Mestre</h2>
-              <p className="text-muted-foreground">Prepare a sessão ou entre no modo de jogo.</p>
-          </div>
-          <div className="flex gap-2 items-center">
-              <Suspense fallback={<Button variant="outline" size="sm" disabled>Carregando...</Button>}>
-                <DiscordSettingsDialog />
-              </Suspense>
-              <Button variant="outline" onClick={() => navigate("/dashboard")}><LogOut className="w-4 h-4 mr-2" /> Sair</Button>
-              <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
-              <Button size="lg" className="bg-green-600 hover:bg-green-700 text-white shadow-glow font-bold px-6" onClick={() => setMode('immersive')}>
-                <Maximize className="w-5 h-5 mr-2" /> Entrar na Mesa
-              </Button>
-          </div>
+      <SidebarProvider>
+        <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
+          <MasterSidebar currentTab={activeTab} onTabChange={setActiveTab} tableId={tableId} />
+          <SidebarInset className="flex flex-col overflow-hidden h-full w-full">
+            <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <h2 className="text-sm font-semibold">{getPageTitle()}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                 <Suspense fallback={null}><DiscordSettingsDialog /></Suspense>
+                 <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}><LogOut className="w-4 h-4 mr-2" /> Sair</Button>
+                 <div className="h-6 w-px bg-border mx-1" />
+                 <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={() => setMode('immersive')}><Maximize className="w-4 h-4 mr-2" /> VTT</Button>
+              </div>
+            </header>
+            <main className="flex-1 overflow-y-auto bg-muted/10 p-4 relative">
+               <div className="mx-auto max-w-full h-full flex flex-col">{renderDashboardContent()}</div>
+            </main>
+          </SidebarInset>
+          <SheetViewer isOpen={!!inspectingEntity} entity={inspectingEntity} onClose={() => setInspectingEntity(null)} />
         </div>
-        <div className="bg-card border rounded-xl shadow-sm min-h-[600px] overflow-hidden">
-             <MasterDashboardTabs tableId={tableId} />
-        </div>
-      </div>
+      </SidebarProvider>
     );
   }
 
-  // --- MODO IMERSIVO (VTT) ---
   return (
     <div className="fixed inset-0 bg-black overflow-hidden font-sans text-foreground">
-        
-        {/* COMPONENTE DE ÁUDIO/VÍDEO (Invisível mas Funcional) */}
+        <div className="hidden"><GlobalSearchDialog tableId={tableId} /></div>
         <ImmersiveOverlay tableId={tableId} isMaster={true} />
-
-        {/* MAPA */}
-        <div className="absolute inset-0 z-0">
-             <VttGridBackground>
-                 <SceneBoard sceneId={activeSceneId} isMaster={true} />
-             </VttGridBackground>
-        </div>
-
-        {/* HUD SUPERIOR */}
+        <div className="absolute inset-0 z-0"><VttGridBackground><SceneBoard sceneId={activeSceneId} isMaster={true} /></VttGridBackground></div>
         <div className="fixed top-4 left-4 z-40 flex gap-2 pointer-events-auto">
-            <Button variant="secondary" size="sm" className="bg-black/80 text-white border-white/10 backdrop-blur-md shadow-lg hover:bg-white/20" onClick={() => setMode('dashboard')}>
-                <Minimize className="w-4 h-4 mr-2" /> Painel
-            </Button>
-            {!activeSceneId && (
-                <div className="bg-destructive/80 text-white px-3 py-1 rounded-md text-xs flex items-center backdrop-blur-md border border-white/10 shadow-lg">
-                    Sem Cena Ativa
-                </div>
-            )}
+            <Button variant="secondary" size="sm" className="bg-black/80 text-white border-white/10 backdrop-blur-md shadow-lg" onClick={() => setMode('dashboard')}><Minimize className="w-4 h-4 mr-2" /> Dashboard</Button>
+            {!activeSceneId && <div className="bg-destructive/80 text-white px-3 py-1 rounded-md text-xs flex items-center backdrop-blur-md border border-white/10">Sem Cena Ativa</div>}
         </div>
-
         <div className="fixed top-4 right-4 z-50 pointer-events-auto">
-            <Button variant={isChatOpen ? "default" : "secondary"} size="icon" className="rounded-full shadow-xl h-10 w-10 border-2 border-black/20 bg-black/80 text-white hover:bg-white/20" onClick={() => setIsChatOpen(!isChatOpen)}>
-                {isChatOpen ? <X className="w-4 h-4"/> : <MessageSquare className="w-4 h-4" />}
-            </Button>
+            <Button variant={isChatOpen ? "default" : "secondary"} size="icon" className="rounded-full shadow-xl h-10 w-10 border-2 border-black/20 bg-black/80 text-white" onClick={() => setIsChatOpen(!isChatOpen)}>{isChatOpen ? <X className="w-4 h-4"/> : <MessageSquare className="w-4 h-4" />}</Button>
         </div>
-
-        {/* --- JANELAS FLUTUANTES --- */}
-        
-        {/* 1. Combate (Canto Superior Esquerdo, abaixo do HUD) */}
-        {isCombatOpen && (
-            <div className="fixed top-16 left-4 z-40 pointer-events-auto animate-in slide-in-from-left-10 fade-in duration-300">
-                 <CombatTracker tableId={tableId} />
-            </div>
-        )}
-        
-        {/* 2. Painéis de Multimédia (Canto Inferior Direito - Empilhados) */}
+        {isCombatOpen && <div className="fixed top-16 left-4 z-40 pointer-events-auto animate-in slide-in-from-left-10 fade-in duration-300"><CombatTracker tableId={tableId} /></div>}
         <div className="fixed bottom-24 right-4 z-50 pointer-events-auto flex flex-col-reverse gap-4 items-end">
-            
-            {/* O BARDO */}
-            {isBardOpen && (
-                <div className="animate-in slide-in-from-right-10 fade-in duration-300 shadow-2xl rounded-xl">
-                    <BardPanel tableId={tableId} onClose={() => setIsBardOpen(false)} />
-                </div>
-            )}
-
-            {/* O PRIOS */}
-            {isPriosOpen && (
-                <div className="animate-in slide-in-from-right-10 fade-in duration-300 shadow-2xl rounded-xl">
-                    <PriosPanel tableId={tableId} onClose={() => setIsPriosOpen(false)} />
-                </div>
-            )}
+            {isBardOpen && <div className="shadow-2xl rounded-xl"><BardPanel tableId={tableId} onClose={() => setIsBardOpen(false)} /></div>}
+            {isPriosOpen && <div className="shadow-2xl rounded-xl"><PriosPanel tableId={tableId} onClose={() => setIsPriosOpen(false)} /></div>}
         </div>
-
-        {/* 3. Acesso Rápido (Centro Inferior, acima da Dock) */}
-        {isQuickAccessOpen && (
-            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in slide-in-from-bottom-10 fade-in duration-300">
-                <QuickAccessPanel tableId={tableId} onClose={() => setIsQuickAccessOpen(false)} onOpenSheet={(type, id, name) => setInspectingEntity({ type, id, name })} />
-            </div>
-        )}
-
-        {/* DOCK (Barra Inferior) */}
-        <VttDock 
-            tableId={tableId} 
-            onDragStart={(item) => console.log(item)} 
-            onInspect={(item) => {
-                if (item.type === 'npc' || item.type === 'character') {
-                    setInspectingEntity({ type: item.type, id: item.id, name: item.name });
-                }
-            }}
-        />
-
-        {/* --- PAINÉIS LATERAIS E MODALS --- */}
-
-        {/* Chat Lateral */}
-        <div className={`fixed top-16 right-4 bottom-24 w-80 transition-all duration-300 ease-in-out pointer-events-auto ${isChatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"}`} style={{ zIndex: 90 }}>
-             <MasterRightPanel tableId={tableId} onClose={() => setIsChatOpen(false)} />
-        </div>
-
-        {/* Painel de Gestão Fullscreen */}
+        {isQuickAccessOpen && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in slide-in-from-bottom-10 fade-in duration-300"><QuickAccessPanel tableId={tableId} onClose={() => setIsQuickAccessOpen(false)} onOpenSheet={(type, id, name) => setInspectingEntity({ type, id, name })} /></div>}
+        <VttDock tableId={tableId} onDragStart={() => {}} onInspect={(item) => { if (item.type === 'npc' || item.type === 'character') { setInspectingEntity({ type: item.type, id: item.id, name: item.name }); } }} />
+        <div className={`fixed top-16 right-4 bottom-24 w-80 transition-all duration-300 ease-in-out pointer-events-auto ${isChatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"}`} style={{ zIndex: 90 }}><MasterRightPanel tableId={tableId} onClose={() => setIsChatOpen(false)} /></div>
         <MasterInGamePanel isOpen={isMasterPanelOpen} onClose={() => setIsMasterPanelOpen(false)} tableId={tableId} />
-
-        {/* Visualizador de Fichas (Lateral) */}
-        <SheetViewer 
-            isOpen={!!inspectingEntity} 
-            entity={inspectingEntity} 
-            onClose={() => setInspectingEntity(null)} 
-        />
-
-        {/* Definições */}
-        <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-            <DialogContent className="bg-black/90 border-white/20 backdrop-blur-xl">
-                <DialogHeader><DialogTitle>Definições da Mesa</DialogTitle></DialogHeader>
-                <div className="py-4"><DiscordSettingsDialog /></div>
-            </DialogContent>
-        </Dialog>
-
+        <SheetViewer isOpen={!!inspectingEntity} entity={inspectingEntity} onClose={() => setInspectingEntity(null)} />
+        <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}><DialogContent className="bg-black/90 border-white/20 backdrop-blur-xl"><DialogHeader><DialogTitle>Definições</DialogTitle></DialogHeader><div className="py-4"><DiscordSettingsDialog /></div></DialogContent></Dialog>
     </div>
   );
 };

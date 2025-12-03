@@ -1,273 +1,165 @@
-// src/components/PlayerView.tsx
-
-import { useState, useEffect } from "react";
-import { useTableContext } from "@/features/table/TableContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { 
-  UserSquare, 
-  MessageSquare, 
-  Dices, 
-  LogOut, 
-  X, 
-  Users, 
-  ShoppingBag, 
-  BookOpen, 
-  Map as MapIcon, 
-  Maximize, 
-  Minimize,
-  ScrollText
-} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Maximize, Minimize, LogOut, MessageSquare, X } from "lucide-react";
 
-// Componentes
+import { useTableContext } from "@/features/table/TableContext";
+import { useTableRealtime } from "@/hooks/useTableRealtime";
+import { supabase } from "@/integrations/supabase/client";
+
+import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
+import { GlobalSearchDialog } from "@/components/GlobalSearchDialog";
+import { PlayerSidebar } from "@/features/player/PlayerSidebar";
+
 import { PlayerCharactersTab } from "@/features/player/PlayerCharactersTab";
 import { PlayerNpcsTab } from "@/features/player/PlayerNpcsTab";
 import { PlayerJournalTab } from "@/features/player/PlayerJournalTab";
+import { PlayerRulesTab } from "@/features/player/PlayerRulesTab";
 import { PlayerShopsTab } from "@/features/shops/PlayerShopsTab";
-import { PlayerRulesTab } from "@/features/player/PlayerRulesTab"; 
+
 import { SceneBoard } from "@/features/map/SceneBoard";
-import { ChatPanel } from "@/components/ChatPanel";
-import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 import { VttGridBackground } from "@/components/VttGridBackground";
-import { CombatTracker } from "@/features/combat/CombatTracker";
-
-// UI
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CombatTracker } from "@/features/combat/CombatTracker"; 
+import { VttDock } from "@/features/vtt/VttDock"; 
+import { QuickAccessPanel } from "@/features/vtt/QuickAccessPanel"; 
+import { SheetViewer } from "@/features/vtt/SheetViewer"; 
+import { ImmersiveOverlay } from "@/components/ImmersiveOverlay"; 
+import { ChatPanel } from "@/components/ChatPanel";
 import { Card } from "@/components/ui/card";
-import { useTableRealtime } from "@/hooks/useTableRealtime";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-interface PlayerViewProps {
-  tableId: string;
-}
+interface PlayerViewProps { tableId: string; }
 
 export const PlayerView = ({ tableId }: PlayerViewProps) => {
   const navigate = useNavigate();
   const { userId } = useTableContext();
+  
+  const [mode, setMode] = useState<'dashboard' | 'immersive'>(() => {
+      const saved = localStorage.getItem(`player-table-mode-${tableId}`);
+      return (saved === 'immersive' || saved === 'dashboard') ? saved : 'dashboard';
+  });
+  
+  const [activeTab, setActiveTab] = useState("characters");
   const [activeSceneId, setActiveSceneId] = useState<string | null>(null);
-  const [shopsOpen, setShopsOpen] = useState(false);
-  
-  // Estados de Navegação
-  const [mode, setMode] = useState<'dashboard' | 'immersive'>('dashboard');
-  
-  // Estados do Modo Imersivo (Janelas)
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [myCharacterId, setMyCharacterId] = useState<string | null>(null);
+  const [isCombatOpen, setIsCombatOpen] = useState(false);
+  const [isQuickAccessOpen, setIsQuickAccessOpen] = useState(false);
   
+  // SheetViewer só para VTT agora
+  const [inspectingEntity, setInspectingEntity] = useState<{ type: string, id: string, name: string } | null>(null);
+
   useTableRealtime(tableId);
 
-  // 1. Setup Inicial e Listeners
+  useEffect(() => { localStorage.setItem(`player-table-mode-${tableId}`, mode); }, [mode, tableId]);
+
   useEffect(() => {
-    // CORREÇÃO: Usar maybeSingle() para evitar erro 406
-    supabase.from("tables").select("shops_open").eq("id", tableId).maybeSingle()
-      .then(({ data }) => { if(data) setShopsOpen(!!data.shops_open); });
+      const fetchState = async () => {
+          const { data } = await supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).maybeSingle();
+          if (data) setActiveSceneId(data.current_scene_id);
+      };
+      fetchState();
 
-    supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).maybeSingle()
-      .then(({ data }) => { if(data) setActiveSceneId(data.current_scene_id); });
-
-    if(userId) {
-        supabase.from("characters").select("id").eq("table_id", tableId).eq("player_id", userId).order("updated_at", { ascending: false }).limit(1).maybeSingle()
-        .then(({ data }) => { if(data) setMyCharacterId(data.id); });
-    }
-
-    const channel = supabase.channel(`player-view:${tableId}`)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'tables', filter: `id=eq.${tableId}` }, 
-        (payload: any) => setShopsOpen(!!payload.new.shops_open))
+      const channel = supabase.channel(`player-view-sync:${tableId}`)
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'game_states', filter: `table_id=eq.${tableId}` }, 
-        (payload: any) => {
-             setActiveSceneId(payload.new.current_scene_id);
-        })
+        (payload: any) => setActiveSceneId(payload.new.current_scene_id))
         .subscribe();
         
-    return () => { supabase.removeChannel(channel); };
-  }, [tableId, userId]);
+      const handleToggleCombat = () => setIsCombatOpen(prev => !prev);
+      const handleToggleQuickAccess = () => setIsQuickAccessOpen(prev => !prev);
+      
+      // NOVA LÓGICA DE NAVEGAÇÃO PARA O JOGADOR
+      const handleNavigation = (e: CustomEvent) => {
+          const { type } = e.detail;
+          if (mode === 'immersive') setMode('dashboard');
 
+          if (type === 'character') setActiveTab('characters');
+          if (type === 'npc') setActiveTab('npcs');
+          if (type === 'journal') setActiveTab('journal');
+          if (type === 'shop') setActiveTab('shops');
+          if (type === 'rule') setActiveTab('rules');
+          if (type === 'item') setActiveTab('shops'); // Jogador não tem DB, manda para Loja
+      };
+      
+      document.addEventListener('toggle-combat-tracker', handleToggleCombat);
+      document.addEventListener('toggle-quick-access', handleToggleQuickAccess);
+      document.addEventListener('navigate-to-content', handleNavigation as EventListener);
 
-  // --- RENDERIZAÇÃO: MODO DASHBOARD (Lobby) ---
+      return () => { 
+          supabase.removeChannel(channel); 
+          document.removeEventListener('toggle-combat-tracker', handleToggleCombat);
+          document.removeEventListener('toggle-quick-access', handleToggleQuickAccess);
+          document.removeEventListener('navigate-to-content', handleNavigation as EventListener);
+      };
+  }, [tableId, mode]);
+
+  const renderTabContent = () => {
+    if (!userId) return <div className="p-4">Carregando perfil...</div>;
+    switch (activeTab) {
+      case "characters": return <PlayerCharactersTab tableId={tableId} userId={userId} />;
+      case "npcs": return <PlayerNpcsTab tableId={tableId} />;
+      case "journal": return <PlayerJournalTab tableId={tableId} userId={userId} />;
+      case "shops": return <PlayerShopsTab tableId={tableId} userId={userId} />;
+      case "rules": return <PlayerRulesTab tableId={tableId} />;
+      default: return <PlayerCharactersTab tableId={tableId} userId={userId} />;
+    }
+  };
+
+  const getPageTitle = () => {
+      const titles: Record<string, string> = {
+          characters: "Meus Personagens", npcs: "NPCs & Aliados", journal: "Diário",
+          shops: "Mercado", rules: "Regras"
+      };
+      return titles[activeTab] || "Personagens";
+  };
+
   if (mode === 'dashboard') {
     return (
-      <div className="space-y-6 animate-in fade-in duration-500 pb-20 p-6 max-w-[1600px] mx-auto">
-        
-        {/* CABEÇALHO */}
-        <div className="flex flex-wrap justify-between items-center gap-4 bg-card p-6 rounded-xl border shadow-sm">
-          <div>
-              <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                 <MapIcon className="w-8 h-8 text-primary" />
-                 Mesa Virtual
-              </h2>
-              <p className="text-muted-foreground">
-                 Consulte suas fichas ou entre no modo de jogo.
-              </p>
-          </div>
-          <div className="flex gap-2 items-center">
-              <Button variant="outline" onClick={() => navigate("/dashboard")}>
-                  <LogOut className="w-4 h-4 mr-2" /> Sair
-              </Button>
-              <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
-              <Button 
-                 size="lg" 
-                 className="bg-green-600 hover:bg-green-700 text-white shadow-glow font-bold px-6" 
-                 onClick={() => setMode('immersive')}
-              >
-                <Maximize className="w-5 h-5 mr-2" /> Entrar na Mesa
-              </Button>
-          </div>
+      <SidebarProvider>
+        <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
+          <PlayerSidebar currentTab={activeTab} onTabChange={setActiveTab} tableId={tableId} />
+          <SidebarInset className="flex flex-col overflow-hidden h-full w-full">
+            <header className="flex h-14 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur">
+              <div className="flex items-center gap-2">
+                <SidebarTrigger />
+                <Separator orientation="vertical" className="mr-2 h-4" />
+                <h2 className="text-sm font-semibold">{getPageTitle()}</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                 <Suspense fallback={null}><DiscordSettingsDialog /></Suspense>
+                 <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}><LogOut className="w-4 h-4 mr-2" /> Sair</Button>
+                 <div className="h-6 w-px bg-border mx-1" />
+                 <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white shadow-sm" onClick={() => setMode('immersive')}><Maximize className="w-4 h-4 mr-2" /> Entrar na Mesa</Button>
+              </div>
+            </header>
+            <main className="flex-1 overflow-y-auto bg-muted/10 p-4 relative">
+               <div className="mx-auto max-w-full h-full flex flex-col">{renderTabContent()}</div>
+            </main>
+          </SidebarInset>
+          {/* SheetViewer mantido aqui apenas se o usuário clicar em algo que não seja da pesquisa (ex: links internos) */}
+          <SheetViewer isOpen={!!inspectingEntity} entity={inspectingEntity} onClose={() => setInspectingEntity(null)} />
         </div>
-
-        {/* ÁREA DE CONTEÚDO */}
-        <div className="bg-card border rounded-xl shadow-sm min-h-[600px] overflow-hidden p-4">
-            <Tabs defaultValue="characters" className="w-full h-full flex flex-col">
-                <div className="px-4 pt-2 border-b border-border/40 bg-muted/20 mb-4 rounded-t-lg">
-                    <TabsList className={`grid w-full h-auto p-1 gap-1 bg-transparent ${shopsOpen ? "grid-cols-5" : "grid-cols-4"}`}>
-                        <TabsTrigger value="characters" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><UserSquare className="w-4 h-4 mr-2" /> Fichas</TabsTrigger>
-                        <TabsTrigger value="npcs" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><Users className="w-4 h-4 mr-2" /> NPCs</TabsTrigger>
-                        <TabsTrigger value="journal" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><BookOpen className="w-4 h-4 mr-2" /> Diário</TabsTrigger>
-                        <TabsTrigger value="rules" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><ScrollText className="w-4 h-4 mr-2" /> Regras</TabsTrigger>
-                        {shopsOpen && <TabsTrigger value="shops" className="text-xs flex-col gap-1 h-14 data-[state=active]:bg-background"><ShoppingBag className="w-4 h-4 mr-2" /> Mercado</TabsTrigger>}
-                    </TabsList>
-                </div>
-                
-                <div className="flex-1 overflow-y-auto p-2">
-                    <TabsContent value="characters" className="mt-0">{userId && <PlayerCharactersTab tableId={tableId} userId={userId} />}</TabsContent>
-                    <TabsContent value="npcs" className="mt-0"><PlayerNpcsTab tableId={tableId} /></TabsContent>
-                    <TabsContent value="journal" className="mt-0">{userId && <PlayerJournalTab tableId={tableId} userId={userId} />}</TabsContent>
-                    <TabsContent value="rules" className="mt-0"><PlayerRulesTab tableId={tableId} /></TabsContent>
-                    {shopsOpen && <TabsContent value="shops" className="mt-0">{userId && <PlayerShopsTab tableId={tableId} userId={userId} />}</TabsContent>}
-                </div>
-            </Tabs>
-        </div>
-      </div>
+      </SidebarProvider>
     );
   }
 
-  // --- RENDERIZAÇÃO: MODO IMERSIVO (VTT) ---
   return (
-    <div className="fixed inset-0 bg-black overflow-hidden animate-in fade-in zoom-in-95 duration-700 z-50">
-        
-        {/* FUNDO E MAPA */}
-        <VttGridBackground className="absolute inset-0 z-0">
-             <SceneBoard sceneId={activeSceneId} isMaster={false} userId={userId || undefined} />
-        </VttGridBackground>
-
-        {/* HUD SUPERIOR */}
-        <div className="absolute top-0 left-0 w-full p-4 z-40 flex justify-between pointer-events-none">
-             <div className="pointer-events-auto">
-                <Button 
-                    variant="secondary" 
-                    size="sm" 
-                    className="opacity-50 hover:opacity-100 transition-opacity bg-black/60 text-white border border-white/10 backdrop-blur-sm"
-                    onClick={() => setMode('dashboard')}
-                >
-                    <Minimize className="w-4 h-4 mr-2" /> Sair da Mesa
-                </Button>
-             </div>
-
-             {!activeSceneId && (
-                 <div className="bg-black/60 text-white/70 px-4 py-1 rounded-full backdrop-blur-md border border-white/10 text-xs font-mono pointer-events-auto">
-                     Aguardando mapa do Mestre...
-                 </div>
-             )}
-
-             <div className="pointer-events-auto">
-                <Button 
-                    variant={isChatOpen ? "default" : "secondary"} 
-                    size="icon" 
-                    className="rounded-full shadow-xl h-10 w-10 border-2 border-black/20"
-                    onClick={() => setIsChatOpen(!isChatOpen)}
-                    title="Chat / Dados"
-                >
-                    {isChatOpen ? <X className="w-4 h-4"/> : <MessageSquare className="w-4 h-4" />}
-                </Button>
-             </div>
+    <div className="fixed inset-0 bg-black overflow-hidden font-sans text-foreground">
+        <div className="hidden"><GlobalSearchDialog tableId={tableId} /></div>
+        <ImmersiveOverlay tableId={tableId} isMaster={false} />
+        <div className="absolute inset-0 z-0"><VttGridBackground><SceneBoard sceneId={activeSceneId} isMaster={false} userId={userId || undefined} /></VttGridBackground></div>
+        <div className="fixed top-4 left-4 z-40 flex gap-2 pointer-events-auto">
+            <Button variant="secondary" size="sm" className="bg-black/80 text-white border-white/10 backdrop-blur-md shadow-lg" onClick={() => setMode('dashboard')}><Minimize className="w-4 h-4 mr-2" /> Fichas</Button>
+            {!activeSceneId && <div className="bg-destructive/80 text-white px-3 py-1 rounded-md text-xs flex items-center backdrop-blur-md border border-white/10">Aguardando Mapa...</div>}
         </div>
-
-        {/* COMBAT TRACKER */}
-        <div className="absolute top-16 left-4 z-40 pointer-events-auto">
-             <CombatTracker tableId={tableId} />
+        <div className="fixed top-4 right-4 z-50 pointer-events-auto">
+             <Button variant={isChatOpen ? "default" : "secondary"} size="icon" className="rounded-full shadow-xl h-10 w-10 border-2 border-black/20 bg-black/80 text-white" onClick={() => setIsChatOpen(!isChatOpen)}>{isChatOpen ? <X className="w-4 h-4"/> : <MessageSquare className="w-4 h-4" />}</Button>
         </div>
-
-        {/* DOCK INFERIOR */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-40 pointer-events-auto">
-            <div className="flex items-center gap-2 bg-black/80 backdrop-blur-xl p-2 px-4 rounded-2xl border border-white/10 shadow-2xl transform transition-transform hover:scale-105">
-                
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        {myCharacterId ? (
-                            <CharacterSheetSheet characterId={myCharacterId}>
-                                <Button variant="ghost" size="icon" className="h-12 w-12 rounded-xl hover:bg-primary/20 hover:text-primary text-white transition-colors">
-                                    <UserSquare className="w-7 h-7" />
-                                </Button>
-                            </CharacterSheetSheet>
-                        ) : (
-                            <Button variant="ghost" size="icon" className="h-12 w-12 text-muted-foreground opacity-50" disabled>
-                                <UserSquare className="w-7 h-7" />
-                            </Button>
-                        )}
-                    </TooltipTrigger>
-                    <TooltipContent side="top"><p>Minha Ficha</p></TooltipContent>
-                </Tooltip>
-                
-                <div className="w-px h-8 bg-white/10 mx-1" />
-
-                <Sheet>
-                    <SheetTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-12 w-12 rounded-xl hover:bg-white/10 text-white transition-colors">
-                            <BookOpen className="w-7 h-7" />
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent side="left" className="w-[400px] sm:w-[600px] bg-background/95 backdrop-blur border-r-slate-800 p-0">
-                         <div className="h-full flex flex-col">
-                            <div className="p-6 pb-2 border-b border-border/50">
-                                <h2 className="text-2xl font-bold">Diário & Referências</h2>
-                            </div>
-                            <Tabs defaultValue="rules" className="flex-1 flex flex-col">
-                                <div className="px-6 pt-4">
-                                    <TabsList className="grid w-full grid-cols-4">
-                                        <TabsTrigger value="rules">Regras</TabsTrigger>
-                                        <TabsTrigger value="journal">Diário</TabsTrigger>
-                                        <TabsTrigger value="npcs">NPCs</TabsTrigger>
-                                        {shopsOpen && <TabsTrigger value="shops">Mercado</TabsTrigger>}
-                                    </TabsList>
-                                </div>
-                                <div className="flex-1 overflow-y-auto p-6">
-                                    <TabsContent value="rules"><PlayerRulesTab tableId={tableId} /></TabsContent>
-                                    <TabsContent value="journal">{userId && <PlayerJournalTab tableId={tableId} userId={userId} />}</TabsContent>
-                                    <TabsContent value="npcs"><PlayerNpcsTab tableId={tableId} /></TabsContent>
-                                    {shopsOpen && <TabsContent value="shops">{userId && <PlayerShopsTab tableId={tableId} userId={userId} />}</TabsContent>}
-                                </div>
-                            </Tabs>
-                         </div>
-                    </SheetContent>
-                </Sheet>
-
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button 
-                            variant="ghost" size="icon" 
-                            className="h-12 w-12 rounded-xl hover:bg-accent/20 hover:text-accent text-white transition-colors"
-                            onClick={() => setIsChatOpen(true)}
-                        >
-                            <Dices className="w-7 h-7" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top"><p>Rolar Dados</p></TooltipContent>
-                </Tooltip>
-            </div>
-        </div>
-
-        {/* PAINEL DE CHAT */}
-        <div 
-            className={`absolute top-16 right-4 bottom-24 w-80 z-30 transition-all duration-300 ease-in-out transform ${isChatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"}`}
-        >
-            <Card className="h-full shadow-2xl border-border/50 bg-black/80 backdrop-blur-md flex flex-col overflow-hidden border border-white/10 rounded-xl">
-                 <div className="flex-1 overflow-hidden">
-                     <ChatPanel tableId={tableId} />
-                 </div>
-            </Card>
-        </div>
-
+        {isCombatOpen && <div className="fixed top-16 left-4 z-40 pointer-events-auto animate-in slide-in-from-left-10 fade-in duration-300"><CombatTracker tableId={tableId} /></div>}
+        <div className={`fixed top-16 right-4 bottom-24 w-80 z-30 transition-all duration-300 ease-in-out transform pointer-events-auto ${isChatOpen ? "translate-x-0 opacity-100" : "translate-x-[120%] opacity-0 pointer-events-none"}`}><Card className="h-full shadow-2xl border-border/50 bg-black/80 backdrop-blur-md flex flex-col overflow-hidden border border-white/10 rounded-xl"><div className="flex-1 overflow-hidden"><ChatPanel tableId={tableId} /></div></Card></div>
+        {isQuickAccessOpen && <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 pointer-events-auto animate-in slide-in-from-bottom-10 fade-in duration-300"><QuickAccessPanel tableId={tableId} onClose={() => setIsQuickAccessOpen(false)} onOpenSheet={(type, id, name) => setInspectingEntity({ type, id, name })} /></div>}
+        <VttDock tableId={tableId} onDragStart={() => {}} onInspect={(item) => { if (item.type === 'npc' || item.type === 'character') { setInspectingEntity({ type: item.type, id: item.id, name: item.name }); } }} />
+        <SheetViewer isOpen={!!inspectingEntity} entity={inspectingEntity} onClose={() => setInspectingEntity(null)} />
     </div>
   );
 };
