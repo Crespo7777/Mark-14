@@ -2,26 +2,22 @@
 
 import { createContext, useContext, ReactNode, SetStateAction, Dispatch } from "react";
 
-// --- 1. NOVO TIPO: Membro da Mesa ---
-// Uma interface simplificada para nossos propósitos
+// --- TIPO ATUALIZADO: Membro da Mesa ---
 export interface TableMember {
   id: string; // user_id (ou master_id)
   display_name: string;
   isMaster: boolean;
+  isHelper: boolean; // <--- NOVO CAMPO: Define se é Ajudante
 }
-// --- FIM DA ADIÇÃO ---
 
 interface TableContextType {
   tableId: string;
   masterId: string;
   userId: string;
   isMaster: boolean;
+  isHelper: boolean; // <--- NOVO CAMPO: Permissão do usuário atual
   members: TableMember[]; 
-  
-  // --- INÍCIO DA CORREÇÃO ---
-  // Adicionamos a função de 'set' ao tipo do contexto
   setMembers: Dispatch<SetStateAction<TableMember[]>>;
-  // --- FIM DA CORREÇÃO ---
 }
 
 const TableContext = createContext<TableContextType | null>(null);

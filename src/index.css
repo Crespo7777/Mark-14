@@ -5,23 +5,32 @@
 
 @layer base {
   :root {
-    --background: 25 20% 8%;
-    --foreground: 40 15% 85%;
-    --card: 25 18% 12%;
+    /* Tema Dark Fantasy / Grim Dark (Mesa de RPG) */
+    --background: 25 20% 8%;       /* Fundo quase preto (marrom muito escuro) */
+    --foreground: 40 15% 85%;      /* Texto padrão (cinza/pergaminho claro) */
+    
+    --card: 25 18% 12%;            /* Cartões ligeiramente mais claros */
     --card-foreground: 40 15% 85%;
+    
     --popover: 25 20% 10%;
     --popover-foreground: 40 15% 85%;
-    --primary: 142 45% 35%;
+    
+    --primary: 142 45% 35%;        /* Verde musgo / Esmeralda escura (Identidade Principal) */
     --primary-foreground: 40 15% 95%;
-    --secondary: 32 35% 25%;
+    
+    --secondary: 32 35% 25%;       /* Marrom couro (Secundário) */
     --secondary-foreground: 40 15% 95%;
-    --muted: 25 15% 20%;
+    
+    --muted: 25 15% 20%;           /* Elementos desabilitados/fundo secundário */
     --muted-foreground: 40 10% 60%;
-    --accent: 45 65% 50%;
+    
+    --accent: 45 65% 50%;          /* Dourado/Âmbar (Destaques, Links) */
     --accent-foreground: 25 20% 10%;
-    --destructive: 0 65% 45%;
+    
+    --destructive: 0 65% 45%;      /* Vermelho sangue */
     --destructive-foreground: 40 15% 95%;
-    --border: 25 15% 25%;
+    
+    --border: 25 15% 25%;          /* Bordas sutis */
     --input: 25 15% 20%;
     --ring: 142 45% 35%;
     --radius: 0.5rem;
@@ -46,6 +55,13 @@
     letter-spacing: -0.02em;
   }
   
+  /* --- CORREÇÃO DE LEITURA (STRONG/BOLD) --- */
+  /* Força todo o texto em negrito a ser BRANCO PURO para contraste máximo em fundo escuro */
+  strong, b {
+    color: #ffffff !important;
+    text-shadow: 0 0 1px rgba(0,0,0,0.5); /* Pequena sombra para destacar do fundo */
+  }
+
   /* --- ESTILOS GERAIS DO TEXTO (PROSE) --- */
   .prose {
     @apply text-foreground;
@@ -56,9 +72,13 @@
   .prose :where(h1, h2, h3):not(:where([class~="not-prose"] *)) {
     @apply text-primary-foreground mt-6 mb-4 font-bold;
   }
+  
+  /* Reforço específico para o editor RichText (TipTap) */
   .prose :where(strong):not(:where([class~="not-prose"] *)) {
-    @apply text-foreground font-bold;
+    color: #ffffff !important;
+    font-weight: 700;
   }
+
   .prose :where(a):not(:where([class~="not-prose"] *)) {
     @apply text-accent underline decoration-accent/50 underline-offset-4 cursor-pointer;
   }
@@ -120,7 +140,7 @@
   font-weight: bold;
   text-align: left;
   background-color: hsl(var(--muted));
-  color: hsl(var(--foreground));
+  color: #ffffff; /* Cabeçalhos de tabela também a branco */
 }
 
 .ProseMirror .selectedCell:after {

@@ -16,6 +16,7 @@ const TableView = () => {
   const { toast } = useToast();
   const [table, setTable] = useState<any>(null);
   const [isMaster, setIsMaster] = useState(false);
+  const [isHelper, setIsHelper] = useState(false); // <--- NOVO ESTADO
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [members, setMembers] = useState<TableMember[]>([]);
@@ -35,6 +36,7 @@ const TableView = () => {
     setUserId(user.id);
 
     try {
+      // 1. Carregar Mesa e Mestre
       const { data: tableData, error: tableError } = await supabase
         .from("tables")
         .select("*, master:profiles!tables_master_id_fkey(id, display_name)")
@@ -45,9 +47,10 @@ const TableView = () => {
         throw tableError || new Error("Mesa não encontrada");
       }
 
+      // 2. Carregar Membros e suas permissões (is_helper)
       const { data: membersData, error: membersError } = await supabase
         .from("table_members")
-        .select("user:profiles!table_members_user_id_fkey(id, display_name)")
+        .select("is_helper, user:profiles!table_members_user_id_fkey(id, display_name)")
         .eq("table_id", tableId);
 
       if (membersError) {
@@ -55,23 +58,33 @@ const TableView = () => {
       }
 
       const masterProfile = tableData.master as { id: string, display_name: string };
-      
+      const isUserMaster = tableData.master_id === user.id;
+
+      // Descobrir se o usuário atual é um Helper
+      // (Procuramos na lista de membros se o ID bate e se a coluna is_helper é true)
+      const currentUserMember = membersData.find((m: any) => m.user.id === user.id);
+      const isUserHelper = currentUserMember?.is_helper || false;
+
+      // Montar a lista de membros completa para o contexto
       const memberList: TableMember[] = [
         { 
           id: masterProfile.id, 
           display_name: masterProfile.display_name, 
-          isMaster: true 
+          isMaster: true,
+          isHelper: false 
         },
         ...membersData.map((m: any) => ({
           id: m.user.id,
           display_name: m.user.display_name,
           isMaster: false,
+          isHelper: m.is_helper // Mapeia do banco de dados
         }))
       ];
       
       setTable(tableData);
       setMembers(memberList);
-      setIsMaster(tableData.master_id === user.id);
+      setIsMaster(isUserMaster);
+      setIsHelper(isUserHelper); // Define o estado
       setLoading(false);
 
     } catch (error: any) {
@@ -102,18 +115,20 @@ const TableView = () => {
     masterId: table.master_id,
     userId: userId,
     isMaster: isMaster,
+    isHelper: isHelper, // Passa para o resto da app
     members: members,
     setMembers: setMembers,
   };
 
+  // Se for Mestre OU Helper, recebe a visão de Mestre
+  const showMasterView = isMaster || isHelper;
+
   return (
       <TableProvider value={tableContextValue}>
-        {/* Overlay de Música/Vídeo Global (Invisível até ser ativado) */}
         <ImmersiveOverlay tableId={tableId!} isMaster={isMaster} />
 
-        {/* Contentor Principal - Sem barras fixas, o MasterView/PlayerView gere tudo */}
         <div className="min-h-screen bg-background">
-            {isMaster ? (
+            {showMasterView ? (
               <MasterView tableId={tableId!} masterId={table.master_id} />
             ) : (
               <PlayerView tableId={tableId!} />
