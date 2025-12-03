@@ -1,5 +1,3 @@
-// src/components/QualitySelector.tsx
-
 import { useState } from "react";
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -29,7 +27,7 @@ interface Quality {
 
 interface QualitySelectorProps {
   tableId: string;
-  value: string; // String separada por vírgulas (ex: "Preciso, Longo")
+  value: string;
   onChange: (newValue: string, combinedDescription?: string) => void;
   targetType?: "weapon" | "armor" | "all";
   disabled?: boolean;
@@ -44,36 +42,32 @@ export function QualitySelector({
 }: QualitySelectorProps) {
   const [open, setOpen] = useState(false);
   
-  // Parse da string atual para array
   const selectedValues = value 
     ? value.split(",").map((v) => v.trim()).filter(Boolean) 
     : [];
 
-  // Buscar qualidades do banco de dados
   const { data: qualities = [] } = useQuery({
     queryKey: ["qualities", tableId],
     queryFn: async () => {
-      // CORREÇÃO CRÍTICA: Aponta para 'items' e usa 'type' em vez de 'category'
+      // CORREÇÃO: Aponta para a tabela 'items' e usa o tipo 'quality'
       const { data, error } = await supabase
-        .from("items") 
+        .from("items")
         .select("name, description, data")
         .eq("type", "quality")
-        // Lógica de segurança: Traz itens da mesa OU itens globais (null)
-        .or(`table_id.eq.${tableId},table_id.is.null`) 
+        .or(`table_id.eq.${tableId},table_id.is.null`) // Traz da mesa E do sistema
         .order("name");
 
       if (error) throw error;
       return data as Quality[];
     },
-    enabled: !disabled, // Só busca se não estiver em modo leitura
+    enabled: !disabled,
   });
 
-  // Filtrar qualidades pelo tipo (Arma/Armadura) se necessário
   const filteredQualities = qualities.filter(q => {
     if (targetType === "all") return true;
     const target = q.data?.targetType?.toLowerCase();
     if (!target || target === "geral") return true;
-    // Se targetType for weapon, aceita "arma" ou "weapon"
+    
     if (targetType === "weapon") return target.includes("arma") || target.includes("weapon");
     if (targetType === "armor") return target.includes("armadura") || target.includes("armor");
     return true;
@@ -89,15 +83,12 @@ export function QualitySelector({
       newValues = [...selectedValues, qualityName];
     }
 
-    // Gerar string de valores (ex: "Preciso, Longo")
     const newString = newValues.join(", ");
 
-    // Gerar descrição combinada
     const descriptions = newValues.map(val => {
       const qual = qualities.find(q => q.name.toLowerCase() === val.toLowerCase());
       if (!qual) return null;
       
-      // Tenta limpar HTML básico se existir
       const cleanDesc = qual.description?.replace(/<[^>]*>?/gm, '') || "";
       return `**${qual.name}:** ${cleanDesc}`;
     }).filter(Boolean);
@@ -119,28 +110,28 @@ export function QualitySelector({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between min-h-[40px] h-auto"
+          className="w-full justify-between min-h-[40px] h-auto bg-background hover:bg-accent/10"
           disabled={disabled}
         >
           <div className="flex flex-wrap gap-1 items-center text-left">
             {selectedValues.length > 0 ? (
               selectedValues.map((val) => (
-                <Badge variant="secondary" key={val} className="mr-1 mb-1">
+                <Badge variant="secondary" key={val} className="mr-1 mb-1 bg-primary/20 text-primary-foreground border-primary/30">
                   {val}
                   <span
-                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer"
+                    className="ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer opacity-70 hover:opacity-100"
                     onMouseDown={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
                     }}
                     onClick={(e) => handleRemove(e, val)}
                   >
-                    <X className="h-3 w-3 text-muted-foreground hover:text-foreground" />
+                    <X className="h-3 w-3" />
                   </span>
                 </Badge>
               ))
             ) : (
-              <span className="text-muted-foreground font-normal">Selecionar qualidades...</span>
+              <span className="text-muted-foreground font-normal italic">Selecionar qualidades...</span>
             )}
           </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -164,12 +155,12 @@ export function QualitySelector({
                   >
                     <Check
                       className={cn(
-                        "mr-2 h-4 w-4",
+                        "mr-2 h-4 w-4 text-primary",
                         isSelected ? "opacity-100" : "opacity-0"
                       )}
                     />
                     <div className="flex flex-col">
-                        <span>{quality.name}</span>
+                        <span className="font-medium">{quality.name}</span>
                         <span className="text-[10px] text-muted-foreground line-clamp-1">
                             {quality.description?.replace(/<[^>]*>?/gm, '')}
                         </span>
