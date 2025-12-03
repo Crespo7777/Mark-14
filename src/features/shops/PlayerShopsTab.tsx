@@ -7,13 +7,14 @@ import { Shop, ShopItem, CharacterWithRelations } from "@/types/app-types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { ShoppingBag, Coins, Weight, Infinity as InfinityIcon } from "lucide-react";
+import { ShoppingBag, Weight, Infinity as InfinityIcon, Image as ImageIcon, Shield, Sword, Zap, FlaskConical, Star } from "lucide-react";
 import { convertFromOrtegas, convertToOrtegas, formatPrice } from "@/lib/economy-utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ExtendedShopItem extends ShopItem {
   data?: any;
+  icon_url?: string | null;
 }
 
 const fetchShops = async (tableId: string) => {
@@ -60,7 +61,6 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
       return;
     }
 
-    // VERIFICAÇÃO DE ESTOQUE
     if (!isInfinite && item.quantity <= 0) {
         toast({ title: "Esgotado!", description: "Este item não está mais disponível.", variant: "destructive" });
         return;
@@ -68,7 +68,6 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
     
     setBuyingId(item.id);
 
-    // --- LÓGICA DE COMPRA ---
     const newTotalOrtegas = playerMoney - price;
     const newMoney = convertFromOrtegas(newTotalOrtegas);
     const currentInventory = (character.data as any).inventory || [];
@@ -83,6 +82,8 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
             quantity: 1,
             weight: item.weight,
             description: item.description,
+            icon_url: item.icon_url,
+            category: item.data?.category || 'general',
             data: item.data || {} 
         };
         newInventory = [...currentInventory, newItemObj];
@@ -94,12 +95,12 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
       inventory: newInventory 
     };
 
-    // Optimistic Update da Ficha
     const queryKeyChar = ['my_character_money', tableId, userId];
     const previousCharacter = queryClient.getQueryData(queryKeyChar);
+    
+    // Optimistic Updates
     queryClient.setQueryData(queryKeyChar, (old: any) => { if (!old) return old; return { ...old, data: newData }; });
 
-    // Optimistic Update do Estoque (Visual)
     if (!isInfinite) {
         queryClient.setQueryData(['shop_items', selectedShopId], (old: ExtendedShopItem[] | undefined) => {
             return old ? old.map(i => i.id === item.id ? { ...i, quantity: i.quantity - 1 } : i) : [];
@@ -112,17 +113,18 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
 
     toast({ title: "Compra realizada!", description: successMessage });
 
-    // Transação Real (Update Personagem + Update Loja se necessário)
     try {
         await supabase.from("characters").update({ data: newData }).eq("id", character.id);
 
         if (!isInfinite) {
-            await supabase.rpc('decrement_shop_item_quantity', { row_id: item.id });
-            // Fallback manual se RPC não existir (embora RPC seja mais seguro para concorrência)
-            // await supabase.from("shop_items").update({ quantity: item.quantity - 1 }).eq("id", item.id);
+            // Tenta usar a função segura, se falhar (por não existir no DB), tenta update direto (fallback)
+            const { error } = await supabase.rpc('decrement_shop_item_quantity', { row_id: item.id });
+            if (error) {
+                 console.warn("RPC falhou, tentando update manual:", error);
+                 await supabase.from("shop_items").update({ quantity: item.quantity - 1 }).eq("id", item.id);
+            }
         }
 
-        // Log no Chat
         await supabase.from("chat_messages").insert({
             table_id: tableId,
             user_id: userId,
@@ -131,58 +133,132 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
         });
         
         queryClient.invalidateQueries({ queryKey: ['chat_messages', tableId] });
-        // Revalida o estoque real para garantir consistência
         if (!isInfinite) queryClient.invalidateQueries({ queryKey: ['shop_items', selectedShopId] });
 
     } catch (err) {
         console.error(err);
-        toast({ title: "Erro na compra", variant: "destructive" });
-        queryClient.setQueryData(queryKeyChar, previousCharacter); // Rollback
-        queryClient.invalidateQueries({ queryKey: ['shop_items', selectedShopId] }); // Rollback estoque
+        toast({ title: "Erro na compra", description: "Verifique a conexão.", variant: "destructive" });
+        queryClient.setQueryData(queryKeyChar, previousCharacter);
+        queryClient.invalidateQueries({ queryKey: ['shop_items', selectedShopId] });
     }
     
     setBuyingId(null);
   };
 
-  if (!character) return <div className="p-8 text-center text-muted-foreground">Você precisa de uma ficha de personagem para comprar.</div>;
+  // --- RENDERIZADOR INTELIGENTE (Detecta propriedades em vez de categorias) ---
+  const renderItemStats = (item: ExtendedShopItem) => {
+      const data = item.data || {};
+      
+      return (
+          <div className="flex flex-wrap gap-1.5 mt-2">
+              {/* STATUS DE ARMA */}
+              {data.damage && (
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-red-500/30 text-red-500 bg-red-500/5 gap-1" title="Dano">
+                      <Sword className="w-3 h-3"/> {data.damage}
+                  </Badge>
+              )}
+              {data.attackAttribute && (
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-blue-500/30 text-blue-500 bg-blue-500/5" title="Atributo">
+                      {data.attackAttribute}
+                  </Badge>
+              )}
+
+              {/* STATUS DE ARMADURA */}
+              {data.protection && (
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-slate-500/30 text-slate-500 bg-slate-500/5 gap-1" title="Proteção">
+                      <Shield className="w-3 h-3"/> {data.protection}
+                  </Badge>
+              )}
+              {data.obstructive && data.obstructive !== "0" && (
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-orange-500/30 text-orange-500 bg-orange-500/5" title="Penalidade">
+                      Obs: {data.obstructive}
+                  </Badge>
+              )}
+
+              {/* MÍSTICO / CONSUMÍVEL */}
+              {data.powerLevel && (
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-purple-500/30 text-purple-500 bg-purple-500/5 gap-1">
+                      <Zap className="w-3 h-3"/> Poder {data.powerLevel}
+                  </Badge>
+              )}
+              {data.corruption && (
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-purple-900/30 text-purple-700 bg-purple-500/5">
+                      Corr: {data.corruption}
+                  </Badge>
+              )}
+              {data.duration && (
+                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 border-green-500/30 text-green-500 bg-green-500/5 gap-1">
+                      <FlaskConical className="w-3 h-3"/> {data.duration}
+                  </Badge>
+              )}
+
+              {/* QUALIDADES (SEMPRE MOSTRA SE EXISTIR) */}
+              {data.quality && (
+                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-muted/50 border border-border gap-1">
+                      <Star className="w-3 h-3 text-yellow-500/70"/> {data.quality}
+                  </Badge>
+              )}
+          </div>
+      );
+  };
+
+  if (!character) return (
+      <div className="flex flex-col items-center justify-center h-[50vh] text-muted-foreground gap-4">
+          <ShoppingBag className="w-12 h-12 opacity-20" />
+          <p>Você precisa de uma ficha de personagem nesta mesa para acessar o mercado.</p>
+      </div>
+  );
 
   return (
     <div className="space-y-6 h-full flex flex-col">
-      <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm">
+      {/* CABEÇALHO DO SALDO */}
+      <div className="flex justify-between items-center bg-card p-4 rounded-lg border shadow-sm sticky top-0 z-10">
         <div>
-            <h3 className="font-bold text-lg flex items-center gap-2"><ShoppingBag className="text-primary"/> Mercado</h3>
-            <p className="text-xs text-muted-foreground">Selecione uma loja para ver os itens.</p>
+            <h3 className="font-bold text-lg flex items-center gap-2 text-primary"><ShoppingBag className="w-5 h-5"/> Mercado</h3>
+            <p className="text-xs text-muted-foreground">Compre equipamentos e suprimentos.</p>
         </div>
-        <div className="text-right">
+        <div className="text-right bg-background/50 px-3 py-1.5 rounded-md border border-border/50">
             <div className="text-sm font-mono text-accent font-bold flex items-center justify-end gap-1">
                 {formatPrice(totalPlayerOrtegas)}
             </div>
-            <span className="text-[10px] text-muted-foreground">Seu Saldo</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Seu Saldo</span>
         </div>
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-2">
+      {/* SELETOR DE LOJAS */}
+      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
         {shops.map(shop => (
            <Button 
               key={shop.id} 
               variant={selectedShopId === shop.id ? "default" : "outline"}
               onClick={() => setSelectedShopId(shop.id)}
-              className="whitespace-nowrap"
+              className="whitespace-nowrap shadow-sm"
            >
               {shop.name}
            </Button>
         ))}
-        {shops.length === 0 && <p className="text-sm text-muted-foreground px-4">Nenhuma loja disponível.</p>}
+        {shops.length === 0 && <p className="text-sm text-muted-foreground px-4 italic">O mestre ainda não abriu nenhuma loja.</p>}
       </div>
 
-      <Card className="flex-1">
-         <CardContent className="p-0 h-[500px]">
-            <ScrollArea className="h-full p-4">
-                {!selectedShopId && <div className="text-center py-20 text-muted-foreground">Selecione uma loja acima.</div>}
+      {/* ÁREA DE ITENS */}
+      <Card className="flex-1 border-t-0 rounded-t-none md:border-t md:rounded-lg overflow-hidden bg-transparent shadow-none border-none">
+         <CardContent className="p-0 h-[calc(100vh-280px)] min-h-[400px]">
+            <ScrollArea className="h-full pr-4">
+                {!selectedShopId && shops.length > 0 && (
+                    <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-2">
+                        <ShoppingBag className="w-10 h-10 opacity-20" />
+                        <p>Selecione uma loja acima para ver o estoque.</p>
+                    </div>
+                )}
                 
-                {selectedShopId && items.length === 0 && <div className="text-center py-20 text-muted-foreground">Esta loja está vazia.</div>}
+                {selectedShopId && items.length === 0 && (
+                    <div className="flex flex-col items-center justify-center h-64 text-muted-foreground gap-2">
+                        <Package className="w-10 h-10 opacity-20" />
+                        <p>Esta loja parece estar vazia no momento.</p>
+                    </div>
+                )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pb-20">
                    {items.map(item => {
                       const price = parseInt(item.price as any) || 0;
                       const isInfinite = item.quantity === -1;
@@ -191,39 +267,48 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
                       const cleanDescription = item.description?.replace(/<[^>]*>?/gm, '') || "";
 
                       return (
-                        <div key={item.id} className={`border rounded-lg p-3 flex flex-col justify-between transition-colors ${isSoldOut ? "bg-destructive/5 border-destructive/20 opacity-70" : "bg-muted/10 hover:bg-muted/30"}`}>
+                        <div key={item.id} className={`group border rounded-lg p-3 flex flex-col justify-between transition-all bg-card shadow-sm hover:shadow-md hover:border-primary/40 ${isSoldOut ? "opacity-60 grayscale bg-muted" : ""}`}>
                             <div>
                                 <div className="flex justify-between items-start">
-                                    <span className="font-bold flex items-center gap-2">
-                                        {item.name}
-                                        {isSoldOut && <span className="text-[10px] text-destructive uppercase font-bold border border-destructive px-1 rounded">Esgotado</span>}
-                                    </span>
-                                    <Badge variant="outline" className="font-mono text-[10px] h-5 gap-1">
-                                        {item.data?.category === 'service' ? 'Serviço' : `${item.weight} peso`} 
-                                        <Weight className="w-3 h-3"/>
-                                    </Badge>
+                                    <div className="flex items-center gap-3 w-full">
+                                        {/* Ícone */}
+                                        <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center shrink-0 border border-border/50 overflow-hidden shadow-inner">
+                                            {item.icon_url ? (
+                                                <img src={item.icon_url} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <ImageIcon className="w-5 h-5 text-muted-foreground/30" />
+                                            )}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex justify-between items-start">
+                                                <span className="font-bold text-sm truncate pr-2">{item.name}</span>
+                                                {isSoldOut && <span className="text-[9px] text-destructive uppercase font-bold border border-destructive px-1 rounded bg-destructive/5">Esgotado</span>}
+                                            </div>
+                                            
+                                            <div className="text-[10px] text-muted-foreground flex gap-2 mt-0.5 items-center">
+                                                <span className="flex items-center gap-1 bg-muted/50 px-1.5 rounded"><Weight className="w-3 h-3"/> {item.weight}</span>
+                                                {isInfinite ? (
+                                                    <span className="text-accent flex items-center gap-1"><InfinityIcon className="w-3 h-3"/> Infinito</span>
+                                                ) : (
+                                                    <span className={`${item.quantity < 3 ? "text-orange-500 font-bold" : ""}`}>Estoque: {item.quantity}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                                 
-                                {/* ESTOQUE DISPLAY */}
-                                <div className="mt-1 mb-1">
-                                    {isInfinite ? (
-                                        <span className="text-[10px] text-accent flex items-center gap-1"><InfinityIcon className="w-3 h-3"/> Estoque Infinito</span>
-                                    ) : (
-                                        <span className={`text-[10px] font-mono ${item.quantity < 3 ? "text-orange-500" : "text-muted-foreground"}`}>
-                                            Estoque: {item.quantity}
-                                        </span>
-                                    )}
-                                </div>
-                                
-                                <div className="flex gap-1.5 mt-1 flex-wrap">
-                                     {item.data?.damage && <span className="text-[10px] border px-1.5 py-0.5 rounded bg-background/50 text-muted-foreground">Dano: {item.data.damage}</span>}
-                                     {item.data?.protection && <span className="text-[10px] border px-1.5 py-0.5 rounded bg-background/50 text-muted-foreground">Prot: {item.data.protection}</span>}
-                                </div>
+                                {/* DETALHES DINÂMICOS (Correção Principal) */}
+                                {renderItemStats(item)}
 
-                                <p className="text-xs text-muted-foreground mt-2 line-clamp-2">{cleanDescription}</p>
+                                {cleanDescription && (
+                                    <p className="text-xs text-muted-foreground mt-3 line-clamp-2 leading-relaxed opacity-80 pl-1 border-l-2 border-primary/20">
+                                        {cleanDescription}
+                                    </p>
+                                )}
                             </div>
-                            <div className="mt-4 flex justify-between items-center">
-                                <span className={`font-bold text-lg ${canAfford ? "text-accent" : "text-destructive"}`}>
+                            
+                            <div className="mt-4 flex justify-between items-center pt-3 border-t border-dashed border-border/60">
+                                <span className={`font-bold text-base font-mono ${canAfford ? "text-accent" : "text-muted-foreground"}`}>
                                    {formatPrice(price)}
                                 </span>
                                 <Button 
@@ -231,8 +316,9 @@ export const PlayerShopsTab = ({ tableId, userId }: { tableId: string, userId: s
                                    onClick={() => handleBuy(item)} 
                                    disabled={!!buyingId || !canAfford || isSoldOut}
                                    variant={canAfford ? "default" : "secondary"}
+                                   className={`h-8 text-xs px-4 transition-all ${canAfford ? "hover:scale-105 shadow-sm" : "opacity-80"}`}
                                 >
-                                   {buyingId === item.id ? "..." : (item.data?.category === 'service' ? "Contratar" : "Comprar")}
+                                   {buyingId === item.id ? <span className="animate-pulse">Comprando...</span> : (item.data?.category === 'service' ? "Contratar" : "Comprar")}
                                 </Button>
                             </div>
                         </div>
