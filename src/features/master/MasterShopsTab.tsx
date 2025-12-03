@@ -1,50 +1,22 @@
+// src/features/master/MasterShopsTab.tsx
+
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Shop, ShopItem, CharacterWithRelations, ItemTemplate } from "@/types/app-types";
+import { Shop } from "@/types/app-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch"; 
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Store, Trash2, Package, PackagePlus, Send, Lock, Unlock, Eye, EyeOff, Database, Loader2, Infinity as InfinityIcon } from "lucide-react";
-import { formatPrice } from "@/lib/economy-utils";
-import { Separator } from "@/components/ui/separator";
-import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-
-interface ExtendedShopItem extends ShopItem {
-  data?: any;
-  icon_url?: string | null; // Adicionado suporte a tipos
-}
-
-const SHOP_CATEGORIES = [
-  { value: 'general', label: 'Geral' },
-  { value: 'weapon', label: 'Arma' },
-  { value: 'armor', label: 'Armadura' },
-  { value: 'consumable', label: 'Consumível' },
-  { value: 'mystic', label: 'Místico' },
-  { value: 'tool', label: 'Ferramenta' },
-  { value: 'service', label: 'Serviço' },
-];
+import { Plus, Store, Trash2, Lock, Unlock, Eye, EyeOff } from "lucide-react";
+import { ShopManager } from "./components/ShopManager";
 
 const fetchShops = async (tableId: string) => {
   const { data, error } = await supabase.from("shops").select("*").eq("table_id", tableId).order("created_at");
   if (error) throw error;
   return data as (Shop & { is_open: boolean })[];
-};
-
-const fetchShopItems = async (shopId: string) => {
-  const { data, error } = await supabase.from("shop_items").select("*").eq("shop_id", shopId).order("name");
-  if (error) throw error;
-  return data as ExtendedShopItem[];
-};
-
-const fetchCharacters = async (tableId: string) => {
-  const { data } = await supabase.from("characters").select("*").eq("table_id", tableId);
-  return (data || []) as CharacterWithRelations[];
 };
 
 export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
@@ -94,6 +66,7 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
   };
 
   const handleDeleteShop = async (id: string) => {
+    if(!confirm("Apagar esta loja e todos os itens dela?")) return;
     await supabase.from("shops").delete().eq("id", id);
     queryClient.invalidateQueries({ queryKey: ['shops', tableId] });
     if (selectedShop?.id === id) setSelectedShop(null);
@@ -175,7 +148,7 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
 
         <div className="md:col-span-2">
           {selectedShop ? (
-            <ShopItemsManager shop={selectedShop} tableId={tableId} />
+            <ShopManager shop={selectedShop} tableId={tableId} />
           ) : (
             <div className="h-full flex items-center justify-center border rounded-lg bg-muted/10 p-8 text-muted-foreground">
               Selecione uma loja para gerenciar o estoque.
@@ -184,313 +157,5 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
         </div>
       </div>
     </div>
-  );
-};
-
-const ShopItemsManager = ({ shop, tableId }: { shop: Shop, tableId: string }) => {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  
-  const [newItem, setNewItem] = useState({ name: "", amount: 0, weight: 0, stock: -1, description: "", category: "general", data: {} as any });
-  const [currencyType, setCurrencyType] = useState<"ortega" | "shekel" | "taler">("ortega");
-  const [itemToSend, setItemToSend] = useState<ExtendedShopItem | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
-
-  const queryKey = ['shop_items', shop.id];
-
-  const { data: items = [] } = useQuery({
-    queryKey: queryKey,
-    queryFn: () => fetchShopItems(shop.id),
-  });
-
-  const { data: characters = [] } = useQuery({
-    queryKey: ['characters', tableId],
-    queryFn: () => fetchCharacters(tableId),
-  });
-
-  useEffect(() => {
-      setNewItem(prev => ({ ...prev, data: {} }));
-  }, [newItem.category]);
-
-  const handleAddItem = async () => {
-    if (!newItem.name) {
-        toast({ title: "Erro", description: "Nome obrigatório", variant: "destructive" });
-        return;
-    }
-    setIsAdding(true);
-
-    let multiplier = 1;
-    if (currencyType === "shekel") multiplier = 10;
-    if (currencyType === "taler") multiplier = 100;
-    const finalPrice = (parseInt(newItem.amount as any) || 0) * multiplier;
-
-    const payload = {
-      shop_id: shop.id,
-      name: newItem.name,
-      price: finalPrice, 
-      weight: newItem.weight,
-      quantity: newItem.stock,
-      description: newItem.description,
-      data: { category: newItem.category, ...newItem.data }
-    };
-
-    try {
-        const { data, error } = await supabase.from("shop_items").insert(payload).select().single();
-        if (error) throw error;
-        queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
-            return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
-        });
-        setNewItem({ name: "", amount: 0, weight: 0, stock: -1, description: "", category: "general", data: {} }); 
-        setCurrencyType("ortega");
-    } catch (error: any) {
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } finally {
-        setIsAdding(false);
-    }
-  };
-
-  const handleImportFromDatabase = async (template: ItemTemplate | null) => {
-     if (!template) return;
-     setIsAdding(true);
-     let price = 0;
-     const templatePriceStr = template.data?.price ? String(template.data.price).toLowerCase() : "";
-     const numMatch = templatePriceStr.match(/\d+/);
-     if (numMatch) {
-        const val = parseInt(numMatch[0]);
-        if (templatePriceStr.includes("táler") || templatePriceStr.includes("taler")) price = val * 100;
-        else if (templatePriceStr.includes("xelim") || templatePriceStr.includes("shekel")) price = val * 10;
-        else price = val;
-     }
-     try {
-         const { data, error } = await supabase.from("shop_items").insert({
-            shop_id: shop.id,
-            name: template.name,
-            description: template.description,
-            weight: template.weight,
-            price: price,
-            quantity: -1, 
-            icon_url: template.image_url || template.icon_url, // <--- CORREÇÃO: Inclui ícone
-            data: { ...template.data, category: template.category }
-         }).select().single();
-         if (error) throw error;
-         queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
-             return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
-         });
-         toast({ title: "Item Importado!" });
-     } catch (error: any) {
-         toast({ title: "Erro ao importar", description: error.message, variant: "destructive" });
-     } finally {
-         setIsAdding(false);
-     }
-  };
-
-  const handleDeleteItem = async (id: string) => {
-    const previousData = queryClient.getQueryData<ExtendedShopItem[]>(queryKey);
-    queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
-        return old ? old.filter(i => i.id !== id) : [];
-    });
-    const { error } = await supabase.from("shop_items").delete().eq("id", id);
-    if (error) {
-        queryClient.setQueryData(queryKey, previousData);
-        toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
-    }
-  };
-
-  const handleSendLoot = async (charId: string) => {
-    if (!itemToSend) return;
-    const char = characters.find(c => c.id === charId);
-    if (!char) return;
-    const isService = itemToSend.data?.category === 'service';
-    
-    const currentInventory = (char.data as any).inventory || [];
-    let newInventory = currentInventory;
-
-    if (!isService) {
-        const newItemObj = {
-            id: crypto.randomUUID(),
-            name: itemToSend.name,
-            quantity: 1,
-            weight: itemToSend.weight,
-            description: itemToSend.description || "Presente do Mestre",
-            icon_url: itemToSend.icon_url, // <--- Envia o ícone para o jogador
-            data: itemToSend.data || {}
-        };
-        newInventory = [...currentInventory, newItemObj];
-    }
-
-    const newData = { ...(char.data as any), inventory: newInventory };
-    const { error } = await supabase.from("characters").update({ data: newData }).eq("id", charId);
-
-    if (error) toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
-    else {
-      const msgText = isService 
-         ? `🎁 **${char.name}** recebeu o serviço **${itemToSend.name}**!`
-         : `🎁 **${char.name}** recebeu **${itemToSend.name}**!`;
-      toast({ title: "Enviado!", description: msgText.replace(/\*/g, '') });
-      await supabase.from("chat_messages").insert({
-        table_id: tableId,
-        user_id: (await supabase.auth.getUser()).data.user?.id!,
-        message: msgText,
-        message_type: "info"
-      });
-      setItemToSend(null);
-    }
-  };
-
-  const updateData = (key: string, value: string) => {
-    setNewItem(prev => ({ ...prev, data: { ...prev.data, [key]: value } }));
-  };
-
-  const renderSpecificFields = () => {
-    switch (newItem.category) {
-        case 'weapon': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="h-8 text-xs"/><Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="h-8 text-xs"/><Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} /></div>);
-        case 'armor': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="h-8 text-xs"/><Input placeholder="Obstrutiva (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="h-8 text-xs"/><Input placeholder="Qualidades" className="col-span-2 h-8 text-xs" value={newItem.data.quality || ""} onChange={e => updateData('quality', e.target.value)} /></div>);
-        case 'consumable': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Efeito Principal" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} /><Input placeholder="Duração" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="h-8 text-xs"/><Input placeholder="Uso (Beber...)" value={newItem.data.usage || ""} onChange={e => updateData('usage', e.target.value)} className="h-8 text-xs"/></div>);
-        case 'mystic': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border"><Input placeholder="Poder" value={newItem.data.powerLevel || ""} onChange={e => updateData('powerLevel', e.target.value)} className="h-8 text-xs"/><Input placeholder="Corrupção" value={newItem.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="h-8 text-xs"/><Input placeholder="Efeito" className="col-span-2 h-8 text-xs" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} /></div>);
-        default: return null;
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{shop.name}</CardTitle>
-        <CardDescription>Adicione itens que estarão à venda aqui.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="bg-muted/20 p-4 rounded-md space-y-4 border border-dashed border-border">
-            <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-6">
-                    <Label className="text-xs">Nome do Item</Label>
-                    <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Ex: Adaga Curta" />
-                </div>
-                <div className="col-span-4">
-                    <Label className="text-xs">Categoria</Label>
-                    <Select value={newItem.category} onValueChange={v => setNewItem({...newItem, category: v})}>
-                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                        <SelectContent>{SHOP_CATEGORIES.map(cat => <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>)}</SelectContent>
-                    </Select>
-                </div>
-                <div className="col-span-2">
-                    <Label className="text-xs">Peso</Label>
-                    <Input type="number" value={newItem.weight} onChange={e => setNewItem({...newItem, weight: parseInt(e.target.value)||0})} />
-                </div>
-            </div>
-            {renderSpecificFields()}
-            <div className="w-full">
-                <Label className="text-xs">Descrição (Opcional)</Label>
-                <Input value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} placeholder="..." />
-            </div>
-            <div className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-3">
-                    <Label className="text-xs">Valor</Label>
-                    <Input type="number" value={newItem.amount} onChange={e => setNewItem({...newItem, amount: parseInt(e.target.value)||0})} />
-                </div>
-                <div className="col-span-3">
-                    <Label className="text-xs">Moeda</Label>
-                    <Select value={currencyType} onValueChange={(v: any) => setCurrencyType(v)}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent><SelectItem value="taler">Táler (Ouro)</SelectItem><SelectItem value="shekel">Xelim (Prata)</SelectItem><SelectItem value="ortega">Ortega (Cobre)</SelectItem></SelectContent>
-                    </Select>
-                </div>
-                <div className="col-span-3">
-                    <Label className="text-xs">Estoque</Label>
-                    <div className="flex items-center gap-2">
-                         <Input 
-                            type={newItem.stock === -1 ? "text" : "number"} 
-                            value={newItem.stock === -1 ? "Infinito" : newItem.stock} 
-                            onChange={e => {
-                                const val = e.target.value;
-                                if(val === "" || val === "-1" || val.toLowerCase().includes("inf")) setNewItem({...newItem, stock: -1});
-                                else setNewItem({...newItem, stock: parseInt(val)||0});
-                            }} 
-                            className={newItem.stock === -1 ? "text-accent font-bold" : ""}
-                         />
-                         <Button 
-                             size="icon" variant="ghost" 
-                             className={newItem.stock === -1 ? "text-accent bg-accent/20" : "text-muted-foreground"}
-                             onClick={() => setNewItem({...newItem, stock: newItem.stock === -1 ? 1 : -1})}
-                             title="Alternar Infinito"
-                         >
-                             <InfinityIcon className="w-4 h-4" />
-                         </Button>
-                    </div>
-                </div>
-                <div className="col-span-3 flex gap-1">
-                    <Button onClick={handleAddItem} className="flex-1 bg-green-600 hover:bg-green-700" disabled={isAdding}>
-                        {isAdding ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Plus className="w-4 h-4 mr-2" />} 
-                        Adicionar
-                    </Button>
-                    <ItemSelectorDialog 
-                        tableId={tableId} 
-                        categories={['weapon', 'armor', 'consumable', 'general', 'material', 'mystic', 'service', 'mount']} 
-                        onSelect={handleImportFromDatabase}
-                        title="Importar"
-                    >
-                         <Button variant="outline" size="icon" title="Importar do Database" disabled={isAdding}>
-                            <Database className="w-4 h-4" />
-                         </Button>
-                    </ItemSelectorDialog>
-                </div>
-            </div>
-        </div>
-        <Separator />
-        <div className="space-y-2">
-           {items.length === 0 && <p className="text-muted-foreground text-center py-4">Sem estoque.</p>}
-           {items.map(item => {
-             const cleanDescription = item.description?.replace(/<[^>]*>?/gm, '') || "";
-             const isInfinite = item.quantity === -1;
-
-             return (
-             <div key={item.id} className="flex items-center justify-between p-2 border rounded-md hover:bg-muted/10 text-sm">
-                
-                {/* ÍCONE DA LOJA */}
-                <div className="w-9 h-9 rounded bg-muted flex items-center justify-center shrink-0 border border-border/50 overflow-hidden mr-3">
-                    {(item as any).icon_url ? (
-                        <img src={(item as any).icon_url} className="w-full h-full object-cover" />
-                    ) : (
-                        <Package className="w-4 h-4 text-muted-foreground/30" />
-                    )}
-                </div>
-
-                <div className="flex-1">
-                   <div className="font-bold flex items-center gap-2">
-                        {item.name}
-                        {item.data?.category === 'service' && <span className="text-[9px] font-mono uppercase bg-primary/20 text-primary px-1 rounded border border-primary/30">SERVICE</span>}
-                        {item.data?.category && item.data.category !== 'service' && <span className="text-[9px] uppercase border px-1 rounded bg-background text-muted-foreground">{item.data.category}</span>}
-                        {!isInfinite && <span className={`text-[10px] px-1.5 py-0.5 rounded border font-mono ${item.quantity === 0 ? "bg-red-500/20 text-red-500 border-red-500/30" : "bg-background text-muted-foreground"}`}>Qtd: {item.quantity}</span>}
-                        {isInfinite && <span className="text-[10px] px-1.5 py-0.5 rounded border font-mono bg-background text-muted-foreground"><InfinityIcon className="w-3 h-3 inline"/></span>}
-                   </div>
-                   <div className="text-xs text-muted-foreground line-clamp-1">{cleanDescription}</div>
-                </div>
-                <div className="flex items-center gap-4 text-right">
-                   <div>
-                      <div className="font-bold text-accent flex items-center justify-end gap-1">{formatPrice(item.price)}</div>
-                      <div className="text-xs text-muted-foreground">{item.weight} peso</div>
-                   </div>
-                   <Dialog>
-                      <DialogTrigger asChild><Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setItemToSend(item)}><Send className="w-3 h-3" /></Button></DialogTrigger>
-                      <DialogContent>
-                         <DialogHeader><DialogTitle>Enviar {item.name}</DialogTitle><DialogDescription>O jogador receberá este {item.data?.category === 'service' ? 'serviço' : 'item'} gratuitamente.</DialogDescription></DialogHeader>
-                         <div className="grid gap-2 py-4">
-                            {characters.map(char => (
-                               <Button key={char.id} variant="ghost" className="justify-start" onClick={() => handleSendLoot(char.id)}>
-                                  <PackagePlus className="w-4 h-4 mr-2 text-primary" />
-                                  {char.name}
-                               </Button>
-                            ))}
-                         </div>
-                      </DialogContent>
-                   </Dialog>
-                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteItem(item.id)}>
-                      <Trash2 className="w-3 h-3" />
-                   </Button>
-                </div>
-             </div>
-             )
-           })}
-        </div>
-      </CardContent>
-    </Card>
   );
 };
