@@ -41,7 +41,8 @@ const fetchFolders = async (tableId: string) => {
 };
 
 export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
-  const { members, masterId } = useTableContext();
+  // AQUI: Adicionado isMaster, isHelper e userId
+  const { members, masterId, isMaster, isHelper, userId } = useTableContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -116,9 +117,27 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
     setItemToShare(null);
   };
 
-  const displayedCharacters = characters.filter(char => 
-    showArchivedChars ? char.is_archived : !char.is_archived
-  );
+  // AQUI ESTÁ A CORREÇÃO: Filtramos antes de exibir
+  const displayedCharacters = characters
+    .filter(char => showArchivedChars ? char.is_archived : !char.is_archived)
+    .filter(char => {
+      // Se for o Mestre (Dono da mesa), vê tudo
+      if (isMaster) return true;
+
+      // Se for Helper (Ajudante), aplicamos regras restritivas
+      if (isHelper) {
+         const isOwner = char.player_id === userId;
+         // Verifica se o array existe e se o ID está lá
+         const isSharedWithMe = char.shared_with_players?.includes(userId || '');
+         const isGloballyShared = char.is_shared;
+         
+         // Helper só vê o que é seu, partilhado ou público
+         return isOwner || isSharedWithMe || isGloballyShared;
+      }
+
+      // Se não for nem Mestre nem Helper (não deveria estar aqui, mas por segurança)
+      return false; 
+    });
 
   return (
     <div className="flex flex-col h-full space-y-4">
