@@ -14,7 +14,7 @@ import {
   PawPrint, Zap, Dna, Star, Save, X, Search, 
   Castle, Box, CircleDot, Wheat, Coins, 
   Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music,
-  Loader2, Image as ImageIcon, Globe, Lock, Copy // Novos ícones
+  Loader2, Image as ImageIcon, Globe, Lock, Copy 
 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { validateItemData } from "./database.schemas";
+import { DatabaseRestorer } from "./DatabaseRestorer"; // Importação do Resgate
 
 const RichTextEditor = lazy(() => 
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
@@ -66,18 +67,36 @@ const WEAPON_SUBCATEGORIES = ["Arma de uma Mão", "Arma Curta", "Arma Longa", "A
 const ARMOR_SUBCATEGORIES = ["Leve", "Média", "Pesada"];
 const FOOD_SUBCATEGORIES = ["Bebidas", "Carne", "Chás", "Ensopados", "Mingau", "Peixe", "Sobremesas", "Sopas", "Tortas"];
 
-// --- FETCH CORRIGIDO ---
+// --- FETCH ROBUSTO (Proteção contra erros de SQL) ---
 const fetchItems = async (tableId: string, category: string) => {
-  const { data, error } = await supabase
-    .from("items")
-    .select("*")
-    .eq("type", category)
-    // AQUI ESTÁ A CORREÇÃO: Traz itens da mesa OU itens globais (null)
-    .or(`table_id.eq.${tableId},table_id.is.null`)
-    .order("name");
-    
-  if (error) throw error;
-  return data;
+  if (!tableId) {
+      console.warn("[MasterDatabase] AVISO: Table ID ausente. Cancelando busca.");
+      return [];
+  }
+
+  // Debug no console para confirmares que está a tentar buscar
+  console.log(`[MasterDatabase] Buscando categoria: ${category} na mesa: ${tableId}`);
+
+  try {
+      const { data, error } = await supabase
+        .from("items")
+        .select("*")
+        .eq("type", category)
+        // Lógica crucial: Busca itens da mesa (tableId) OU itens globais (null)
+        .or(`table_id.eq.${tableId},table_id.is.null`)
+        .order("name");
+        
+      if (error) {
+          console.error("[MasterDatabase] ERRO SUPABASE:", error);
+          throw error;
+      }
+      
+      return data || [];
+  } catch (err) {
+      console.error("[MasterDatabase] ERRO FATAL:", err);
+      // Retorna array vazio em vez de quebrar a página
+      return []; 
+  }
 };
 
 export const MasterDatabaseTab = ({ tableId }: { tableId: string }) => {
@@ -85,6 +104,9 @@ export const MasterDatabaseTab = ({ tableId }: { tableId: string }) => {
 
   return (
     <div className="space-y-6">
+       {/* COMPONENTE DE RESGATE (Para recuperar dados das fichas) */}
+       <DatabaseRestorer tableId={tableId} />
+
        <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
           <ScrollArea className="w-full whitespace-nowrap rounded-md border bg-muted/20">
              <div className="flex w-max space-x-2 p-4">
@@ -131,10 +153,12 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const queryKey = ['items', tableId, category];
 
-  const { data: items = [], isLoading } = useQuery({
+  const { data: items = [], isLoading, error, refetch } = useQuery({
     queryKey: queryKey,
     queryFn: () => fetchItems(tableId, category),
-    staleTime: 1000 * 60 * 5, // CACHE: 5 minutos para carregar instantaneamente ao voltar
+    staleTime: 1000 * 60 * 5, 
+    retry: 1, // Tenta 1 vez se falhar
+    refetchOnWindowFocus: false,
   });
 
   const filteredItems = items.filter((item: any) => {
@@ -173,7 +197,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
             if (error) throw error;
             savedData = data;
             
-            // Atualização Otimista
             queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
                 return old ? old.map(i => i.id === editingId ? savedData : i) : [savedData];
             });
@@ -183,7 +206,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
             if (error) throw error;
             savedData = data;
             
-            // Atualização Otimista
             queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
                 return old ? [...old, savedData].sort((a,b) => a.name.localeCompare(b.name)) : [savedData];
             });
@@ -191,14 +213,13 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         }
         cancelEdit();
     } catch (error: any) {
-        toast({ title: "Erro", description: error.message, variant: "destructive" });
+        toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } finally {
         setIsSaving(false);
     }
   };
 
   const handleEdit = (item: any) => {
-      // Proteção: Se for item global (sem table_id), avisa que não pode editar direto
       if (!item.table_id) {
           toast({ title: "Item do Sistema", description: "Itens globais não podem ser editados. Use o botão de copiar.", variant: "default" });
           return;
@@ -217,12 +238,11 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   };
 
   const handleDuplicate = async (item: any) => {
-      // Remove ID e datas para criar novo
       const { id, created_at, table_id, ...itemData } = item;
       
       const newItemPayload = {
           ...itemData,
-          table_id: tableId, // Associa à mesa atual
+          table_id: tableId,
           name: `${item.name} (Cópia)`
       };
 
@@ -231,7 +251,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           if(error) throw error;
           
           toast({ title: "Item Duplicado", description: "Agora você pode editar a cópia." });
-          // Atualiza a lista localmente
           queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
               return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
           });
@@ -250,7 +269,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
      if (!itemToDelete) return;
      const previousData = queryClient.getQueryData<any[]>(queryKey);
      
-     // Atualização Otimista
      queryClient.setQueryData(queryKey, (old: any[] | undefined) => {
          return old ? old.filter(i => i.id !== itemToDelete) : [];
      });
@@ -258,7 +276,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
      const { error } = await supabase.from("items").delete().eq("id", itemToDelete);
      
      if (error) {
-        queryClient.setQueryData(queryKey, previousData); // Reverte se falhar
+        queryClient.setQueryData(queryKey, previousData);
         toast({ title: "Erro ao apagar", description: error.message, variant: "destructive" });
      } else {
         toast({ title: "Item apagado" });
@@ -285,7 +303,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                     </Select>
                     <Input placeholder="Dano (ex: 1d8)" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/>
                     <Input placeholder="Atributo (ex: Vigoroso)" value={newItem.data.attackAttribute || ""} onChange={e => updateData('attackAttribute', e.target.value)} className="bg-background"/>
-                    
                     <div className="col-span-2">
                         <Label className="text-xs">Qualidades</Label>
                         <QualitySelector 
@@ -295,7 +312,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                             targetType="weapon" 
                         />
                     </div>
-
                     {isReloadable && (<Input placeholder="Recarga (ex: Ação Livre)" value={newItem.data.reloadAction || ""} onChange={e => updateData('reloadAction', e.target.value)} className="bg-background col-span-2 md:col-span-1 border-accent/50"/>)}
                     <Input placeholder="Preço (ex: 5 Tálers)" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/>
                 </div>
@@ -309,7 +325,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                 </Select>
                 <Input placeholder="Proteção (ex: 1d4)" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="bg-background"/>
                 <Input placeholder="Penalidade (ex: 2)" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="bg-background"/>
-                
                 <div className="col-span-2">
                     <Label className="text-xs">Qualidades</Label>
                     <QualitySelector 
@@ -319,7 +334,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                         targetType="armor" 
                     />
                 </div>
-
                 <Input placeholder="Preço" className="col-span-2 bg-background" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} />
             </div>
         );
@@ -332,6 +346,21 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
         default: return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Preço" value={newItem.data.price || ""} onChange={e => updateData('price', e.target.value)} className="col-span-2 bg-background"/></div>);
       }
   };
+
+  // Mensagem de Erro Visual (Caso RLS ou Rede falhem)
+  if (error) {
+     return (
+         <div className="flex flex-col items-center justify-center p-8 border border-destructive/20 rounded bg-destructive/10 text-destructive gap-3 mt-4">
+             <div className="text-center font-bold">Erro ao carregar o Banco de Dados</div>
+             <div className="text-xs text-center max-w-md opacity-80">
+                 {(error as any).message || "Erro desconhecido. Verifique as permissões (RLS) no Supabase."}
+             </div>
+             <Button variant="outline" size="sm" onClick={() => refetch()} className="border-destructive/50 hover:bg-destructive/20">
+                 Tentar Novamente
+             </Button>
+         </div>
+     );
+  }
 
   return (
     <div className="space-y-6">
@@ -448,12 +477,10 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
                             )}
                             
                             <div className="flex gap-1">
-                                {/* Botão Duplicar */}
                                 <Button variant="ghost" size="icon" className="text-primary opacity-0 group-hover:opacity-100 transition-all" onClick={(e) => { e.stopPropagation(); handleDuplicate(item); }} title="Duplicar item">
                                     <Copy className="w-4 h-4" />
                                 </Button>
 
-                                {/* Botão Apagar (Só aparece se não for Global) */}
                                 {isGlobal ? (
                                     <div className="p-2 opacity-0 group-hover:opacity-100 transition-all text-muted-foreground/50" title="Item protegido do sistema">
                                         <Lock className="w-4 h-4" />
@@ -488,4 +515,4 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
        </AlertDialog>
     </div>
   );
-}
+};
