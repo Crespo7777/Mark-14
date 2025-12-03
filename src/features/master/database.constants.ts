@@ -2,7 +2,7 @@
 import { 
   Sword, Shield, Zap, Dna, FlaskConical, Backpack, Box, CircleDot, 
   Hammer, Wrench, Shirt, Utensils, PawPrint, Wheat, Castle, Skull, 
-  Sparkles, Music, Coins, Gem, Star 
+  Sparkles, Music, Gem, Star 
 } from "lucide-react";
 
 export const RPG_ATTRIBUTES = [
@@ -34,6 +34,6 @@ export const CATEGORIES = [
   { id: 'trap', label: 'Armadilhas', icon: Skull },
   { id: 'artifact', label: 'Artefatos', icon: Sparkles },
   { id: 'musical', label: 'Instrumentos', icon: Music },
-  { id: 'asset', label: 'Proventos', icon: Coins },
+  // REMOVIDO: { id: 'asset', label: 'Proventos', icon: Coins },
   { id: 'material', label: 'Materiais', icon: Gem },
 ];
