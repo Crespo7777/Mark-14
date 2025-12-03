@@ -1,6 +1,6 @@
 // src/components/QualitySelector.tsx
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -53,11 +53,13 @@ export function QualitySelector({
   const { data: qualities = [] } = useQuery({
     queryKey: ["qualities", tableId],
     queryFn: async () => {
+      // CORREÇÃO CRÍTICA: Aponta para 'items' e usa 'type' em vez de 'category'
       const { data, error } = await supabase
-        .from("item_templates")
+        .from("items") 
         .select("name, description, data")
-        .eq("table_id", tableId)
-        .eq("category", "quality")
+        .eq("type", "quality")
+        // Lógica de segurança: Traz itens da mesa OU itens globais (null)
+        .or(`table_id.eq.${tableId},table_id.is.null`) 
         .order("name");
 
       if (error) throw error;
