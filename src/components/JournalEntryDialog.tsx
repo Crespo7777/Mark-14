@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Switch } from "@/components/ui/switch";
@@ -17,7 +16,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
     Save, Share2, MoreVertical, ImageIcon, 
-    Maximize2, Minimize2, Trash2, X, Calendar, BookOpen
+    Maximize2, Minimize2, Trash2, X, BookOpen,
+    Eye, EyeOff // <--- Novos ícones
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -56,6 +56,7 @@ export const JournalEntryDialog = ({
   const [title, setTitle] = useState("");
   const [content, setContent] = useState(""); 
   const [isShared, setIsShared] = useState(false);
+  const [isHiddenOnSheet, setIsHiddenOnSheet] = useState(false); // <--- Novo Estado
   const [coverImage, setCoverImage] = useState<string | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -63,6 +64,9 @@ export const JournalEntryDialog = ({
   const { toast } = useToast();
   const isEditing = !!entry;
   const canShare = !isPlayerNote && !characterId && !npcId;
+  
+  // Verifica se é uma nota vinculada a personagem (para mostrar o botão de ocultar)
+  const isCharacterNote = !!(characterId || entry?.character_id || npcId || entry?.npc_id);
 
   // Carrega dados iniciais
   useEffect(() => {
@@ -71,16 +75,18 @@ export const JournalEntryDialog = ({
         setTitle(entry.title || "");
         setContent(entry.content || "");
         setIsShared(entry.is_shared || false);
+        setIsHiddenOnSheet(entry.is_hidden_on_sheet || false); // <--- Carrega estado
         setCoverImage(entry.data?.cover_image || null);
       } else if (!isEditing) {
         // Reset limpo para criar novo
         setTitle("");
         setContent("");
         setIsShared(false);
+        setIsHiddenOnSheet(false);
         setCoverImage(null);
       }
     }
-  }, [open, entry?.id, isEditing]);
+  }, [open, entry, isEditing]);
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -100,7 +106,9 @@ export const JournalEntryDialog = ({
         title: title.trim(),
         content: contentToSave,
         data: extraData,
-        is_shared: canShare ? isShared : (entry?.is_shared || false)
+        is_shared: canShare ? isShared : (entry?.is_shared || false),
+        is_hidden_on_sheet: isHiddenOnSheet, // <--- Salva o estado
+        folder_id: entry?.folder_id ?? null // Mantém a pasta se existir
     };
 
     try {
@@ -170,10 +178,29 @@ export const JournalEntryDialog = ({
             </div>
 
             <div className="flex items-center gap-1 md:gap-2">
+                {/* Switch de Partilha (Só para notas soltas) */}
                 {canShare && (
                     <div className="flex items-center gap-2 mr-2 border-r border-border/50 pr-4">
                         <Switch id="share-switch" checked={isShared} onCheckedChange={setIsShared} className="scale-75" />
                         <Label htmlFor="share-switch" className="text-xs text-muted-foreground cursor-pointer hidden sm:inline-block">Público</Label>
+                    </div>
+                )}
+
+                {/* Switch de Visibilidade na Ficha (Só para notas de Personagem/NPC) */}
+                {isCharacterNote && (
+                    <div className="flex items-center gap-2 mr-2 border-r border-border/50 pr-4">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setIsHiddenOnSheet(!isHiddenOnSheet)}
+                            className={isHiddenOnSheet ? "text-muted-foreground" : "text-primary"}
+                            title={isHiddenOnSheet ? "Oculto na Ficha" : "Visível na Ficha"}
+                        >
+                            {isHiddenOnSheet ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+                            <span className="text-xs hidden sm:inline">
+                                {isHiddenOnSheet ? "Oculto na Ficha" : "Visível na Ficha"}
+                            </span>
+                        </Button>
                     </div>
                 )}
 
@@ -218,7 +245,7 @@ export const JournalEntryDialog = ({
             {/* DOCUMENTO CENTRAL */}
             <div className="w-full max-w-3xl bg-background border-x border-border/20 shadow-sm min-h-full flex flex-col relative animate-in fade-in duration-300">
                 
-                {/* CAPA (Agora com fallback elegante) */}
+                {/* CAPA */}
                 <div className={`relative w-full transition-all duration-300 ease-in-out group ${coverImage ? 'h-52 md:h-72' : 'h-auto py-8 hover:bg-muted/30'}`}>
                     {coverImage ? (
                         <>
@@ -261,7 +288,7 @@ export const JournalEntryDialog = ({
                         "
                     />
 
-                    {/* EDITOR RICO (Carregado com Suspense) */}
+                    {/* EDITOR RICO */}
                     <div className="flex-1 min-h-[400px]">
                         <Suspense fallback={<div className="space-y-4 pt-4"><Skeleton className="h-4 w-full"/><Skeleton className="h-4 w-[90%]"/><Skeleton className="h-4 w-[95%]"/></div>}>
                             <RichTextEditor

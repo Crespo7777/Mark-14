@@ -1,13 +1,13 @@
-// src/components/SharedEntityJournalTab.tsx
-
 import { useState, lazy, Suspense } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Plus, Trash2, Edit, BookOpen, Eye } from "lucide-react"; 
+import { 
+    Plus, Edit, Trash2, Eye, FolderOpen, Archive, ArchiveRestore, 
+    MoreVertical, Share2, Image as ImageIcon, Book 
+} from "lucide-react"; 
 import { Skeleton } from "@/components/ui/skeleton";
-import { JournalRenderer } from "@/components/JournalRenderer";
+import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,9 +18,26 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    DropdownMenuSub,
+    DropdownMenuSubTrigger,
+    DropdownMenuSubContent,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { JournalReadDialog } from "@/components/JournalReadDialog";
-import { JournalEntryWithRelations } from "@/types/app-types";
+import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
+import { EntityListManager } from "@/components/EntityListManager"; 
+import { Card } from "@/components/ui/card"; // Simplificado, usaremos div interna
+import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
+import { formatDistanceToNow } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -45,16 +62,29 @@ const fetchEntityJournal = async (entityId: string, type: "character" | "npc") =
   return data as JournalEntryWithRelations[];
 };
 
+const fetchFolders = async (tableId: string) => {
+    const { data, error } = await supabase.from("journal_folders").select("*").eq("table_id", tableId).order("name", { ascending: true });
+    if (error) throw error;
+    return data as FolderType[];
+};
+
 export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOnly = false }: SharedEntityJournalTabProps) => { 
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntryWithRelations | null>(null);
   const [entryToRead, setEntryToRead] = useState<JournalEntryWithRelations | null>(null);
 
-  const { data: entries, isLoading } = useQuery({
+  const { data: entries = [], isLoading } = useQuery({
     queryKey: ["journal_entries", entityType, entityId],
     queryFn: () => fetchEntityJournal(entityId, entityType),
+  });
+
+  const { data: folders = [] } = useQuery({
+    queryKey: ['journal_folders', tableId],
+    queryFn: () => fetchFolders(tableId),
   });
 
   const invalidate = () => {
@@ -73,79 +103,190 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
     setEntryToDelete(null);
   };
 
-  if (isLoading) {
-    return <div className="grid gap-4 md:grid-cols-2"><Skeleton className="h-40 w-full" /><Skeleton className="h-40 w-full" /></div>;
-  }
+  const handleArchive = async (id: string, currentVal: boolean) => {
+      await supabase.from("journal_entries").update({ is_archived: !currentVal }).eq("id", id);
+      invalidate();
+      toast({ title: currentVal ? "Restaurado" : "Arquivado" });
+  };
+
+  const handleMoveFolder = async (id: string, folderId: string | null) => {
+      await supabase.from("journal_entries").update({ folder_id: folderId }).eq("id", id);
+      invalidate();
+      toast({ title: "Movido com sucesso" });
+  };
+
+  const filteredEntries = entries.filter(e => {
+      if (e.is_hidden_on_sheet) return false;
+      const matchSearch = (e.title || "").toLowerCase().includes(searchTerm.toLowerCase());
+      const matchArchive = showArchived ? e.is_archived : !e.is_archived;
+      return matchSearch && matchArchive;
+  });
+
+  // --- NOVO RENDER ITEM (Estilo Card Visual com Capa) ---
+  const renderItem = (entry: JournalEntryWithRelations) => {
+    const coverUrl = entry.data?.cover_image;
+    const timeAgo = formatDistanceToNow(new Date(entry.created_at), { locale: ptBR, addSuffix: true });
+
+    return (
+        <Card 
+            className={`
+                group relative flex flex-col h-[200px] overflow-hidden border-border/40 bg-muted/20 
+                transition-all duration-300 hover:shadow-lg hover:border-primary/50 cursor-pointer
+                ${entry.is_archived ? "opacity-60 grayscale border-dashed" : ""}
+            `}
+            onClick={() => setEntryToRead(entry)}
+        >
+            {/* 1. IMAGEM DE FUNDO (Capa) */}
+            <div className="absolute inset-0 z-0 bg-muted">
+                {coverUrl ? (
+                    <img 
+                        src={coverUrl} 
+                        alt={entry.title} 
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                ) : (
+                    // Fallback visual elegante
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/50 to-background">
+                        <Book className="w-12 h-12 text-muted-foreground/10 group-hover:text-primary/20 transition-colors" />
+                    </div>
+                )}
+                {/* Gradiente escuro para garantir leitura do texto */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+            </div>
+
+            {/* 2. MENU DE AÇÕES (Topo Direito) */}
+            {!isReadOnly && (
+                <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="secondary" size="icon" className="h-8 w-8 rounded-full shadow-md bg-background/80 hover:bg-background backdrop-blur-sm">
+                                <MoreVertical className="w-4 h-4 text-foreground" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem onClick={() => setEntryToRead(entry)}>
+                                <Eye className="w-4 h-4 mr-2"/> Ler
+                            </DropdownMenuItem>
+                            
+                            <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
+                                <JournalEntryDialog 
+                                    tableId={tableId} 
+                                    onEntrySaved={invalidate} 
+                                    entry={entry}
+                                    characterId={entityType === "character" ? entityId : undefined}
+                                    npcId={entityType === "npc" ? entityId : undefined}
+                                >
+                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                                        <Edit className="w-4 h-4 mr-2" /> Editar
+                                    </DropdownMenuItem>
+                                </JournalEntryDialog>
+                            </Suspense>
+
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2"/> Pasta</DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                    <DropdownMenuRadioGroup value={entry.folder_id || "none"} onValueChange={(val) => handleMoveFolder(entry.id, val === "none" ? null : val)}>
+                                        <DropdownMenuRadioItem value="none">Raiz</DropdownMenuRadioItem>
+                                        {folders.map(f => <DropdownMenuRadioItem key={f.id} value={f.id}>{f.name}</DropdownMenuRadioItem>)}
+                                    </DropdownMenuRadioGroup>
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+
+                            <DropdownMenuSeparator />
+                            
+                            <DropdownMenuItem onClick={() => handleArchive(entry.id, !!entry.is_archived)}>
+                                {entry.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2"/> : <Archive className="w-4 h-4 mr-2"/>}
+                                {entry.is_archived ? "Restaurar" : "Arquivar"}
+                            </DropdownMenuItem>
+
+                            <DropdownMenuItem className="text-destructive" onClick={() => setEntryToDelete(entry)}>
+                                <Trash2 className="w-4 h-4 mr-2"/> Excluir
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
+            )}
+
+            {/* 3. ÍCONES / BADGES (Topo Esquerdo) */}
+            <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
+                 {entry.is_shared && (
+                    <Badge variant="secondary" className="bg-primary/20 text-primary-foreground text-[10px] h-5 px-1.5 backdrop-blur-md border border-primary/30 shadow-sm">
+                        <Share2 className="w-3 h-3 mr-1" /> Público
+                    </Badge>
+                 )}
+            </div>
+
+            {/* 4. CONTEÚDO DE TEXTO (Rodapé) */}
+            <div className="mt-auto relative z-10 p-3 pb-3">
+                 <h3 className="font-bold text-base text-white leading-tight line-clamp-2 drop-shadow-md mb-1">
+                    {entry.title || "Sem Título"}
+                 </h3>
+                 <div className="flex items-center justify-between text-[11px] text-gray-300 font-medium">
+                    <span className="flex items-center gap-1 opacity-80">
+                       {coverUrl ? <ImageIcon className="w-3 h-3" /> : <Book className="w-3 h-3" />}
+                       {timeAgo}
+                    </span>
+                 </div>
+            </div>
+        </Card>
+    );
+  };
+
+  if (isLoading) return <div className="space-y-4"><Skeleton className="h-10 w-full" /><div className="grid grid-cols-2 lg:grid-cols-4 gap-4"><Skeleton className="h-40" /><Skeleton className="h-40" /><Skeleton className="h-40" /><Skeleton className="h-40" /></div></div>;
 
   return (
-    <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <div>
-            <CardTitle className="flex items-center gap-2"><BookOpen /> Diário</CardTitle>
-            <CardDescription>Anotações e histórias ligadas a esta entidade.</CardDescription>
-          </div>
-          {!isReadOnly && (
-            <Suspense fallback={<Button size="sm" disabled>...</Button>}>
-              <JournalEntryDialog
-                tableId={tableId}
-                onEntrySaved={invalidate}
-                characterId={entityType === "character" ? entityId : undefined}
-                npcId={entityType === "npc" ? entityId : undefined}
-              >
-                <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Anotação</Button>
-              </JournalEntryDialog>
-            </Suspense>
-          )}
-        </CardHeader>
-        <CardContent>
-           {(!entries || entries.length === 0) && <p className="text-muted-foreground text-center py-12">Nenhuma anotação ainda.</p>}
-           
-           <div className="grid gap-4 md:grid-cols-2">
-            {entries?.map((entry) => (
-              <Card 
-                key={entry.id} 
-                className="border-border/50 flex flex-col h-[250px] hover:shadow-glow transition-shadow cursor-pointer group"
-                onClick={() => setEntryToRead(entry)}
-              >
-                <CardHeader className="pb-2">
-                  <CardTitle className="truncate">{entry.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="flex-1 overflow-hidden text-sm pt-2 pb-2 relative">
-                  <JournalRenderer content={entry.content} className="line-clamp-5" />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
-                    <span className="bg-background/80 px-3 py-1 rounded-full text-xs font-medium flex items-center shadow-sm"><Eye className="w-3 h-3 mr-1" /> Ler</span>
-                  </div>
-                </CardContent>
-                {!isReadOnly && (
-                  <CardFooter className="flex justify-end items-center gap-1 pt-0 pb-3 px-4 h-10" onClick={e => e.stopPropagation()}>
-                    <Suspense fallback={<Button variant="ghost" size="icon" disabled><Edit className="w-4 h-4" /></Button>}>
-                      <JournalEntryDialog
-                        tableId={tableId}
-                        onEntrySaved={invalidate}
-                        entry={entry}
-                        characterId={entityType === "character" ? entityId : undefined}
-                        npcId={entityType === "npc" ? entityId : undefined}
-                      >
-                        <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="w-4 h-4" /></Button>
-                      </JournalEntryDialog>
-                    </Suspense>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setEntryToDelete(entry)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </CardFooter>
-                )}
-              </Card>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4 h-full flex flex-col animate-in fade-in">
+       <EntityListManager
+            items={filteredEntries}
+            folders={folders}
+            searchTerm={searchTerm}
+            onSearch={setSearchTerm}
+            showArchived={showArchived}
+            onToggleArchived={setShowArchived}
+            renderItem={renderItem}
+            emptyMessage={showArchived ? "Nenhum diário arquivado." : "Nenhuma anotação nesta ficha."}
+            // Grid ajustado para cards menores
+            gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
+            actions={
+                !isReadOnly && (
+                    <>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowArchived(!showArchived)}
+                            className={showArchived ? "bg-accent text-accent-foreground border border-border" : "text-muted-foreground hover:text-foreground"}
+                            title={showArchived ? "Voltar aos Ativos" : "Ver Arquivados"}
+                        >
+                            {showArchived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
+                            <span className="hidden sm:inline">{showArchived ? "Restaurar" : "Arquivados"}</span>
+                        </Button>
+                        
+                        <div className="h-4 w-px bg-border mx-1" />
+
+                        <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Pastas" />
+                        
+                        <Suspense fallback={<Button size="sm" disabled>...</Button>}>
+                            <JournalEntryDialog
+                                tableId={tableId}
+                                onEntrySaved={invalidate}
+                                characterId={entityType === "character" ? entityId : undefined}
+                                npcId={entityType === "npc" ? entityId : undefined}
+                            >
+                                <Button size="sm" className="shadow-sm">
+                                    <Plus className="w-4 h-4 mr-2" /> Nova Nota
+                                </Button>
+                            </JournalEntryDialog>
+                        </Suspense>
+                    </>
+                )
+            }
+       />
 
       <AlertDialog open={!!entryToDelete} onOpenChange={(open) => !open && setEntryToDelete(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir esta Anotação?</AlertDialogTitle>
-            <AlertDialogDescription>Ação irreversível.</AlertDialogDescription>
+            <AlertDialogDescription>Esta ação removerá a nota permanentemente da ficha e do diário geral.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -155,6 +296,6 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
       </AlertDialog>
 
       <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
-    </>
+    </div>
   );
 };

@@ -25,6 +25,7 @@ export type JournalEntryWithRelations = Tables<"journal_entries"> & {
   npc: { name: string } | null;
   folder_id?: string | null;
   is_archived?: boolean;
+  is_hidden_on_sheet?: boolean; // <--- NOVO CAMPO ADICIONADO
 };
 
 // Tipo simples para Pastas

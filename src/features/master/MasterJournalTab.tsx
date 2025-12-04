@@ -5,6 +5,9 @@ import {
   Card,
   CardHeader,
   CardTitle,
+  CardContent,
+  CardDescription,
+  CardFooter
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +56,8 @@ import { JournalReadDialog } from "@/components/JournalReadDialog";
 import { useTableContext } from "@/features/table/TableContext";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { JournalRenderer } from "@/components/JournalRenderer";
+import { useTableRealtime } from "@/hooks/useTableRealtime";
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -84,6 +89,10 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   const { members } = useTableContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // 1. Adicionado Hook de Realtime (Atualização automática)
+  useTableRealtime(tableId, "journal_entries", ["journal", tableId]);
+  useTableRealtime(tableId, "journal_folders", ["journal_folders", tableId]);
 
   const [journalSearch, setJournalSearch] = useState("");
   const [showArchivedJournal, setShowArchivedJournal] = useState(false);
@@ -150,9 +159,9 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
       return (
         <Card 
           className={`
-            group relative flex flex-col h-[200px] overflow-hidden border-border/40 bg-muted/20 
+            group relative flex flex-col h-[220px] overflow-hidden border-border/40 bg-muted/20 
             transition-all duration-300 hover:shadow-lg hover:border-primary/50 cursor-pointer
-            ${entry.is_archived ? "opacity-60 grayscale" : ""}
+            ${entry.is_archived ? "opacity-60 grayscale border-dashed" : ""}
           `}
           onClick={() => setEntryToRead(entry)}
         >
@@ -165,7 +174,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
                 ) : (
-                    // Fallback se não tiver imagem: Ícone grande suave
+                    // Fallback se não tiver imagem
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/50 to-background">
                         <Book className="w-12 h-12 text-muted-foreground/10 group-hover:text-primary/20 transition-colors" />
                     </div>
@@ -275,11 +284,24 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
             showArchived={showArchivedJournal}
             onToggleArchived={setShowArchivedJournal}
             renderItem={renderJournalCard}
-            emptyMessage="Nenhuma anotação encontrada."
-            // Layout de Grade Responsivo para Cartões Menores
+            emptyMessage={showArchivedJournal ? "Nenhuma anotação arquivada." : "Nenhuma anotação encontrada."}
             gridClassName="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
             actions={
                 <>
+                    {/* 2. BOTÃO ADICIONADO AQUI */}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowArchivedJournal(!showArchivedJournal)}
+                        className={showArchivedJournal ? "bg-accent text-accent-foreground border border-border" : "text-muted-foreground hover:text-foreground"}
+                        title={showArchivedJournal ? "Voltar aos Ativos" : "Ver Arquivados"}
+                    >
+                        {showArchivedJournal ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
+                        <span className="hidden sm:inline">{showArchivedJournal ? "Restaurar" : "Arquivados"}</span>
+                    </Button>
+                    
+                    <div className="h-4 w-px bg-border mx-1" />
+
                     <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Diário" />
                     <Suspense fallback={<Button size="sm" disabled>...</Button>}>
                         <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal}>
