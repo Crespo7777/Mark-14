@@ -6,20 +6,19 @@ import { DeckHolder } from "./DeckHolder";
 import { CounterWidget } from "./CounterWidget"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Trash2, X, Upload, Loader2, Image as ImageIcon, Hand, Users, LayoutTemplate, Layers, Search, Calculator, Ban } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, X, Upload, Loader2, Image as ImageIcon, Hand, Users, LayoutTemplate, Layers, Calculator, Ban, Shuffle, ArrowRightLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 export function CardTablePanel({ roomId }: { roomId: string }) {
   const system = useCardSystem(roomId);
   
-  // Dados Seguros
   const handCards = system?.handCards || [];
   const tableCards = system?.tableCards || [];
   const opponents = system?.opponents || [];
   const counters = system?.counters || [];
   
-  // Layout
   const DECK_X = 50; 
   const DECK_Y = 50;
   const DISCARD_X = 50;
@@ -29,9 +28,9 @@ export function CardTablePanel({ roomId }: { roomId: string }) {
   const SPAWN_Y = DECK_Y + CENTER_OFFSET;
 
   const [deckUrl, setDeckUrl] = useState("https://placehold.co/240x336/png?text=Monstro");
+  const [dealCount, setDealCount] = useState("5");
   const [isUploading, setIsUploading] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
-  const [hoveredCardImg, setHoveredCardImg] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handZoneRef = useRef<HTMLDivElement>(null);
@@ -85,48 +84,82 @@ export function CardTablePanel({ roomId }: { roomId: string }) {
   };
 
   if (!isOpen) return null;
-  
-  // State Loading Screen
-  if (system.isLoading) {
-      return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 text-white">
-            <Loader2 className="w-8 h-8 animate-spin mr-3 text-indigo-500" />
-            <span className="font-serif text-lg">A preparar a mesa...</span>
-        </div>
-      );
-  }
+  if (system.isLoading) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950 text-white">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mr-2"/> A carregar mesa...
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-950 pointer-events-auto font-sans select-none">
         
         {/* HEADER */}
         <div className="h-14 bg-slate-900 border-b border-slate-800 flex items-center px-4 gap-4 shadow-xl shrink-0 z-40 relative">
-           <div className="flex items-center gap-2 text-white/80">
+           <div className="flex items-center gap-2 text-white/80 hidden lg:flex">
               <LayoutTemplate className="w-5 h-5" />
-              <span className="font-bold hidden md:block">Mesa</span>
+              <span className="font-bold">Mesa</span>
            </div>
-           <div className="h-6 w-px bg-white/10 mx-2" />
+           
+           <div className="h-6 w-px bg-white/10 mx-2 hidden lg:block" />
 
-           <div className="flex-1 flex gap-2 items-center">
+           {/* Toolbar - Upload */}
+           <div className="flex gap-2 items-center">
              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
              <div className="flex bg-black/40 p-1 rounded-lg border border-white/10 items-center">
                 <Button size="icon" variant="ghost" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="h-8 w-8 text-slate-400 hover:text-white">
                     {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                 </Button>
                 <div className="w-px bg-white/10 mx-1 h-4" />
-                <Input value={deckUrl} onChange={(e) => setDeckUrl(e.target.value)} placeholder="URL..." className="h-8 w-32 border-none bg-transparent text-xs focus-visible:ring-0 text-white" />
+                <Input value={deckUrl} onChange={(e) => setDeckUrl(e.target.value)} placeholder="URL..." className="h-8 w-24 lg:w-32 border-none bg-transparent text-xs focus-visible:ring-0 text-white" />
              </div>
-             <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500 text-white h-8" onClick={() => system.spawnDeck(deckUrl, SPAWN_X, SPAWN_Y, 1)}>
+             <Button size="sm" variant="secondary" className="h-8 border border-white/10" onClick={() => system.spawnDeck(deckUrl, SPAWN_X, SPAWN_Y, 1)}>
                <Plus className="w-3 h-3 mr-1" /> Carta
-             </Button>
-             
-             {/* Novo Contador */}
-             <Button size="sm" variant="outline" className="border-slate-700 bg-slate-800/50 text-slate-300 h-8" onClick={() => system.addCounter("Token", 400, 100)}>
-               <Calculator className="w-3 h-3 mr-1" /> Token
              </Button>
            </div>
 
+           <div className="h-6 w-px bg-white/10 mx-2" />
+
+           {/* Toolbar - Ações */}
+           <div className="flex gap-2 items-center flex-1">
+             <Button size="sm" variant="secondary" className="h-8 bg-slate-800 border-slate-600 text-slate-300 hover:text-white" onClick={() => system.shuffleStack(SPAWN_X, SPAWN_Y)} title="Embaralhar Cartas no Deck">
+                <Shuffle className="w-3 h-3 mr-1" /> Mix
+             </Button>
+
+             <Popover>
+                <PopoverTrigger asChild>
+                    <Button size="sm" variant="secondary" className="h-8 bg-amber-900/40 border-amber-700/50 text-amber-200 hover:bg-amber-900/60 hover:text-white">
+                        <ArrowRightLeft className="w-3 h-3 mr-1" /> Dar
+                    </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 bg-slate-900 border-slate-700 p-2 z-[60]">
+                    <div className="flex gap-2 items-center">
+                        <Input 
+                            type="number" 
+                            value={dealCount} 
+                            onChange={(e) => setDealCount(e.target.value)} 
+                            className="h-8 w-16 bg-black text-white border-slate-600"
+                        />
+                        <span className="text-xs text-slate-400">cartas cada</span>
+                    </div>
+                    <Button className="w-full mt-2 h-8 text-xs bg-indigo-600 hover:bg-indigo-500" onClick={() => system.dealCards(SPAWN_X, SPAWN_Y, parseInt(dealCount) || 1)}>
+                        Confirmar
+                    </Button>
+                </PopoverContent>
+             </Popover>
+
+             <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm" onClick={() => system.spawnDeck(deckUrl, SPAWN_X, SPAWN_Y, 54)}>
+               <Layers className="w-3 h-3 mr-1" /> Baralho
+             </Button>
+           </div>
+
+           {/* Toolbar - Utils */}
            <div className="flex items-center gap-2">
+             <Button size="sm" variant="outline" className="border-slate-700 bg-slate-800/50 text-slate-300 h-8 hidden sm:flex" onClick={() => system.addCounter("Token", 400, 100)}>
+               <Calculator className="w-3 h-3 mr-1" /> Token
+             </Button>
+             
+             <div className="h-6 w-px bg-white/10 mx-2" />
+
              <Button size="sm" variant="ghost" onClick={() => system.gatherAllToDeck(SPAWN_X, SPAWN_Y)} className="text-slate-400 hover:text-amber-400" title="Recolher Tudo">
                <Layers className="w-4 h-4" />
              </Button>
@@ -138,15 +171,6 @@ export function CardTablePanel({ roomId }: { roomId: string }) {
              </Button>
            </div>
         </div>
-
-        {/* INSPECTOR */}
-        {hoveredCardImg && (
-            <div className="absolute top-16 right-4 w-64 h-80 z-50 pointer-events-none animate-in fade-in zoom-in-95 duration-100 origin-top-right">
-                <div className="w-full h-full rounded-xl border-4 border-amber-500/50 shadow-2xl bg-black overflow-hidden relative">
-                    <img src={hoveredCardImg} className="w-full h-full object-contain bg-slate-900" alt="Zoom" />
-                </div>
-            </div>
-        )}
 
         {/* OPONENTES */}
         <div className="absolute top-16 left-0 right-0 z-30 flex justify-center gap-6 px-4 pointer-events-none">
@@ -161,13 +185,7 @@ export function CardTablePanel({ roomId }: { roomId: string }) {
         <div ref={tableRef} className="flex-1 relative overflow-hidden bg-[#24303c] perspective-1000 shadow-inner">
           <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/felt.png')] opacity-10 pointer-events-none mix-blend-overlay"></div>
           
-          <DeckHolder 
-            x={DECK_X} y={DECK_Y} 
-            label="Baralho"
-            onShuffle={() => system.shuffleStack(SPAWN_X, SPAWN_Y)}
-            onGather={() => system.gatherAllToDeck(SPAWN_X, SPAWN_Y)}
-            onDeal={(n) => system.dealCards(SPAWN_X, SPAWN_Y, n)}
-          />
+          <DeckHolder x={DECK_X} y={DECK_Y} label="Baralho" />
 
           <div 
             className="absolute w-32 h-44 border-2 border-dashed border-white/5 rounded-xl bg-black/10 flex items-center justify-center pointer-events-none"
@@ -196,27 +214,36 @@ export function CardTablePanel({ roomId }: { roomId: string }) {
               onMove={handleCardMove}
               onFlip={(c) => system.flipCard(c)}
               onRotate={(c) => system.rotateCard(c)}
-              onHover={setHoveredCardImg}
             />
           ))}
         </div>
 
-        {/* MÃO */}
+        {/* MÃO DO JOGADOR */}
         <div ref={handZoneRef} className="h-60 bg-gradient-to-t from-slate-950 via-slate-900/95 to-slate-900/0 relative z-20 flex flex-col justify-end pb-4 group">
             <div className="absolute top-10 left-1/2 -translate-x-1/2 flex flex-col items-center opacity-30 group-hover:opacity-100 transition-opacity pointer-events-none">
                 <span className="text-[10px] font-bold text-white uppercase tracking-widest bg-black/50 px-3 py-1 rounded-full border border-white/10">Sua Mão</span>
             </div>
-            <div className="w-full h-48 relative flex items-center justify-center px-10 gap-[-20px] overflow-x-auto overflow-y-visible py-4">
-                {handCards.map((card) => (
-                    <PlayingCard 
-                        key={card.id} 
-                        card={card} 
-                        onMove={handleCardMove}
-                        onFlip={(c) => system.flipCard(c)}
-                        onRotate={(c) => system.rotateCard(c)}
-                        onHover={setHoveredCardImg}
-                    />
-                ))}
+            
+            <div className="w-full h-48 flex items-center justify-center overflow-x-auto overflow-y-visible py-4 px-10">
+                {handCards.length === 0 && (
+                    <div className="text-white/20 text-sm italic flex flex-col items-center gap-2 select-none pointer-events-none">
+                        <Hand className="w-10 h-10 opacity-30" />
+                        Arraste cartas para aqui
+                    </div>
+                )}
+
+                <div className="flex items-center pl-12 min-w-min"> 
+                    {handCards.map((card) => (
+                        <PlayingCard 
+                            key={card.id} 
+                            card={card} 
+                            isInHand={true}
+                            onMove={handleCardMove}
+                            onFlip={(c) => system.flipCard(c)}
+                            onPlay={(c) => system.playCardFromHand(c)}
+                        />
+                    ))}
+                </div>
             </div>
         </div>
     </div>

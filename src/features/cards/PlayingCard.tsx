@@ -2,30 +2,45 @@ import { useState, useRef, useEffect } from "react";
 import { GameCard } from "./types";
 import { cn } from "@/lib/utils";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
-import { RotateCw, Eye, EyeOff } from "lucide-react";
+import { RotateCw, Eye, EyeOff, ArrowUpCircle } from "lucide-react";
 
 interface PlayingCardProps {
   card: GameCard;
+  isInHand?: boolean;
   onMove: (id: string, x: number, y: number) => void;
   onFlip: (card: GameCard) => void;
-  onRotate?: (card: GameCard) => void; // Nova prop
-  onHover?: (url: string | null) => void; // Nova prop para o Inspector
+  onRotate?: (card: GameCard) => void;
+  onPlay?: (card: GameCard) => void;
 }
 
-export function PlayingCard({ card, onMove, onFlip, onRotate, onHover }: PlayingCardProps) {
+export function PlayingCard({ card, isInHand = false, onMove, onFlip, onRotate, onPlay }: PlayingCardProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [localPos, setLocalPos] = useState({ x: card.position_x, y: card.position_y });
+  
   const offset = useRef({ x: 0, y: 0 });
+  const dragStartPos = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (!isDragging) setLocalPos({ x: card.position_x, y: card.position_y });
-  }, [card.position_x, card.position_y, isDragging]);
+    // Só atualiza a posição se estiver na mesa. Na mão, o Flexbox manda.
+    if (!isDragging && !isInHand) {
+        setLocalPos({ x: card.position_x, y: card.position_y });
+    }
+  }, [card.position_x, card.position_y, isDragging, isInHand]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Só botão esquerdo arrasta
+    if (e.button !== 0) return;
     e.stopPropagation(); e.preventDefault();
     setIsDragging(true);
-    offset.current = { x: e.clientX - localPos.x, y: e.clientY - localPos.y };
+    dragStartPos.current = { x: e.clientX, y: e.clientY };
+
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    offset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+
+    // Se estiver na mão, ao começar a arrastar, a posição inicial é onde o mouse está
+    if (isInHand) {
+        setLocalPos({ x: e.clientX - offset.current.x, y: e.clientY - offset.current.y });
+    }
+
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
   };
@@ -38,14 +53,55 @@ export function PlayingCard({ card, onMove, onFlip, onRotate, onHover }: Playing
     setIsDragging(false);
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
-    onMove(card.id, e.clientX - offset.current.x, e.clientY - offset.current.y);
+    
+    const dist = Math.sqrt(Math.pow(e.clientX - dragStartPos.current.x, 2) + Math.pow(e.clientY - dragStartPos.current.y, 2));
+    
+    if (dist < 5) {
+        // Clique rápido
+        if (isInHand && onPlay) onPlay(card);
+        else onFlip(card);
+    } else {
+        // Arrastou
+        onMove(card.id, e.clientX - offset.current.x, e.clientY - offset.current.y);
+    }
   };
 
-  // Inspector Logic
-  const handleMouseEnter = () => {
-      // Se a carta está virada para cima, mostra a frente. Se não, mostra o verso.
-      const imgToShow = card.is_face_up ? card.front_image : card.back_image;
-      if (onHover) onHover(imgToShow);
+  const getStyle = () => {
+    // 1. Arrastando (prioridade total)
+    if (isDragging) {
+        return {
+            position: 'fixed' as const,
+            left: localPos.x,
+            top: localPos.y,
+            zIndex: 9999,
+            transform: 'scale(1.1) rotate(5deg)',
+            cursor: 'grabbing',
+            pointerEvents: 'none' as const 
+        };
+    }
+
+    // 2. Na Mão (Leque)
+    if (isInHand) {
+        return {
+            position: 'relative' as const,
+            transform: 'translateY(0)',
+            zIndex: 1,
+            cursor: 'grab',
+            transition: 'all 0.2s ease-out'
+        };
+    }
+
+    // 3. Na Mesa
+    return {
+        position: 'absolute' as const,
+        left: localPos.x,
+        top: localPos.y,
+        zIndex: card.z_index,
+        transform: `rotate(${card.is_tapped ? 90 : 0}deg)`,
+        perspective: "1000px",
+        cursor: 'grab',
+        transition: 'transform 0.2s'
+    };
   };
 
   return (
@@ -53,21 +109,12 @@ export function PlayingCard({ card, onMove, onFlip, onRotate, onHover }: Playing
         <ContextMenuTrigger>
             <div
               onMouseDown={handleMouseDown}
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={() => onHover && onHover(null)}
-              onClick={(e) => { if (!isDragging) onFlip(card); }}
               className={cn(
-                "absolute w-24 h-36 cursor-grab active:cursor-grabbing hover:scale-105 transition-transform shadow-md rounded-lg",
-                isDragging ? "z-[9999] scale-110 shadow-2xl" : ""
+                "w-24 h-36 rounded-lg shadow-md select-none border border-black/20",
+                // Estilo "Leque" com margem negativa suave
+                !isDragging && isInHand ? "hover:-translate-y-8 hover:z-50 hover:scale-110 mx-[-15px] first:mx-0 shadow-xl" : ""
               )}
-              style={{
-                left: localPos.x,
-                top: localPos.y,
-                zIndex: isDragging ? 9999 : card.z_index,
-                // Rotação: 0 ou 90 graus (Tap) + Flip 3D
-                transform: `rotate(${card.is_tapped ? 90 : 0}deg)`,
-                perspective: "1000px"
-              }}
+              style={getStyle()}
             >
               <div className={cn(
                 "relative w-full h-full duration-500 transform-style-3d transition-all",
@@ -75,26 +122,26 @@ export function PlayingCard({ card, onMove, onFlip, onRotate, onHover }: Playing
               )}
               style={{ transformStyle: "preserve-3d", transform: card.is_face_up ? "rotateY(180deg)" : "rotateY(0deg)" }}
               >
-                {/* Verso */}
                 <div 
-                  className="absolute inset-0 w-full h-full backface-hidden rounded-lg border-2 border-white/20 bg-cover bg-center shadow-md bg-slate-800"
+                  className="absolute inset-0 w-full h-full backface-hidden rounded-lg border-2 border-white/10 bg-cover bg-center shadow-inner bg-slate-800"
                   style={{ backgroundImage: `url(${card.back_image})`, backfaceVisibility: "hidden" }}
                 />
-                {/* Frente */}
                 <div 
-                  className="absolute inset-0 w-full h-full backface-hidden rounded-lg border-2 border-white/20 bg-cover bg-center shadow-md bg-white"
+                  className="absolute inset-0 w-full h-full backface-hidden rounded-lg border-2 border-white/10 bg-cover bg-center shadow-inner bg-white"
                   style={{ backgroundImage: `url(${card.front_image})`, backfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
                 />
               </div>
             </div>
         </ContextMenuTrigger>
-        <ContextMenuContent className="bg-slate-900 border-slate-700 text-white">
-            <ContextMenuItem onClick={() => onFlip(card)}>
-                {card.is_face_up ? <><EyeOff className="w-4 h-4 mr-2"/> Virar para Baixo</> : <><Eye className="w-4 h-4 mr-2"/> Revelar</>}
+        <ContextMenuContent className="bg-slate-900 border-slate-700 text-white z-[9999]">
+            <ContextMenuItem onClick={() => isInHand && onPlay ? onPlay(card) : onFlip(card)}>
+                {isInHand ? <><ArrowUpCircle className="w-4 h-4 mr-2"/> Jogar na Mesa</> : (card.is_face_up ? "Virar para Baixo" : "Revelar")}
             </ContextMenuItem>
-            <ContextMenuItem onClick={() => onRotate && onRotate(card)}>
-                <RotateCw className="w-4 h-4 mr-2"/> {card.is_tapped ? "Desvirar (Untap)" : "Virar (Tap)"}
-            </ContextMenuItem>
+            {!isInHand && (
+                <ContextMenuItem onClick={() => onRotate && onRotate(card)}>
+                    <RotateCw className="w-4 h-4 mr-2"/> {card.is_tapped ? "Desvirar" : "Virar (Tap)"}
+                </ContextMenuItem>
+            )}
         </ContextMenuContent>
     </ContextMenu>
   );

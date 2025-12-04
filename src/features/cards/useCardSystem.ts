@@ -25,30 +25,44 @@ export function useCardSystem(roomId: string) {
   const [cards, setCards] = useState<GameCard[]>([]);
   const [players, setPlayers] = useState<any[]>([]);
   const [myId, setMyId] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true); // <--- CORRIGIDO: Nome da variável
-  
+  const [isLoading, setIsLoading] = useState(true);
   const [counters, setCounters] = useState<Counter[]>([]);
 
   useEffect(() => {
     let isMounted = true;
 
     async function init() {
+      // 1. Identificar Usuário
       const { data: userData } = await supabase.auth.getUser();
-      if (isMounted) setMyId(userData.user?.id || null);
+      const currentUserId = userData.user?.id || null;
+      if (isMounted) setMyId(currentUserId);
 
+      // 2. Carregar Players
       const { data: playerData } = await supabase
         .from('table_members')
         .select('user_id, profiles(display_name, avatar_url)')
         .eq('table_id', roomId);
       
-      if (isMounted && playerData) {
-        setPlayers(playerData.map((p: any) => ({
-            id: p.user_id,
-            name: p.profiles?.display_name || "Jogador",
-            avatarUrl: p.profiles?.avatar_url || ""
-        })));
+      if (isMounted) {
+        let loadedPlayers = [];
+        if (playerData && playerData.length > 0) {
+            loadedPlayers = playerData.map((p: any) => ({
+                id: p.user_id,
+                name: p.profiles?.display_name || "Jogador",
+                avatarUrl: p.profiles?.avatar_url || ""
+            }));
+        } else if (currentUserId) {
+            // FALLBACK: Modo Solo
+            loadedPlayers = [{
+                id: currentUserId,
+                name: "Eu (Solo)",
+                avatarUrl: ""
+            }];
+        }
+        setPlayers(loadedPlayers);
       }
 
+      // 3. Carregar Cartas
       const { data: cardsData } = await supabase
         .from('game_cards')
         .select('*')
@@ -57,7 +71,7 @@ export function useCardSystem(roomId: string) {
       
       if (isMounted) {
         if (cardsData) setCards(cardsData as unknown as GameCard[]);
-        setIsLoading(false); // <--- CORRIGIDO: Setter correto
+        setIsLoading(false);
       }
     }
 
@@ -89,6 +103,8 @@ export function useCardSystem(roomId: string) {
     }
   };
 
+  // --- AÇÕES ---
+
   const updateCardPosition = async (id: string, x: number, y: number, containerType: 'hand' | 'table') => {
     const newOwnerId = containerType === 'hand' ? myId : null;
     const updates: any = { position_x: x, position_y: y, owner_id: newOwnerId };
@@ -116,6 +132,29 @@ export function useCardSystem(roomId: string) {
     await supabase.from('game_cards').update({ is_tapped: newTapState }).eq('id', card.id);
   };
 
+  const playCardFromHand = async (card: GameCard) => {
+    // Joga para a "Minha Frente" na mesa (Y = 550 aprox, X = Centro + Variação)
+    // Isso evita que vá para o meio do baralho ou para longe
+    const variation = Math.random() * 40 - 20; 
+    const targetX = 400 + variation; 
+    const targetY = 500 + variation; // Parte inferior da mesa
+
+    setCards(prev => prev.map(c => c.id === card.id ? { 
+        ...c, 
+        position_x: targetX, 
+        position_y: targetY, 
+        owner_id: null, // Deixa de ser privada
+        is_face_up: true // Revela na mesa
+    } : c));
+
+    await supabase.from('game_cards').update({
+        position_x: targetX,
+        position_y: targetY,
+        owner_id: null,
+        is_face_up: true
+    }).eq('id', card.id);
+  };
+
   const spawnDeck = async (frontUrl: string, x: number, y: number, count: number = 1) => {
     const finalFront = frontUrl && frontUrl.length > 5 ? frontUrl : DEFAULT_FRONT;
     const baseZIndex = Math.floor(Date.now() / 1000);
@@ -132,15 +171,15 @@ export function useCardSystem(roomId: string) {
     }));
     
     const { error } = await supabase.from('game_cards').insert(newCards);
-    if (error) toast.error("Erro ao criar: " + error.message);
+    if (error) toast.error("Erro: " + error.message);
     else toast.success(count > 1 ? "Baralho criado!" : "Carta criada!");
   };
 
   const shuffleStack = async (x: number, y: number) => {
     const cardsInStack = cards.filter(c => 
         !c.owner_id && 
-        Math.abs(c.position_x - x) < 80 && 
-        Math.abs(c.position_y - y) < 80
+        Math.abs(c.position_x - x) < 100 && 
+        Math.abs(c.position_y - y) < 100
     );
 
     if (cardsInStack.length < 2) {
@@ -150,9 +189,20 @@ export function useCardSystem(roomId: string) {
 
     const baseZ = Math.floor(Date.now() / 1000);
     const shuffled = [...cardsInStack].sort(() => Math.random() - 0.5);
+    const newCardsState = [...cards];
     
     for (let i = 0; i < shuffled.length; i++) {
         const card = shuffled[i];
+        const index = newCardsState.findIndex(c => c.id === card.id);
+        if(index !== -1) {
+            newCardsState[index] = {
+                ...newCardsState[index],
+                z_index: baseZ + i,
+                position_x: x + (Math.random() * 4 - 2),
+                position_y: y + (Math.random() * 4 - 2),
+                is_face_up: false
+            };
+        }
         await supabase.from('game_cards').update({
             z_index: baseZ + i,
             position_x: x + (Math.random() * 4 - 2),
@@ -160,38 +210,63 @@ export function useCardSystem(roomId: string) {
             is_face_up: false 
         }).eq('id', card.id);
     }
+    setCards(newCardsState);
     toast.success("Embaralhado!");
   };
 
   const gatherAllToDeck = async (targetX: number, targetY: number) => {
-    if(!confirm("Recolher TODAS as cartas da mesa para o baralho?")) return;
+    if(!confirm("Recolher TODAS as cartas para o baralho?")) return;
     const tableCardsList = cards.filter(c => !c.owner_id);
     const baseZ = Math.floor(Date.now() / 1000);
+    const newCardsState = [...cards];
 
     for (let i = 0; i < tableCardsList.length; i++) {
         const card = tableCardsList[i];
+        const index = newCardsState.findIndex(c => c.id === card.id);
+        if (index !== -1) {
+             newCardsState[index] = { ...newCardsState[index], position_x: targetX, position_y: targetY, is_face_up: false, z_index: baseZ + i };
+        }
         await supabase.from('game_cards').update({
             position_x: targetX, position_y: targetY, is_face_up: false, z_index: baseZ + i
         }).eq('id', card.id);
     }
-    toast.success("Mesa limpa!");
+    setCards(newCardsState);
+    toast.success("Mesa organizada!");
   };
 
   const dealCards = async (sourceX: number, sourceY: number, countPerPlayer: number) => {
+    let targetPlayers = [...players];
+    if (targetPlayers.length === 0 && myId) {
+        targetPlayers = [{ id: myId }];
+    }
+
+    if (targetPlayers.length === 0) {
+        toast.error("Nenhum jogador.");
+        return;
+    }
+
     const deckCards = cards
         .filter(c => !c.owner_id && Math.abs(c.position_x - sourceX) < 100 && Math.abs(c.position_y - sourceY) < 100)
         .sort((a, b) => b.z_index - a.z_index);
 
-    if (deckCards.length < players.length * countPerPlayer) {
-        toast.error(`Cartas insuficientes. Tem ${deckCards.length}, precisa de ${players.length * countPerPlayer}.`);
+    if (deckCards.length < targetPlayers.length * countPerPlayer) {
+        toast.error(`Cartas insuficientes (${deckCards.length}).`);
         return;
     }
 
     let cardIndex = 0;
+    const newCardsState = [...cards];
+
     for (let round = 0; round < countPerPlayer; round++) {
-        for (const player of players) {
+        for (const player of targetPlayers) {
             if (cardIndex >= deckCards.length) break;
             const card = deckCards[cardIndex];
+            
+            const index = newCardsState.findIndex(c => c.id === card.id);
+            if (index !== -1) {
+                newCardsState[index] = { ...newCardsState[index], owner_id: player.id, is_face_up: true };
+            }
+
             await supabase.from('game_cards').update({
                 owner_id: player.id,
                 is_face_up: true,
@@ -200,11 +275,12 @@ export function useCardSystem(roomId: string) {
             cardIndex++;
         }
     }
-    toast.success("Cartas distribuídas!");
+    setCards(newCardsState);
+    toast.success("Distribuído!");
   };
 
   const clearTable = async () => {
-    if(!confirm("Isto apaga todas as cartas do jogo permanentemente. Continuar?")) return;
+    if(!confirm("Apagar tudo permanentemente?")) return;
     setCards([]);
     await supabase.from('game_cards').delete().eq('room_id', roomId);
   };
@@ -235,8 +311,8 @@ export function useCardSystem(roomId: string) {
 
   return { 
     cards: safeCards, handCards, tableCards, opponents,
-    updateCardPosition, flipCard, rotateCard, spawnDeck, clearTable, shuffleStack, gatherAllToDeck, dealCards,
+    updateCardPosition, flipCard, rotateCard, playCardFromHand, spawnDeck, clearTable, shuffleStack, gatherAllToDeck, dealCards,
     counters, addCounter, updateCounter, deleteCounter,
-    isLoading // <--- AGORA CORRETO
+    isLoading 
   };
 }
