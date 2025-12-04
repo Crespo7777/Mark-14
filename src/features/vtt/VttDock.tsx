@@ -3,7 +3,9 @@ import { useTableContext } from "@/features/table/TableContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { 
-  Map as MapIcon, Users, Swords, Settings, Search, Image as ImageIcon, X, Upload, Loader2, Plus, Music, LayoutGrid, FileText, MonitorPlay, CloudFog, Play, Eye, EyeOff, Trash2
+  Map as MapIcon, Users, Swords, Settings, Search, Image as ImageIcon, X, Upload, Loader2, Plus, Music, LayoutGrid, FileText, MonitorPlay, CloudFog, Play, Eye, EyeOff, Trash2,
+  Gamepad2, // Ícone do Jogo de Cartas
+  Book      // Ícone do Livro de Regras
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +14,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { QuickCreateDialog } from "./QuickCreateDialog";
+
+// --- Importações dos Painéis Novos ---
+import { CardTablePanel } from "../cards/CardTablePanel";
+import { RulesBookPanel } from "../rules/RulesBookPanel";
 
 type DockCategory = 'scenes' | 'tokens';
 
@@ -30,6 +36,10 @@ export const VttDock = ({ tableId, onDragStart }: { tableId: string, onDragStart
   const [activeCategory, setActiveCategory] = useState<DockCategory | null>(null);
   const [search, setSearch] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+
+  // --- Novos Estados para os Painéis ---
+  const [showCards, setShowCards] = useState(false);
+  const [showRules, setShowRules] = useState(false);
 
   const { data: gameState } = useQuery({ queryKey: ['game_state', tableId], queryFn: async () => (await supabase.from("game_states").select("current_scene_id").eq("table_id", tableId).single()).data });
   const { data: scenes = [] } = useQuery({ queryKey: ['scenes', tableId], queryFn: async () => (await supabase.from("scenes").select("*").eq("table_id", tableId).order("created_at", { ascending: false })).data || [], enabled: activeCategory === 'scenes' });
@@ -60,7 +70,7 @@ export const VttDock = ({ tableId, onDragStart }: { tableId: string, onDragStart
       if (!files || files.length === 0) return;
       setIsUploading(true);
       
-      const file = files[0]; // Processa o primeiro por agora
+      const file = files[0]; 
       try {
           const folder = type === 'scene' ? 'maps' : 'tokens';
           const fileName = `${folder}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
@@ -99,15 +109,20 @@ export const VttDock = ({ tableId, onDragStart }: { tableId: string, onDragStart
   const items = getItems().filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
+    <>
+    {/* --- Renderização dos Painéis Flutuantes --- */}
+    {showCards && <CardTablePanel roomId={tableId} />}
+    {showRules && <RulesBookPanel roomId={tableId} />}
+
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 w-full max-w-4xl px-4 pointer-events-none">
         
+        {/* Painel Expansível de Mapas/Tokens */}
         {activeCategory && (
             <div 
                 className={cn(
                     "w-full bg-black/90 backdrop-blur-md border border-white/10 rounded-xl p-2 shadow-2xl animate-in slide-in-from-bottom-4 duration-200 pointer-events-auto transition-colors",
                     isUploading && "opacity-50 pointer-events-none"
                 )}
-                // AQUI ESTÁ A MAGIA: Drop na Dock
                 onDrop={handleDockDrop} 
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
             >
@@ -152,24 +167,50 @@ export const VttDock = ({ tableId, onDragStart }: { tableId: string, onDragStart
             </div>
         )}
 
+        {/* --- DOCK PRINCIPAL (BOTÕES) --- */}
         <div className="flex items-center gap-1 bg-black/80 backdrop-blur-xl p-1.5 rounded-2xl border border-white/10 shadow-2xl pointer-events-auto transition-all hover:bg-black/90">
+            
+            {/* Esquerda: Gestão de Mapas e Tokens */}
             <DockButton icon={<MapIcon />} label="Meus Mapas (Drop Aqui)" active={activeCategory === 'scenes'} onClick={() => setActiveCategory(activeCategory === 'scenes' ? null : 'scenes')} disabled={!isMaster} />
             <div className="w-px h-6 bg-white/10 mx-1" />
             <DockButton icon={<ImageIcon />} label="Tokens (Imagens)" active={activeCategory === 'tokens'} onClick={() => setActiveCategory(activeCategory === 'tokens' ? null : 'tokens')} />
+            
+            {/* Centro: Ferramentas de Jogo */}
             <div className="w-px h-6 bg-white/10 mx-1" />
             <DockButton icon={<FileText />} label="Acesso Rápido (Fichas)" active={false} onClick={() => document.dispatchEvent(new CustomEvent('toggle-quick-access'))} />
             <DockButton icon={<LayoutGrid />} label="Gestão Completa" active={false} onClick={() => document.dispatchEvent(new CustomEvent('toggle-master-panel'))} disabled={!isMaster} />
             <div className="w-px h-6 bg-white/10 mx-1" />
+            
+            {/* Direita: Funcionalidades Especiais */}
             <DockButton icon={<Swords />} label="Combate" active={false} onClick={() => document.dispatchEvent(new CustomEvent('toggle-combat-tracker'))} />
+            
+            {/* NOVOS BOTÕES */}
+            <DockButton 
+                icon={<Gamepad2 />} 
+                label="Mesa de Cartas" 
+                active={showCards} 
+                onClick={() => { setShowCards(!showCards); setShowRules(false); }} 
+            />
+            
+            <DockButton 
+                icon={<Book />} 
+                label="Livro de Regras" 
+                active={showRules} 
+                onClick={() => { setShowRules(!showRules); setShowCards(false); }} 
+            />
+
             <DockButton icon={<MonitorPlay />} label="Prios (Projetor)" active={false} onClick={() => document.dispatchEvent(new CustomEvent('toggle-prios-panel'))} disabled={!isMaster} />
             <DockButton icon={<Music />} label="O Bardo" active={false} onClick={() => document.dispatchEvent(new CustomEvent('toggle-bard-panel'))} />
+            
             <div className="w-px h-6 bg-white/10 mx-1" />
             <DockButton icon={<Settings />} label="Definições" active={false} onClick={() => document.dispatchEvent(new CustomEvent('toggle-vtt-settings'))} />
         </div>
     </div>
+    </>
   );
 };
 
+// Componente auxiliar para os botões (para manter o código limpo)
 const DockButton = ({ icon, label, active, onClick, disabled }: any) => (
     <Tooltip>
         <TooltipTrigger asChild>
