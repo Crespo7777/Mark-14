@@ -1,4 +1,3 @@
-// src/features/character/hooks/useCharacterCalculations.ts
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useMemo, useEffect } from "react";
 
@@ -9,9 +8,12 @@ export const useCharacterCalculations = () => {
   const attributes = form.watch("attributes");
   const toughnessMaxMod = form.watch("toughness.max_modifier");
   
+  // Observamos TODAS as listas para garantir que qualquer edição (nome, peso, qtd) dispare o cálculo
+  const weapons = form.watch("weapons") || []; 
   const armors = form.watch("armors") || [];
   const inventory = form.watch("inventory") || [];
   const projectiles = form.watch("projectiles") || [];
+  
   const experience = form.watch("experience");
   const corruption = form.watch("corruption");
   const painThresholdBonus = Number(form.watch("painThresholdBonus") || 0);
@@ -21,7 +23,7 @@ export const useCharacterCalculations = () => {
     if (!value) return 0;
     if (typeof value === "number") return value;
     
-    // Troca vírgula por ponto e remove espaços
+    // Troca vírgula por ponto para garantir cálculo matemático
     const cleanString = value.toString().replace(",", ".").trim();
     const result = parseFloat(cleanString);
     
@@ -41,8 +43,6 @@ export const useCharacterCalculations = () => {
     // 3. Defesa
     const equippedArmors = armors.filter((a: any) => a.equipped);
     const armorImpeding = equippedArmors.reduce((acc: number, item: any) => {
-        // CORREÇÃO AQUI: Math.abs() garante que pegamos a magnitude (2) e não o valor negativo (-2)
-        // Assim, a conta 'Quick - Impeding' subtrai corretamente.
         return acc + Math.abs(Number(item.obstructive) || 0);
     }, 0);
     const defense = quick - armorImpeding;
@@ -52,20 +52,33 @@ export const useCharacterCalculations = () => {
     const bonusHp = Number(toughnessMaxMod) || 0;
     const toughnessMax = maxHpBase + bonusHp;
 
-    // 5. Carga e Peso
-    const inventoryWeight = inventory.reduce((acc: number, item: any) => {
-      const itemWeight = parseWeight(item.weight);
-      return acc + itemWeight;
-    }, 0);
-
-    const projectilesWeight = projectiles.reduce((acc: number, item: any) => {
-      const itemWeight = parseWeight(item.weight);
-      return acc + itemWeight;
-    }, 0);
-
-    const totalWeight = inventoryWeight + projectilesWeight;
+    // 5. Carga e Peso (LÓGICA FINAL AJUSTADA)
     
-    // Regra: Carga Máxima = Atributo Forte
+    // Peso da Mochila
+    const inventoryWeight = inventory.reduce((acc: number, item: any) => {
+      // Regra: O peso inserido é o total do item/pack. Não multiplica por quantidade.
+      return acc + parseWeight(item.weight);
+    }, 0);
+
+    // Peso dos Projéteis
+    const projectilesWeight = projectiles.reduce((acc: number, item: any) => {
+      return acc + parseWeight(item.weight);
+    }, 0);
+
+    // Peso das Armas (Aba Combate)
+    // Regra: Armas contam peso SEMPRE, mesmo equipadas na aba de combate.
+    const weaponsWeight = weapons.reduce((acc: number, item: any) => {
+      return acc + parseWeight(item.weight);
+    }, 0);
+
+    // Peso das Armaduras (Aba Combate)
+    // Regra: Armaduras equipadas (na aba combate) NÃO contam peso (estão vestidas).
+    const armorsWeight = 0; 
+
+    // Soma Total
+    const totalWeight = inventoryWeight + projectilesWeight + weaponsWeight + armorsWeight;
+    
+    // Regra: Carga Máxima = Atributo Forte (Mínimo 10 para não quebrar a UI em fichas novas)
     const maxLoad = strong > 0 ? strong : 10;
     
     let encumbranceStatus = "Leve";
@@ -102,6 +115,7 @@ export const useCharacterCalculations = () => {
   }, [
     attributes, 
     toughnessMaxMod, 
+    weapons, // Importante: Recalcula se adicionares/removeres armas
     armors, 
     inventory, 
     projectiles,
@@ -110,7 +124,7 @@ export const useCharacterCalculations = () => {
     painThresholdBonus
   ]);
 
-  // --- Guardião da Vida ---
+  // --- Guardião da Vida (Impede que HP atual exceda o máximo ao mudar atributos) ---
   useEffect(() => {
       const currentVal = Number(form.getValues("toughness.current")) || 0;
       if (currentVal > calculations.toughnessMax) {
