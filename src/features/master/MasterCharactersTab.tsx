@@ -2,7 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Trash2, Archive, ArchiveRestore, Plus, LayoutGrid, List } from "lucide-react";
+import { Trash2, Archive, ArchiveRestore, Plus } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -23,7 +23,6 @@ import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 import { ShareDialog } from "@/components/ShareDialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { CharacterCard } from "@/components/CharacterCard"; // Novo Componente
 
 const fetchCharacters = async (tableId: string) => {
   const { data, error } = await supabase
@@ -46,7 +45,6 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
@@ -132,34 +130,10 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
 
   return (
     <div className="flex flex-col h-full space-y-4 p-2">
-      {/* Barra de Ferramentas */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-background/50 p-2 rounded-lg border">
         <div className="flex items-center gap-2">
             <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Pastas" />
-            
-            {/* Toggle Grid/List */}
-            <div className="flex items-center bg-secondary/50 rounded-md p-1 border">
-                <Button 
-                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-                    size="icon" 
-                    className="h-7 w-7"
-                    onClick={() => setViewMode('grid')}
-                    title="Ver em Grade"
-                >
-                    <LayoutGrid className="w-4 h-4" />
-                </Button>
-                <Button 
-                    variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
-                    size="icon" 
-                    className="h-7 w-7"
-                    onClick={() => setViewMode('list')}
-                    title="Ver em Lista"
-                >
-                    <List className="w-4 h-4" />
-                </Button>
-            </div>
-
-            <div className="flex items-center space-x-2 px-2 border-l ml-2">
+            <div className="flex items-center space-x-2 px-3 py-1.5 bg-secondary/50 rounded-md border">
                 <Switch id="show-archived" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
                 <Label htmlFor="show-archived" className="cursor-pointer text-xs font-medium flex items-center gap-1 text-muted-foreground">
                     {showArchivedChars ? <ArchiveRestore className="w-3 h-3"/> : <Archive className="w-3 h-3"/>}
@@ -180,46 +154,24 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
         </CreateCharacterDialog>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-          {viewMode === 'list' ? (
-             <EntityListManager
-                title="" 
-                type="character"
-                items={displayedCharacters}
-                folders={folders}
-                isLoading={isLoadingChars}
-                onEdit={(id) => setSelectedCharId(id)}
-                onDelete={(id) => {
-                    const char = characters.find(c => c.id === id);
-                    if (char) setCharacterToDelete(char);
-                }}
-                onDuplicate={handleDuplicate}
-                onArchive={handleArchive}
-                onMove={handleMove}
-                onShare={(item) => setItemToShare(item)}
-                actions={null} 
-             />
-          ) : (
-             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 pb-10">
-                {displayedCharacters.map(char => (
-                    <CharacterCard 
-                        key={char.id}
-                        character={char}
-                        isMaster={true}
-                        onEdit={(id) => setSelectedCharId(id)}
-                        onDelete={(id) => setCharacterToDelete(char)}
-                        onDuplicate={handleDuplicate}
-                        onArchive={handleArchive}
-                        onShare={(item) => setItemToShare(item)}
-                    />
-                ))}
-                {displayedCharacters.length === 0 && !isLoadingChars && (
-                    <div className="col-span-full text-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
-                        Nenhum personagem encontrado.
-                    </div>
-                )}
-             </div>
-          )}
+      <div className="flex-1 min-h-0">
+         <EntityListManager
+            title="" 
+            type="character"
+            items={displayedCharacters}
+            folders={folders}
+            isLoading={isLoadingChars}
+            onEdit={(id) => setSelectedCharId(id)}
+            onDelete={(id) => {
+                const char = characters.find(c => c.id === id);
+                if (char) setCharacterToDelete(char);
+            }}
+            onDuplicate={handleDuplicate}
+            onArchive={handleArchive}
+            onMove={handleMove}
+            onShare={(item) => setItemToShare(item)}
+            actions={null} 
+         />
       </div>
 
       <CharacterSheetSheet 
