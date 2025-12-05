@@ -16,17 +16,19 @@ import { MasterNpcsTab } from "@/features/master/MasterNpcsTab";
 import { MasterJournalTab } from "@/features/master/MasterJournalTab";
 import { MasterPlayersTab } from "@/features/master/MasterPlayersTab";
 import { MasterShopsTab } from "@/features/master/MasterShopsTab";
-// Removemos a MasterMediaTab aqui
 import { MasterDatabaseTab } from "@/features/master/MasterDatabaseTab";
 import { MasterRulesTab } from "@/features/master/MasterRulesTab";
 
+// Hooks e Contexto
 import { useTableRealtime } from "@/hooks/useTableRealtime";
+import { useTableContext } from "@/features/table/TableContext"; // <--- IMPORTANTE
 
-interface MasterViewProps { tableId: string; masterId: string; }
-
-export const MasterView = ({ tableId }: MasterViewProps) => {
+export const MasterView = () => { // <--- REMOVIDO PROPS
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("characters");
+
+  // Pega o ID do contexto (Correção do erro undefined)
+  const { tableId } = useTableContext(); 
 
   useTableRealtime(tableId);
 
@@ -38,7 +40,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
       case "shops": return <MasterShopsTab tableId={tableId} />;
       case "database": return <MasterDatabaseTab tableId={tableId} />;
       case "rules": return <MasterRulesTab tableId={tableId} />;
-      // Case "media" removido
       case "players": return <MasterPlayersTab tableId={tableId} />;
       default: return <MasterCharactersTab tableId={tableId} />;
     }
@@ -49,7 +50,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
           characters: "Personagens", npcs: "Bestiário & NPCs", journal: "Diário",
           shops: "Mercado", database: "Base de Dados", rules: "Regras",
           players: "Jogadores"
-          // "media" removido
       };
       return titles[activeTab] || "Campanha";
   };
@@ -57,7 +57,6 @@ export const MasterView = ({ tableId }: MasterViewProps) => {
   return (
     <SidebarProvider>
       <div className="flex h-screen w-full overflow-hidden bg-background text-foreground">
-        {/* Nota: Terás de atualizar o MasterSidebar para remover o botão "Media" visualmente também */}
         <MasterSidebar currentTab={activeTab} onTabChange={setActiveTab} tableId={tableId} />
         
         <SidebarInset className="flex flex-col overflow-hidden h-full w-full">

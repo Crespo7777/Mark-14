@@ -1,40 +1,32 @@
-// src/types/app-types.ts
-
 import { Database } from "@/integrations/supabase/types";
 
-// Tipo base genérico para tabelas
 type Tables<T extends keyof Database["public"]["Tables"]> = Database["public"]["Tables"][T]["Row"];
 
-// Personagem com relação do jogador (Profile)
 export type CharacterWithRelations = Tables<"characters"> & {
-  player: { display_name: string } | null; // Pode ser null se o utilizador for deletado
+  player: { display_name: string } | null;
   folder_id?: string | null;
   is_archived?: boolean;
 };
 
-// NPC (simples, mas preparado para expansão com pastas)
 export type NpcWithRelations = Tables<"npcs"> & {
   folder_id?: string | null;
   is_archived?: boolean;
 };
 
-// Entrada de Diário com todas as relações possíveis
 export type JournalEntryWithRelations = Tables<"journal_entries"> & {
   player: { display_name: string } | null;
   character: { name: string } | null;
   npc: { name: string } | null;
   folder_id?: string | null;
   is_archived?: boolean;
-  is_hidden_on_sheet?: boolean; // <--- NOVO CAMPO ADICIONADO
+  is_hidden_on_sheet?: boolean;
 };
 
-// Tipo simples para Pastas
 export type FolderType = {
   id: string;
   name: string;
 };
 
-// Lojas
 export interface Shop {
   id: string;
   table_id: string;
@@ -43,48 +35,39 @@ export interface Shop {
   created_at: string;
 }
 
-// Itens da Loja
 export interface ShopItem {
   id: string;
   shop_id: string;
   name: string;
   description?: string | null;
   weight: number;
-  price: number; // Em Ortegas
+  price: number;
   quantity: number;
 }
 
-// --- NOVO TEMPLATE DE ITEM (Para o Database/Compêndio) ---
 export interface ItemTemplate {
   id: string;
   table_id: string;
   name: string;
   description?: string;
   image_url?: string | null;
-  // Lista expandida com todas as novas categorias
   category: 
-    | 'quality' 
-    | 'weapon' 
-    | 'armor' 
-    | 'ability' 
-    | 'trait' 
-    | 'consumable' // Elixires
-    | 'general'    // Equipamentos
-    | 'mount'      // Transporte
-    | 'construction'
-    | 'service'
-    | 'material'
-    | 'container'  // Recipientes
-    | 'ammunition' // Munições
-    | 'animal'     // Animais de Fazenda
-    | 'asset'      // Proventos
-    | 'clothing'   // Roupas
-    | 'tool'       // Ferramenta
-    | 'food'       // Comida e bebida
-    | 'artifact'   // Artefatos Menores
-    | 'trap'       // Armadilhas
-    | 'spec_tool'  // Ferramentas Especializadas
-    | 'musical';   // Instrumentos Musicais
+    | 'quality' | 'weapon' | 'armor' | 'ability' | 'trait' | 'consumable' 
+    | 'general' | 'mount' | 'construction' | 'service' | 'material' 
+    | 'container' | 'ammunition' | 'animal' | 'asset' | 'clothing' 
+    | 'tool' | 'food' | 'artifact' | 'trap' | 'spec_tool' | 'musical';
   weight: number;
-  data: any; // JSON flexível para dados específicos
+  data: any;
+}
+
+// --- TIPOS DA MESA (SIMPLIFICADOS) ---
+
+export interface Table {
+  id: string;
+  name: string;
+  description?: string | null;
+  master_id: string;
+  created_at: string;
+  password?: string | null; // Apenas Senha
+  image_url?: string | null;
 }

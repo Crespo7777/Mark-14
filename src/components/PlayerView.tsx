@@ -1,3 +1,5 @@
+// src/components/PlayerView.tsx
+
 import { useState, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -17,11 +19,12 @@ import { PlayerJournalTab } from "@/features/player/PlayerJournalTab";
 import { PlayerRulesTab } from "@/features/player/PlayerRulesTab";
 import { PlayerShopsTab } from "@/features/shops/PlayerShopsTab";
 
-interface PlayerViewProps { tableId: string; }
-
-export const PlayerView = ({ tableId }: PlayerViewProps) => {
+export const PlayerView = () => { // <--- REMOVIDO PROPS
   const navigate = useNavigate();
-  const { userId } = useTableContext();
+  
+  // Pega tableId E userId do contexto
+  const { tableId, userId } = useTableContext(); 
+  
   const [activeTab, setActiveTab] = useState("characters");
 
   useTableRealtime(tableId);

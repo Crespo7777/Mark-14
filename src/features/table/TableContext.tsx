@@ -1,5 +1,3 @@
-// src/features/table/TableContext.tsx
-
 import { createContext, useContext, ReactNode, SetStateAction, Dispatch } from "react";
 
 // --- TIPO ATUALIZADO: Membro da Mesa ---
@@ -20,7 +18,8 @@ interface TableContextType {
   setMembers: Dispatch<SetStateAction<TableMember[]>>;
 }
 
-const TableContext = createContext<TableContextType | null>(null);
+// *** CORREÇÃO: Adicionei 'export' aqui ***
+export const TableContext = createContext<TableContextType | null>(null);
 
 interface TableProviderProps {
   children: ReactNode;
