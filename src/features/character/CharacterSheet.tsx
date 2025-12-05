@@ -50,7 +50,7 @@ interface CharacterSheetProps {
   onBack?: () => void;
 }
 
-// --- HEADER REDESENHADO (ESTILO VTT PRO) ---
+// --- HEADER ---
 const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, sharedWith }: any) => {
     const { register, watch, setValue, formState: { isDirty } } = useFormContext();
     const { toast } = useToast();
@@ -68,7 +68,7 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
     
     // Cálculos
     const currentXp = calculations.currentExperience; 
-    const nextLevelXp = 100; // Valor fixo por agora, pode ser dinâmico
+    const nextLevelXp = 100; 
     const xpPercentage = Math.min(100, Math.max(0, (currentXp / nextLevelXp) * 100));
     const maxHp = calculations.toughnessMax; 
     const hpPercentage = Math.min(100, Math.max(0, (currentHp / (maxHp || 1)) * 100));
@@ -108,7 +108,7 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
             <div className="flex flex-col md:flex-row gap-4 p-4 items-center">
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
 
-                {/* Avatar Hexagonal/Quadrado Estilizado */}
+                {/* Avatar */}
                 <div className="relative group shrink-0">
                     <div className="w-20 h-20 md:w-24 md:h-24 rounded-xl border-2 border-primary/50 shadow-lg overflow-hidden bg-muted flex items-center justify-center relative">
                         {isUploading ? (
@@ -152,7 +152,7 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
                     )}
                 </div>
 
-                {/* Info Principal */}
+                {/* Info */}
                 <div className="flex-1 w-full space-y-2">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
                         <div className="w-full">
@@ -169,7 +169,6 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
                             </div>
                         </div>
                         
-                        {/* Botões de Ação */}
                         <div className="flex gap-2 shrink-0">
                             {onBack && <Button variant="ghost" size="icon" onClick={onBack} title="Voltar"><ArrowLeft className="w-4 h-4"/></Button>}
                             
@@ -181,7 +180,7 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
                                     
                                     <Button 
                                         type="button" 
-                                        onClick={() => saveSheet()} 
+                                        onClick={() => saveSheet({ silent: false })} // Salvar manual = Barulho
                                         disabled={!isDirty || isSaving} 
                                         variant={isDirty ? "default" : "secondary"} 
                                         size="sm" 
@@ -195,7 +194,6 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
                         </div>
                     </div>
 
-                    {/* Barras de Status (HP e XP) */}
                     <div className="grid grid-cols-2 gap-4 mt-2">
                         <div className="space-y-1 relative group">
                             <div className="flex justify-between text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
@@ -226,7 +224,6 @@ CharacterHeader.displayName = "CharacterHeader";
 export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetProps) => {
   const context = useCharacterSheet();
   const [activeTab, setActiveTab] = useState("details");
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   if (!context || !context.character) {
       return (
@@ -247,24 +244,12 @@ export const CharacterSheet = ({ isReadOnly = false, onBack }: CharacterSheetPro
     }
   }, [character?.data, form]);
 
-  // Auto-save
-  useEffect(() => {
-    if (isReadOnly) return;
-    const subscription = form.watch(() => {
-      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
-      autoSaveTimeoutRef.current = setTimeout(() => {
-        if (form.formState.isDirty) saveSheet();
-      }, 3000);
-    });
-    return () => {
-        subscription.unsubscribe();
-        if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
-    };
-  }, [form, saveSheet, isReadOnly]);
+  // REMOVIDO O USEEFFECT DE AUTO-SAVE DAQUI. 
+  // O auto-save agora é gerido 100% pelo Contexto de forma silenciosa.
 
   return (
     <Form {...form}>
-      <form onSubmit={(e) => { e.preventDefault(); saveSheet(); }} className="h-full flex flex-col bg-background">
+      <form onSubmit={(e) => { e.preventDefault(); saveSheet({ silent: false }); }} className="h-full flex flex-col bg-background">
         
         <CharacterHeader 
             isReadOnly={isReadOnly} 
