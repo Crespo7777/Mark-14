@@ -149,6 +149,7 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
                         size="icon" 
                         className="h-7 w-7"
                         onClick={() => setViewMode('grid')}
+                        title="Ver em Grade"
                     >
                         <LayoutGrid className="w-4 h-4" />
                     </Button>
@@ -157,12 +158,13 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
                         size="icon" 
                         className="h-7 w-7"
                         onClick={() => setViewMode('list')}
+                        title="Ver em Lista"
                     >
                         <List className="w-4 h-4" />
                     </Button>
                 </div>
 
-                <div className="flex items-center space-x-2 px-2">
+                <div className="flex items-center space-x-2 px-2 border-l ml-2">
                     <Switch id="show-archived-p" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
                     <Label htmlFor="show-archived-p" className="cursor-pointer text-xs font-medium text-muted-foreground">
                         {showArchivedChars ? "Arquivados" : "Ativos"}
@@ -196,7 +198,7 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
                     actions={null}
                 />
             ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pb-10">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 pb-10">
                     {displayedChars.map(char => (
                         <CharacterCard 
                             key={char.id}
