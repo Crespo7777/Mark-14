@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Shield, Settings2, Trash2, Dices } from "lucide-react";
-import { FormField, FormLabel } from "@/components/ui/form";
+import { FormField, FormLabel, FormControl } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { QualitySelector } from "@/components/QualitySelector";
 
@@ -24,13 +24,13 @@ export const ArmorCard = ({ index, onRoll, onRemove, tableId }: ArmorCardProps) 
   const equipped = watch(`armors.${index}.equipped`);
 
   return (
-    <Card className={`group flex items-center justify-between p-2 pl-3 pr-2 transition-all border ${equipped ? "border-blue-500/50 bg-blue-500/5 shadow-sm" : "border-border bg-muted/20 opacity-70 hover:opacity-100"}`}>
+    <Card className={`flex items-center justify-between p-2 pl-3 pr-2 transition-all border ${equipped ? "border-blue-500/50 bg-blue-500/5 shadow-sm" : "border-border bg-muted/20 opacity-70 hover:opacity-100"}`}>
         <div className="flex items-center gap-3 overflow-hidden">
             {/* Ícone Equipado */}
             <FormField control={control} name={`armors.${index}.equipped`} render={({field}) => (
                 <div 
                     onClick={() => field.onChange(!field.value)}
-                    className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all ${field.value ? "bg-blue-500 text-white shadow-sm" : "bg-muted text-muted-foreground hover:bg-muted-foreground/20"}`}
+                    className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition-all border ${field.value ? "bg-blue-500 border-blue-600 text-white shadow-sm" : "bg-muted text-muted-foreground border-transparent hover:bg-muted-foreground/20"}`}
                     title={field.value ? "Equipado" : "Não Equipado"}
                 >
                     <Shield className="w-4 h-4 fill-current" />
@@ -38,9 +38,9 @@ export const ArmorCard = ({ index, onRoll, onRemove, tableId }: ArmorCardProps) 
             )} />
 
             <div className="flex flex-col min-w-0">
-                <span className="font-bold text-sm truncate leading-none mb-0.5">{name}</span>
+                <span className="font-bold text-sm truncate leading-none mb-0.5">{name || "Armadura"}</span>
                 <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                    Proteção: <span className="font-mono font-bold text-foreground bg-muted px-1 rounded">{protection}</span>
+                    Proteção: <span className="font-mono font-bold text-foreground bg-muted px-1 rounded border border-border/50">{protection}</span>
                 </span>
             </div>
         </div>
@@ -66,7 +66,21 @@ export const ArmorCard = ({ index, onRoll, onRemove, tableId }: ArmorCardProps) 
                         <FormField control={control} name={`armors.${index}.name`} render={({ field }) => (<div><FormLabel className="text-[10px]">Nome</FormLabel><Input {...field} className="h-7 text-xs"/></div>)}/>
                         <div className="grid grid-cols-2 gap-2">
                             <FormField control={control} name={`armors.${index}.protection`} render={({ field }) => (<div><FormLabel className="text-[10px]">Proteção</FormLabel><Input {...field} className="h-7 text-xs"/></div>)}/>
-                            <FormField control={control} name={`armors.${index}.obstructive`} render={({ field }) => (<div><FormLabel className="text-[10px]">Obstrutiva</FormLabel><Input type="number" {...field} className="h-7 text-xs"/></div>)}/>
+                            
+                            {/* CAMPO OBSTRUTIVA CORRIGIDO */}
+                            <FormField control={control} name={`armors.${index}.obstructive`} render={({ field }) => (
+                                <div>
+                                    <FormLabel className="text-[10px]">Obstrutiva</FormLabel>
+                                    <FormControl>
+                                        <Input 
+                                            type="number" 
+                                            {...field} 
+                                            className="h-7 text-xs"
+                                            onChange={e => field.onChange(e.target.valueAsNumber)} // Garante número
+                                        />
+                                    </FormControl>
+                                </div>
+                            )}/>
                         </div>
                         <FormField control={control} name={`armors.${index}.quality`} render={({ field }) => (
                             <div>

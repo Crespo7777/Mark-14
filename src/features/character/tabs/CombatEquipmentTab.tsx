@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useFieldArray, useFormContext } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Plus, Shield, Sword, Dices, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,7 +30,6 @@ export const CombatEquipmentTab = () => {
   const { tableId } = useTableContext();
   const { toast } = useToast();
   
-  // Hooks
   const { toughnessMax, painThreshold, activeBerserk, totalDefense, corruptionThreshold } = useCharacterCalculations();
 
   const combatLogic = useCombatLogic({ 
@@ -50,9 +49,13 @@ export const CombatEquipmentTab = () => {
     const armor = form.getValues(`armors.${index}`);
     let protectionString = armor.protection || "0";
     
-    if (activeBerserk && (activeBerserk.level === 'Adepto' || activeBerserk.level === 'Mestre')) {
-         protectionString += "+1d4"; 
-         toast({ title: "Pele de Ferro", description: "Amoque ativo: +1d4 proteção." }); 
+    // LÓGICA DE AMOQUE (BERSERK) - PROTEÇÃO EXTRA
+    // Se for Adepto ou Mestre, ganha +1d4 de redução de dano (pele de ferro).
+    if (activeBerserk) {
+        if (activeBerserk.level === 'Adepto' || activeBerserk.level === 'Mestre') {
+             protectionString += "+1d4"; 
+             toast({ title: "Pele de Ferro", description: "Amoque (Adepto+) ativo: +1d4 proteção." }); 
+        }
     }
     
     const roll = parseDiceRoll(protectionString);
@@ -78,12 +81,12 @@ export const CombatEquipmentTab = () => {
   return (
     <div className="space-y-6 h-full flex flex-col pb-10">
       
-      {/* 1. PAINEL SUPERIOR: STATUS DE COMBATE */}
+      {/* 1. PAINEL SUPERIOR: STATUS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           
           {/* DEFESA */}
-          <Card className="border-t-4 border-t-blue-500 shadow-sm relative overflow-hidden bg-gradient-to-br from-card to-blue-500/5">
-             <CardContent className="p-4 flex flex-col items-center justify-center gap-2">
+          <Card className="border-t-4 border-t-blue-500 shadow-sm relative overflow-hidden bg-gradient-to-br from-card to-blue-500/5 h-full">
+             <CardContent className="p-4 flex flex-col items-center justify-center gap-2 h-full">
                  <div className="flex items-center gap-2 text-muted-foreground text-sm uppercase font-bold tracking-widest mb-1">
                     <Shield className="w-4 h-4" /> Defesa Total
                  </div>
@@ -94,7 +97,7 @@ export const CombatEquipmentTab = () => {
                     type="button" 
                     variant="secondary" 
                     size="sm" 
-                    className="w-full mt-2 gap-2 font-semibold" 
+                    className="w-full mt-auto gap-2 font-semibold" 
                     onClick={() => combatLogic.setIsDefenseRollOpen(true)}
                  >
                     <Dices className="w-4 h-4" /> Rolar Defesa
@@ -145,7 +148,7 @@ export const CombatEquipmentTab = () => {
                   <p>Nenhuma arma equipada.</p>
               </div>
           ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {weaponFields.map((field, index) => (
                       <WeaponCard 
                           key={field.id} 
@@ -153,7 +156,7 @@ export const CombatEquipmentTab = () => {
                           tableId={tableId}
                           projectiles={projectiles}
                           onAttack={() => combatLogic.preparePcAttack(index)}
-                          onDamage={() => combatLogic.prepareDamage(index, activeBerserk ? "1d6" : "")}
+                          onDamage={() => combatLogic.prepareDamage(index)} // Sem bónus fixo aqui, a lógica trata disso
                           onRemove={() => removeWeapon(index)}
                       />
                   ))}
@@ -177,7 +180,7 @@ export const CombatEquipmentTab = () => {
               </ItemSelectorDialog>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {armorFields.length === 0 && (
                   <div className="col-span-full border border-dashed rounded-lg p-4 text-center text-sm text-muted-foreground">
                       Personagem sem proteção.
@@ -195,6 +198,7 @@ export const CombatEquipmentTab = () => {
           </div>
       </div>
 
+      {/* DIÁLOGOS DE ROLAGEM */}
       {combatLogic.attackRollData && <WeaponAttackDialog open={!!combatLogic.attackRollData} onOpenChange={(o) => !o && combatLogic.setAttackRollData(null)} characterName={character.name} tableId={character.table_id} {...combatLogic.attackRollData} onConfirm={() => combatLogic.consumeProjectile(combatLogic.attackRollData?.projectileId)} />}
       {combatLogic.damageRollData && <WeaponDamageDialog open={!!combatLogic.damageRollData} onOpenChange={(o) => !o && combatLogic.setDamageRollData(null)} characterName={character.name} tableId={character.table_id} {...combatLogic.damageRollData} />}
       <DefenseRollDialog open={combatLogic.isDefenseRollOpen} onOpenChange={combatLogic.setIsDefenseRollOpen} defenseValue={totalDefense} characterName={character.name} tableId={character.table_id} />

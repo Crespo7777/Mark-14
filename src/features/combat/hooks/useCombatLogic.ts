@@ -2,6 +2,7 @@ import { useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import { attributesList } from "@/features/character/character.constants";
+import { useCharacterCalculations } from "@/features/character/hooks/useCharacterCalculations";
 
 export type AttackRollData = {
   weaponName: string;
@@ -28,6 +29,9 @@ interface UseCombatLogicProps {
 export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
   const { toast } = useToast();
   
+  // Importar dados das habilidades
+  const { activeBerserk, featOfStrength, isBloodied } = useCharacterCalculations();
+
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null);
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
@@ -55,7 +59,6 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
 
     const newCurrent = Math.max(0, current - damageRemaining);
     
-    // CORREÇÃO CRÍTICA: Adicionado shouldTouch para garantir salvamento
     form.setValue(tempField, newTemporary, { shouldDirty: true, shouldTouch: true });
     form.setValue(fields.currentToughness, newCurrent, { shouldDirty: true, shouldTouch: true });
     
@@ -72,7 +75,6 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
     
     const newValue = Math.min(max, current + amount);
     
-    // CORREÇÃO CRÍTICA: Adicionado shouldTouch para garantir salvamento
     form.setValue(fields.currentToughness, newValue, { shouldDirty: true, shouldTouch: true });
     toast({ title: "Cura Aplicada", description: `+${amount} Vitalidade (Atual: ${newValue}/${max}).` });
   };
@@ -172,6 +174,22 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
         finalDamage += `+${bonusDice}`;
     }
 
+    // 1. LÓGICA DE AMOQUE (BERSERK)
+    if (activeBerserk && activeBerserk.isActive) {
+        finalDamage += "+1d6";
+        toast({ title: "Fúria Amoque!", description: "+1d6 de dano (Berserk Ativo)." });
+    }
+
+    // 2. LÓGICA DE FAÇANHA DE FORÇA (MESTRE)
+    // Requer nível Mestre e estar "Ensanguentado" (HP <= 50%)
+    if (featOfStrength && featOfStrength.isActive && featOfStrength.level === "Mestre") {
+        if (isBloodied) {
+            finalDamage += "+1d4";
+            toast({ title: "Façanha de Força!", description: "Ferido e perigoso: +1d4 de dano." });
+        }
+    }
+
+    // 3. Munição
     if (weapon.projectileId && weapon.projectileId !== "none") {
         const projectiles = form.getValues("projectiles") || [];
         const projectile = projectiles.find((p: any) => p.id === weapon.projectileId);
@@ -207,6 +225,7 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
     preparePcAttack,
     prepareNpcAttack,
     prepareDamage,
-    consumeProjectile
+    consumeProjectile,
+    activeBerserk 
   };
 };
