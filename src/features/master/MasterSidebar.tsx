@@ -18,7 +18,6 @@ import {
   BookOpen,
   Store,
   ScrollText,
-  Image as ImageIcon,
   UserCheck,
   Settings
 } from "lucide-react";
@@ -28,7 +27,7 @@ import { Separator } from "@/components/ui/separator";
 interface MasterSidebarProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
-  tableId: string; // <--- NOVO PROP OBRIGATÓRIO
+  tableId: string;
 }
 
 export function MasterSidebar({ currentTab, onTabChange, tableId }: MasterSidebarProps) {
@@ -44,13 +43,12 @@ export function MasterSidebar({ currentTab, onTabChange, tableId }: MasterSideba
     { title: "Lojas", id: "shops", icon: Store },
     { title: "Diário & Lore", id: "journal", icon: ScrollText },
     { title: "Regras", id: "rules", icon: BookOpen },
-    { title: "Multimédia", id: "media", icon: ImageIcon },
+    // Item "Multimédia" removido aqui
   ];
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4 pb-2">
-        {/* Passamos o tableId para restringir a busca */}
         <GlobalSearchDialog tableId={tableId} />
       </SidebarHeader>
 
@@ -99,7 +97,7 @@ export function MasterSidebar({ currentTab, onTabChange, tableId }: MasterSideba
       </SidebarContent>
 
       <SidebarFooter>
-         <SidebarMenu>
+          <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={() => console.log("Configurações")}>
                 <Settings />
