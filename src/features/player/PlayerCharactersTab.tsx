@@ -6,9 +6,7 @@ import {
   Plus,
   Trash2,
   Archive,
-  ArchiveRestore,
-  LayoutGrid,
-  List
+  ArchiveRestore
 } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -28,7 +26,6 @@ import { CharacterWithRelations, FolderType } from "@/types/app-types";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { CharacterCard } from "@/components/CharacterCard";
 
 const fetchPlayerCharacters = async (tableId: string) => {
   const { data, error } = await supabase
@@ -50,7 +47,6 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
@@ -142,29 +138,7 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
         <div className="flex flex-wrap items-center justify-between gap-4 bg-background/50 p-2 rounded-lg border">
             <div className="flex items-center gap-2">
                 <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Pastas" />
-                
-                <div className="flex items-center bg-secondary/50 rounded-md p-1 border">
-                    <Button 
-                        variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
-                        size="icon" 
-                        className="h-7 w-7"
-                        onClick={() => setViewMode('grid')}
-                        title="Ver em Grade"
-                    >
-                        <LayoutGrid className="w-4 h-4" />
-                    </Button>
-                    <Button 
-                        variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
-                        size="icon" 
-                        className="h-7 w-7"
-                        onClick={() => setViewMode('list')}
-                        title="Ver em Lista"
-                    >
-                        <List className="w-4 h-4" />
-                    </Button>
-                </div>
-
-                <div className="flex items-center space-x-2 px-2 border-l ml-2">
+                <div className="flex items-center space-x-2 px-3 py-1.5 bg-secondary/50 rounded-md border">
                     <Switch id="show-archived-p" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
                     <Label htmlFor="show-archived-p" className="cursor-pointer text-xs font-medium text-muted-foreground">
                         {showArchivedChars ? "Arquivados" : "Ativos"}
@@ -179,44 +153,23 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
             </CreatePlayerCharacterDialog>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto">
-            {viewMode === 'list' ? (
-                <EntityListManager
-                    title=""
-                    type="character"
-                    items={displayedChars}
-                    folders={folders}
-                    isLoading={isLoadingChars}
-                    onEdit={(id) => setSelectedCharId(id)}
-                    onDelete={(id) => {
-                        const char = myCharacters.find(c => c.id === id);
-                        if (char) setCharacterToDelete(char);
-                    }}
-                    onDuplicate={handleDuplicateCharacter}
-                    onArchive={handleArchiveItem}
-                    onMove={handleMoveItem}
-                    actions={null}
-                />
-            ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 pb-10">
-                    {displayedChars.map(char => (
-                        <CharacterCard 
-                            key={char.id}
-                            character={char}
-                            isMaster={false}
-                            onEdit={(id) => setSelectedCharId(id)}
-                            onDelete={(id) => setCharacterToDelete(char)}
-                            onDuplicate={handleDuplicateCharacter}
-                            onArchive={handleArchiveItem}
-                        />
-                    ))}
-                    {displayedChars.length === 0 && !isLoadingChars && (
-                        <div className="col-span-full text-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
-                            Nenhuma ficha encontrada.
-                        </div>
-                    )}
-                </div>
-            )}
+        <div className="flex-1 min-h-0">
+            <EntityListManager
+                title=""
+                type="character"
+                items={displayedChars}
+                folders={folders}
+                isLoading={isLoadingChars}
+                onEdit={(id) => setSelectedCharId(id)}
+                onDelete={(id) => {
+                    const char = myCharacters.find(c => c.id === id);
+                    if (char) setCharacterToDelete(char);
+                }}
+                onDuplicate={handleDuplicateCharacter}
+                onArchive={handleArchiveItem}
+                onMove={handleMoveItem}
+                actions={null}
+            />
         </div>
         
         <CharacterSheetSheet 
