@@ -31,7 +31,19 @@ export const CharacterCard = ({
   onShare 
 }: CharacterCardProps) => {
   const data = character.data as any;
-  const imageSettings = data.image_settings || { x: 50, y: 50, scale: 100 };
+  const rawSettings = data.image_settings || { x: 50, y: 50, scale: 100 };
+
+  // LÓGICA DE CORREÇÃO DE ENQUADRAMENTO:
+  // Se as configurações forem as padrão (50/50), forçamos o foco para o TOPO (20%) 
+  // para tentar apanhar o rosto no formato "banner/faixa" do card.
+  // Se o usuário tiver personalizado (ex: y=40), respeitamos a escolha dele.
+  const isDefaultSettings = rawSettings.x === 50 && rawSettings.y === 50;
+  
+  const finalObjectPosition = isDefaultSettings 
+    ? `50% 20%` // Foco no rosto por padrão
+    : `${rawSettings.x}% ${rawSettings.y}%`; // Foco personalizado
+
+  const finalScale = isDefaultSettings ? 1 : (rawSettings.scale / 100);
 
   return (
     <Card 
@@ -39,15 +51,15 @@ export const CharacterCard = ({
       onClick={() => onEdit(character.id)}
     >
       {/* Imagem de Fundo Completa */}
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0 bg-muted">
         {character.image_url ? (
           <img 
             src={character.image_url} 
             alt={character.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 opacity-80 group-hover:opacity-100"
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100"
             style={{ 
-              objectPosition: `${imageSettings.x}% ${imageSettings.y}%`, 
-              transform: `scale(${imageSettings.scale / 100})` 
+              objectPosition: finalObjectPosition,
+              transform: `scale(${finalScale})` 
             }}
           />
         ) : (
@@ -57,8 +69,9 @@ export const CharacterCard = ({
             </span>
           </div>
         )}
+        
         {/* Gradiente Escuro para Leitura de Texto */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent" />
       </div>
 
       {/* Badges Flutuantes (Topo) */}
