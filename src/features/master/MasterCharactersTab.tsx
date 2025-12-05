@@ -23,7 +23,7 @@ import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 import { ShareDialog } from "@/components/ShareDialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { CharacterCard } from "@/components/CharacterCard"; // Novo componente
+import { CharacterCard } from "@/components/CharacterCard"; // Novo Componente
 
 const fetchCharacters = async (tableId: string) => {
   const { data, error } = await supabase
@@ -46,7 +46,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid'); // Novo estado
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
@@ -159,7 +159,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
                 </Button>
             </div>
 
-            <div className="flex items-center space-x-2 px-2">
+            <div className="flex items-center space-x-2 px-2 border-l ml-2">
                 <Switch id="show-archived" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
                 <Label htmlFor="show-archived" className="cursor-pointer text-xs font-medium flex items-center gap-1 text-muted-foreground">
                     {showArchivedChars ? <ArchiveRestore className="w-3 h-3"/> : <Archive className="w-3 h-3"/>}
@@ -183,7 +183,7 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
       <div className="flex-1 min-h-0 overflow-y-auto">
           {viewMode === 'list' ? (
              <EntityListManager
-                title="" // Título removido pois já temos header
+                title="" 
                 type="character"
                 items={displayedCharacters}
                 folders={folders}
@@ -197,10 +197,10 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
                 onArchive={handleArchive}
                 onMove={handleMove}
                 onShare={(item) => setItemToShare(item)}
-                actions={null} // Ações já estão no topo
+                actions={null} 
              />
           ) : (
-             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pb-10">
+             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-3 pb-10">
                 {displayedCharacters.map(char => (
                     <CharacterCard 
                         key={char.id}
