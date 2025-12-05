@@ -7,7 +7,8 @@ import {
   Trash2,
   Archive,
   ArchiveRestore,
-  FolderOpen
+  LayoutGrid,
+  List
 } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +28,7 @@ import { CharacterWithRelations, FolderType } from "@/types/app-types";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { CharacterCard } from "@/components/CharacterCard";
 
 const fetchPlayerCharacters = async (tableId: string) => {
   const { data, error } = await supabase
@@ -48,11 +50,9 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Estados
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
-  
-  // Estado da Ficha Aberta
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
 
   const { data: allCharacters = [], isLoading: isLoadingChars } = useQuery({
@@ -72,7 +72,6 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
-  // --- HANDLERS ---
   const handleArchiveItem = async (id: string, currentValue: boolean) => {
     const { error } = await supabase.from("characters").update({ is_archived: !currentValue }).eq("id", id);
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -139,52 +138,85 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   );
 
   return (
-    <div className="flex flex-col h-full space-y-4">
-        {/* BARRA DE FILTROS */}
-        <div className="flex flex-wrap items-center justify-between gap-4 p-1">
+    <div className="flex flex-col h-full space-y-4 p-2">
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-background/50 p-2 rounded-lg border">
             <div className="flex items-center gap-2">
-                <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Minhas Pastas" />
-                <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
+                <ManageFoldersDialog tableId={tableId} folders={folders} tableName="character_folders" title="Pastas" />
+                
+                <div className="flex items-center bg-secondary/50 rounded-md p-1 border">
+                    <Button 
+                        variant={viewMode === 'grid' ? 'secondary' : 'ghost'} 
+                        size="icon" 
+                        className="h-7 w-7"
+                        onClick={() => setViewMode('grid')}
+                    >
+                        <LayoutGrid className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                        variant={viewMode === 'list' ? 'secondary' : 'ghost'} 
+                        size="icon" 
+                        className="h-7 w-7"
+                        onClick={() => setViewMode('list')}
+                    >
+                        <List className="w-4 h-4" />
+                    </Button>
+                </div>
+
+                <div className="flex items-center space-x-2 px-2">
                     <Switch id="show-archived-p" checked={showArchivedChars} onCheckedChange={setShowArchivedChars} />
-                    <Label htmlFor="show-archived-p" className="cursor-pointer text-sm font-medium flex items-center gap-2">
-                        {showArchivedChars ? <ArchiveRestore className="w-4 h-4"/> : <Archive className="w-4 h-4"/>}
-                        {showArchivedChars ? "Ver Ativos" : "Ver Arquivados"}
+                    <Label htmlFor="show-archived-p" className="cursor-pointer text-xs font-medium text-muted-foreground">
+                        {showArchivedChars ? "Arquivados" : "Ativos"}
                     </Label>
                 </div>
             </div>
+
+            <CreatePlayerCharacterDialog tableId={tableId} onCharacterCreated={invalidateCharacters}>
+                <Button size="sm" className="h-9 shadow-sm">
+                    <Plus className="w-4 h-4 mr-2" /> Nova Ficha
+                </Button>
+            </CreatePlayerCharacterDialog>
         </div>
 
-        {/* LISTA */}
-        <div className="flex-1 min-h-0">
-            <EntityListManager
-                title="Minhas Fichas"
-                type="character"
-                items={displayedChars}
-                folders={folders}
-                isLoading={isLoadingChars}
-                
-                // Conecta os eventos para evitar o erro 'is not a function'
-                onEdit={(id) => setSelectedCharId(id)}
-                onDelete={(id) => {
-                    const char = myCharacters.find(c => c.id === id);
-                    if (char) setCharacterToDelete(char);
-                }}
-                onDuplicate={handleDuplicateCharacter}
-                onArchive={handleArchiveItem}
-                onMove={handleMoveItem}
-                
-                // Ação de criar
-                actions={
-                    <CreatePlayerCharacterDialog tableId={tableId} onCharacterCreated={invalidateCharacters}>
-                       <Button size="sm" className="h-9 shadow-sm">
-                           <Plus className="w-4 h-4 mr-2" /> Nova Ficha
-                       </Button>
-                   </CreatePlayerCharacterDialog>
-                }
-            />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+            {viewMode === 'list' ? (
+                <EntityListManager
+                    title=""
+                    type="character"
+                    items={displayedChars}
+                    folders={folders}
+                    isLoading={isLoadingChars}
+                    onEdit={(id) => setSelectedCharId(id)}
+                    onDelete={(id) => {
+                        const char = myCharacters.find(c => c.id === id);
+                        if (char) setCharacterToDelete(char);
+                    }}
+                    onDuplicate={handleDuplicateCharacter}
+                    onArchive={handleArchiveItem}
+                    onMove={handleMoveItem}
+                    actions={null}
+                />
+            ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 pb-10">
+                    {displayedChars.map(char => (
+                        <CharacterCard 
+                            key={char.id}
+                            character={char}
+                            isMaster={false}
+                            onEdit={(id) => setSelectedCharId(id)}
+                            onDelete={(id) => setCharacterToDelete(char)}
+                            onDuplicate={handleDuplicateCharacter}
+                            onArchive={handleArchiveItem}
+                        />
+                    ))}
+                    {displayedChars.length === 0 && !isLoadingChars && (
+                        <div className="col-span-full text-center py-20 text-muted-foreground border-2 border-dashed rounded-xl">
+                            Nenhuma ficha encontrada.
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
         
-        {/* FICHA */}
         <CharacterSheetSheet 
           characterId={selectedCharId} 
           open={!!selectedCharId} 
