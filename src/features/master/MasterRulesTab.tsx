@@ -1,21 +1,18 @@
-// src/features/master/MasterRulesTab.tsx
-
-import { useState } from "react";
+import { useState, Suspense, lazy } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Save, BookOpen, Search, Crown, Users } from "lucide-react";
+import { Plus, Trash2, Save, BookOpen, Search, Crown, Users, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { RichTextEditor } from "@/components/RichTextEditor";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { useTableContext } from "@/features/table/TableContext"; // IMPORTANTE: Para saber quem é o utilizador
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTableContext } from "@/features/table/TableContext";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,6 +23,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+const RichTextEditor = lazy(() => 
+  import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
+);
 
 interface Rule {
   id: string;
@@ -44,18 +45,18 @@ const fetchRules = async (tableId: string) => {
 export const MasterRulesTab = ({ tableId }: { tableId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { isMaster, isHelper } = useTableContext(); // Contexto de permissões
-
-  // Lógica de Segurança: Se for Ajudante (mas não o Dono), é um "OnlyHelper"
-  const isOnlyHelper = isHelper && !isMaster;
+  const { isHelper, isMaster } = useTableContext();
   
+  const isOnlyHelper = isHelper && !isMaster;
+
   const [selectedRule, setSelectedRule] = useState<Rule | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [ruleToDelete, setRuleToDelete] = useState<string | null>(null);
-  const [activeListTab, setActiveListTab] = useState("public"); // 'public' | 'gm'
+  const [isSaving, setIsSaving] = useState(false);
   
-  // Estados de Edição
+  const [activeCategory, setActiveCategory] = useState("public"); // 'public' | 'gm'
+  
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editIsGmOnly, setEditIsGmOnly] = useState(false);
@@ -65,57 +66,54 @@ export const MasterRulesTab = ({ tableId }: { tableId: string }) => {
     queryFn: () => fetchRules(tableId),
   });
 
-  // FILTRO INTELIGENTE
   const filteredRules = rules.filter(r => {
-      // 1. Filtro de Texto
       const matchesSearch = r.title.toLowerCase().includes(searchQuery.toLowerCase());
       
-      // 2. Filtro de Aba (Público vs Mestre)
-      let matchesTab = activeListTab === "gm" ? r.is_gm_only : !r.is_gm_only;
+      let matchesCategory = false;
+      if (activeCategory === "public") matchesCategory = !r.is_gm_only;
+      if (activeCategory === "gm") matchesCategory = r.is_gm_only;
 
-      // 3. SEGURANÇA: Se for Ajudante, NUNCA mostra regras de GM, mesmo que a aba esteja ativa
-      if (isOnlyHelper && r.is_gm_only) {
-          return false;
-      }
+      // Segurança extra: Ajudante nunca vê regras de GM na lista, mesmo se forçar a aba
+      if (isOnlyHelper && r.is_gm_only) return false;
 
-      return matchesSearch && matchesTab;
+      return matchesSearch && matchesCategory;
   });
 
   const handleSelectRule = (rule: Rule) => {
+      if (isEditing && rule.id !== selectedRule?.id) {
+          if (!confirm("Tem alterações não salvas. Deseja sair?")) return;
+      }
       setSelectedRule(rule);
       setEditTitle(rule.title);
       setEditContent(rule.content || "");
-      setEditIsGmOnly(rule.is_gm_only || false);
+      setEditIsGmOnly(rule.is_gm_only);
       setIsEditing(false);
   };
 
   const handleCreateNew = () => {
-      const isGmTab = activeListTab === "gm";
-      
-      // Proteção: Ajudante não pode criar regra secreta
-      if (isOnlyHelper && isGmTab) {
-          toast({ title: "Acesso Negado", description: "Ajudantes não podem criar regras secretas de Mestre.", variant: "destructive" });
+      if (isOnlyHelper && activeCategory === "gm") {
+          toast({ title: "Acesso Negado", description: "Ajudantes não podem criar regras secretas.", variant: "destructive" });
           return;
       }
 
-      const newRule = { id: "new", title: "Nova Regra", content: "", is_gm_only: isGmTab, updated_at: new Date().toISOString() };
+      const isGm = activeCategory === "gm";
+      const newRule = { id: "new", title: "", content: "", is_gm_only: isGm, updated_at: new Date().toISOString() };
       
       setSelectedRule(newRule);
       setEditTitle("");
       setEditContent("");
-      setEditIsGmOnly(isGmTab);
+      setEditIsGmOnly(isGm);
       setIsEditing(true);
   };
 
   const handleSave = async () => {
       if (!editTitle.trim()) return toast({ title: "Título obrigatório", variant: "destructive" });
-
-      // Proteção no Save: Se for Ajudante a tentar salvar como GM Only
+      
       if (isOnlyHelper && editIsGmOnly) {
-          return toast({ title: "Erro de Permissão", description: "Você não pode criar regras privadas de Mestre.", variant: "destructive" });
+          return toast({ title: "Erro de Permissão", description: "Você não pode criar regras privadas.", variant: "destructive" });
       }
 
-      let savedRule = null;
+      setIsSaving(true);
       const payload = {
           table_id: tableId,
           title: editTitle,
@@ -123,25 +121,34 @@ export const MasterRulesTab = ({ tableId }: { tableId: string }) => {
           is_gm_only: editIsGmOnly
       };
 
-      if (selectedRule?.id === "new") {
-          const { data, error } = await supabase.from("rules").insert(payload).select().single();
-          if (error) return toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
-          savedRule = data;
-          toast({ title: "Regra criada!" });
-      } else if (selectedRule) {
-          const { data, error } = await supabase.from("rules").update({
-              ...payload,
-              updated_at: new Date().toISOString()
-          }).eq("id", selectedRule.id).select().single();
-          if (error) return toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
-          savedRule = data;
-          toast({ title: "Regra salva!" });
-      }
+      try {
+          let savedData;
+          if (selectedRule?.id === "new") {
+              const { data, error } = await supabase.from("rules").insert(payload).select().single();
+              if (error) throw error;
+              savedData = data;
+              toast({ title: "Regra Criada!" });
+          } else if (selectedRule) {
+              const { data, error } = await supabase.from("rules").update({
+                  ...payload,
+                  updated_at: new Date().toISOString()
+              }).eq("id", selectedRule.id).select().single();
+              if (error) throw error;
+              savedData = data;
+              toast({ title: "Regra Atualizada!" });
+          }
 
-      if (savedRule) {
-          setSelectedRule(savedRule as Rule);
-          setIsEditing(false);
-          queryClient.invalidateQueries({ queryKey: ['rules', tableId] });
+          if (savedData) {
+              setSelectedRule(savedData as Rule);
+              setIsEditing(false);
+              queryClient.invalidateQueries({ queryKey: ['rules', tableId] });
+              if (savedData.is_gm_only) setActiveCategory("gm");
+              else setActiveCategory("public");
+          }
+      } catch (error: any) {
+          toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
+      } finally {
+          setIsSaving(false);
       }
   };
 
@@ -155,208 +162,192 @@ export const MasterRulesTab = ({ tableId }: { tableId: string }) => {
   };
 
   return (
-    <div className="flex h-[calc(100vh-200px)] gap-4">
-       {/* LISTA LATERAL */}
-       <Card className="w-1/3 flex flex-col min-w-[280px] border-border/50 bg-card">
-          <div className="p-4 border-b border-border/50 bg-muted/10 space-y-3">
-             <div className="flex justify-between items-center">
-                 <CardTitle className="text-lg">Compêndio</CardTitle>
-                 {/* Botão Nova só aparece se não for Helper na aba de Mestre */}
-                 {!(isOnlyHelper && activeListTab === 'gm') && (
-                     <Button size="sm" onClick={handleCreateNew} className="bg-primary hover:bg-primary/90"><Plus className="w-4 h-4 mr-2"/> Nova</Button>
-                 )}
-             </div>
+    <div className="flex h-[calc(100vh-200px)] gap-6 animate-in fade-in duration-500">
+       
+       {/* 1. LISTA LATERAL (Índice com Abas) */}
+       <Card className="w-1/3 min-w-[300px] max-w-sm flex flex-col border-border/40 bg-card/50 backdrop-blur-sm">
+          <div className="p-4 border-b border-border/50 space-y-4">
+              <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                      <BookOpen className="w-5 h-5 text-primary" /> Grimório
+                  </h3>
+                  {!(isOnlyHelper && activeCategory === 'gm') && (
+                      <Button size="sm" onClick={handleCreateNew} className="h-8 gap-2 shadow-sm bg-primary/90 hover:bg-primary text-primary-foreground">
+                          <Plus className="w-4 h-4" /> Nova Regra
+                      </Button>
+                  )}
+              </div>
 
-             {/* ABAS DE FILTRO */}
-             <Tabs value={activeListTab} onValueChange={setActiveListTab} className="w-full">
-                <TabsList className="w-full grid grid-cols-2 bg-background/50">
-                    <TabsTrigger value="public" className="text-xs">
-                        <Users className="w-3 h-3 mr-2" /> Públicas
-                    </TabsTrigger>
-                    
-                    {/* Ajudante vê a aba "Mestre" desativada ou escondida? Vamos deixar desativada visualmente */}
-                    <TabsTrigger 
-                        value="gm" 
-                        className="text-xs data-[state=active]:text-amber-500"
-                        disabled={isOnlyHelper} // BLOQUEIA CLIQUE DO AJUDANTE
-                        title={isOnlyHelper ? "Acesso Restrito ao Dono da Mesa" : "Apenas Mestre"}
-                    >
-                        {isOnlyHelper ? <Crown className="w-3 h-3 mr-2 opacity-50" /> : <Crown className="w-3 h-3 mr-2" />} 
-                        Mestre
-                    </TabsTrigger>
-                </TabsList>
-             </Tabs>
+              {/* SELETOR DE CATEGORIA (ABAS) */}
+              <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
+                  <TabsList className="w-full grid grid-cols-2 bg-muted/50 border border-border/30">
+                      <TabsTrigger value="public" className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm">
+                          <Users className="w-3 h-3 mr-2" /> Públicas
+                      </TabsTrigger>
+                      <TabsTrigger 
+                          value="gm" 
+                          className="text-xs font-medium data-[state=active]:bg-background data-[state=active]:text-amber-500 data-[state=active]:shadow-sm disabled:opacity-50"
+                          disabled={isOnlyHelper}
+                      >
+                          <Crown className="w-3 h-3 mr-2" /> Mestre
+                      </TabsTrigger>
+                  </TabsList>
+              </Tabs>
 
-             <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                   placeholder="Pesquisar..." 
-                   className="pl-8 h-9 bg-background" 
-                   value={searchQuery}
-                   onChange={e => setSearchQuery(e.target.value)}
-                />
-             </div>
+              <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                      placeholder="Pesquisar..." 
+                      className="pl-9 h-9 bg-background/50 border-white/10 focus:bg-background transition-colors" 
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                  />
+              </div>
           </div>
           
           <CardContent className="p-0 flex-1 overflow-hidden">
-             <ScrollArea className="h-full">
-                {isLoading && <div className="p-4 space-y-2"><Skeleton className="h-8"/><Skeleton className="h-8"/></div>}
-                
-                <div className="flex flex-col p-2 gap-1">
-                    {filteredRules.map(rule => (
-                        <div 
-                           key={rule.id}
-                           className={`flex justify-between items-center p-3 rounded-md cursor-pointer transition-all border border-transparent ${selectedRule?.id === rule.id ? "bg-accent/10 border-accent/30 text-accent" : "hover:bg-muted text-muted-foreground hover:text-foreground"}`}
-                           onClick={() => handleSelectRule(rule)}
-                        >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                                {rule.is_gm_only ? <Crown className="w-4 h-4 shrink-0 text-amber-600/70" /> : <BookOpen className="w-4 h-4 shrink-0 opacity-70" />}
-                                <span className="truncate text-sm font-medium">{rule.title}</span>
-                            </div>
-                        </div>
-                    ))}
-                    {filteredRules.length === 0 && !isLoading && (
-                        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground opacity-50">
-                            {(activeListTab === "gm" && !isOnlyHelper) ? <Crown className="w-8 h-8 mb-2" /> : <BookOpen className="w-8 h-8 mb-2" />}
-                            <p className="text-xs">
-                                {isOnlyHelper && activeListTab === 'gm' 
-                                    ? "Acesso restrito." 
-                                    : "Nenhuma regra encontrada."}
-                            </p>
-                        </div>
-                    )}
-                </div>
-             </ScrollArea>
+              <ScrollArea className="h-full px-2 py-2">
+                 {isLoading && <div className="p-4 space-y-2"><Skeleton className="h-8"/><Skeleton className="h-8"/></div>}
+                 
+                 <div className="flex flex-col gap-1">
+                     {filteredRules.map(rule => (
+                         <div 
+                            key={rule.id}
+                            className={`
+                                group flex justify-between items-center p-3 rounded-lg cursor-pointer transition-all border
+                                ${selectedRule?.id === rule.id 
+                                    ? "bg-primary/10 border-primary/30 text-primary font-medium shadow-sm" 
+                                    : "border-transparent hover:bg-muted/50 text-muted-foreground hover:text-foreground hover:border-border/30"}
+                            `}
+                            onClick={() => handleSelectRule(rule)}
+                         >
+                             <div className="flex items-center gap-3 overflow-hidden">
+                                 {rule.is_gm_only ? (
+                                     <EyeOff className="w-4 h-4 shrink-0 text-amber-500/70" />
+                                 ) : (
+                                     <Eye className="w-4 h-4 shrink-0 text-green-500/70" />
+                                 )}
+                                 <span className="truncate text-sm">{rule.title}</span>
+                             </div>
+                             
+                             <div className={`opacity-0 group-hover:opacity-100 transition-opacity ${selectedRule?.id === rule.id ? "opacity-100" : ""}`}>
+                                 <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-6 w-6 hover:bg-destructive/20 hover:text-destructive" 
+                                    onClick={(e) => { e.stopPropagation(); setRuleToDelete(rule.id); }}
+                                 >
+                                    <Trash2 className="w-3 h-3" />
+                                 </Button>
+                             </div>
+                         </div>
+                     ))}
+                     {filteredRules.length === 0 && !isLoading && (
+                         <div className="text-center py-10 text-muted-foreground opacity-50 flex flex-col items-center">
+                             {activeCategory === "gm" ? <Crown className="w-8 h-8 mb-2 opacity-20"/> : <BookOpen className="w-8 h-8 mb-2 opacity-20"/>}
+                             <p className="text-xs">
+                                 {activeCategory === "gm" ? "Sem regras de Mestre." : "Sem regras públicas."}
+                             </p>
+                         </div>
+                     )}
+                 </div>
+              </ScrollArea>
           </CardContent>
        </Card>
 
-       {/* ÁREA DE CONTEÚDO */}
-       <Card className="flex-1 flex flex-col overflow-hidden border-border/50 bg-card shadow-lg">
+       {/* 2. ÁREA DE LEITURA / EDIÇÃO */}
+       <Card className="flex-1 flex flex-col overflow-hidden border-border/40 bg-card shadow-lg">
            {selectedRule ? (
                <>
-                  <CardHeader className="p-4 border-b border-border/50 flex flex-row justify-between items-start bg-muted/10 gap-4">
-                      <div className="flex-1 space-y-3">
-                          {isEditing || selectedRule.id === 'new' ? (
-                              <div className="space-y-3">
-                                  <Input 
-                                     value={editTitle} 
-                                     onChange={e => setEditTitle(e.target.value)} 
-                                     className="text-lg font-bold h-10 bg-background border-primary/30 focus-visible:ring-primary/50" 
-                                     placeholder="Título da Regra"
-                                  />
-                                  
-                                  {/* Switch de Visibilidade (Escondido para Ajudantes, forçado a Público) */}
-                                  {!isOnlyHelper && (
-                                      <div className="flex items-center gap-3 bg-background/50 p-2 rounded border border-border/50 w-fit">
-                                          <div className="flex items-center gap-2">
-                                              <Switch 
-                                                id="gm-only-mode" 
-                                                checked={editIsGmOnly} 
-                                                onCheckedChange={setEditIsGmOnly}
-                                              />
-                                              <Label htmlFor="gm-only-mode" className="text-xs font-medium cursor-pointer flex items-center gap-1.5">
-                                                  {editIsGmOnly ? (
-                                                      <><Crown className="w-3 h-3 text-amber-500" /> Apenas Mestre</>
-                                                  ) : (
-                                                      <><Users className="w-3 h-3 text-muted-foreground" /> Público</>
-                                                  )}
-                                              </Label>
-                                          </div>
-                                      </div>
-                                  )}
-                              </div>
+                  <CardHeader className="p-4 border-b border-border/50 bg-muted/5 flex flex-row justify-between items-center">
+                      <div className="flex-1 mr-4">
+                          {isEditing ? (
+                              <Input 
+                                  value={editTitle} 
+                                  onChange={e => setEditTitle(e.target.value)} 
+                                  className="text-xl font-bold h-10 bg-background border-primary/30" 
+                                  placeholder="Título do Capítulo" 
+                              />
                           ) : (
-                              <div className="space-y-1">
-                                  <CardTitle className="text-2xl flex items-center gap-2 text-primary">
-                                      {selectedRule.title}
-                                  </CardTitle>
-                                  <div className="flex items-center gap-2">
-                                      {selectedRule.is_gm_only ? (
-                                          <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 gap-1 text-[10px] px-2 h-5">
-                                              <Crown className="w-3 h-3" /> Mestre
-                                          </Badge>
-                                      ) : (
-                                          <Badge variant="outline" className="text-muted-foreground gap-1 text-[10px] px-2 h-5">
-                                              <Users className="w-3 h-3" /> Público
-                                          </Badge>
-                                      )}
-                                      <span className="text-[10px] text-muted-foreground">
-                                          Atualizado: {new Date(selectedRule.updated_at).toLocaleDateString()}
-                                      </span>
-                                  </div>
+                              <div className="flex items-center gap-3">
+                                  <CardTitle className="text-2xl text-primary font-serif tracking-wide">{selectedRule.title}</CardTitle>
+                                  {selectedRule.is_gm_only && <Badge variant="outline" className="text-amber-500 border-amber-500/30 bg-amber-500/10 gap-1"><Crown className="w-3 h-3"/> Mestre</Badge>}
                               </div>
                           )}
                       </div>
-                      
-                      <div className="flex gap-2 shrink-0">
-                          {isEditing || selectedRule.id === 'new' ? (
+
+                      <div className="flex items-center gap-2">
+                          {isEditing ? (
                               <>
-                                <Button variant="ghost" size="sm" onClick={() => {
-                                    if(selectedRule.id === 'new') setSelectedRule(null);
-                                    else {
-                                        setIsEditing(false);
-                                        setEditTitle(selectedRule.title);
-                                        setEditContent(selectedRule.content);
-                                        setEditIsGmOnly(selectedRule.is_gm_only);
-                                    }
-                                }}>Cancelar</Button>
-                                <Button size="sm" onClick={handleSave} className="bg-green-600 hover:bg-green-700 text-white"><Save className="w-4 h-4 mr-2"/> Salvar</Button>
+                                  {!isOnlyHelper && (
+                                      <div className="flex items-center gap-2 mr-2 bg-background p-1.5 rounded-md border border-border/50">
+                                          <Switch id="gm-only" checked={editIsGmOnly} onCheckedChange={setEditIsGmOnly} />
+                                          <Label htmlFor="gm-only" className="text-xs cursor-pointer text-muted-foreground w-20 flex items-center justify-end gap-1">
+                                              {editIsGmOnly ? <><Crown className="w-3 h-3"/> Secreto</> : "Público"}
+                                          </Label>
+                                      </div>
+                                  )}
+                                  <Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                                  <Button size="sm" onClick={handleSave} disabled={isSaving}>
+                                      {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4 mr-2"/>} Salvar
+                                  </Button>
                               </>
                           ) : (
-                              <>
-                                <Button variant="outline" size="sm" onClick={() => {
-                                    setEditTitle(selectedRule.title);
-                                    setEditContent(selectedRule.content || "");
-                                    setEditIsGmOnly(selectedRule.is_gm_only);
-                                    setIsEditing(true);
-                                }}>Editar</Button>
-                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => setRuleToDelete(selectedRule.id)}><Trash2 className="w-4 h-4"/></Button>
-                              </>
+                              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>Editar</Button>
                           )}
                       </div>
                   </CardHeader>
                   
-                  <CardContent className="flex-1 overflow-hidden p-0 bg-background/50 relative">
-                      {isEditing || selectedRule.id === 'new' ? (
-                          <div className="h-full p-4 overflow-y-auto">
-                              <RichTextEditor 
-                                 key={selectedRule.id} 
-                                 value={editContent} 
-                                 onChange={setEditContent} 
-                                 placeholder="Escreva as regras..."
-                              />
+                  <CardContent className="flex-1 overflow-hidden p-0 relative bg-background/50">
+                      {isEditing ? (
+                          <div className="h-full p-4 overflow-y-auto custom-scrollbar">
+                              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                                  <RichTextEditor 
+                                      value={editContent} 
+                                      onChange={setEditContent} 
+                                      placeholder="Escreva as regras aqui..."
+                                      className="min-h-[400px] font-serif text-lg leading-relaxed"
+                                  />
+                              </Suspense>
                           </div>
                       ) : (
                           <ScrollArea className="h-full p-8">
-                              <div 
-                                className="prose prose-invert max-w-none prose-img:rounded-lg prose-img:shadow-md prose-headings:text-primary prose-a:text-blue-400"
-                                dangerouslySetInnerHTML={{ __html: selectedRule.content }} 
-                              />
+                              {selectedRule.content ? (
+                                  <div 
+                                    className="prose prose-invert max-w-none prose-headings:text-primary prose-a:text-blue-400 prose-p:leading-relaxed prose-li:marker:text-primary/50 font-serif text-slate-300 text-lg"
+                                    dangerouslySetInnerHTML={{ __html: selectedRule.content }} 
+                                  />
+                              ) : (
+                                  <div className="h-full flex flex-col items-center justify-center text-muted-foreground opacity-30">
+                                     <p className="italic">Sem conteúdo.</p>
+                                  </div>
+                              )}
                           </ScrollArea>
                       )}
                   </CardContent>
                </>
            ) : (
                <div className="h-full flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-                   <BookOpen className="w-16 h-16 mb-4 opacity-20" />
-                   <p>Selecione uma regra para ver os detalhes.</p>
+                   <div className="w-20 h-20 bg-muted/20 rounded-full flex items-center justify-center mb-4 border border-white/5">
+                       <BookOpen className="w-8 h-8 opacity-20" />
+                   </div>
+                   <h3 className="text-lg font-medium">Nenhuma regra selecionada</h3>
+                   <p className="text-sm text-muted-foreground/60">Selecione um capítulo à esquerda ou crie uma nova regra.</p>
                </div>
            )}
        </Card>
 
        <AlertDialog open={!!ruleToDelete} onOpenChange={() => setRuleToDelete(null)}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Apagar Regra?</AlertDialogTitle>
-                    <AlertDialogDescription>Esta ação é irreversível.</AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                        Apagar
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
+           <AlertDialogContent>
+               <AlertDialogHeader>
+                   <AlertDialogTitle>Apagar Regra?</AlertDialogTitle>
+                   <AlertDialogDescription>Esta ação é irreversível.</AlertDialogDescription>
+               </AlertDialogHeader>
+               <AlertDialogFooter>
+                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                   <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Apagar</AlertDialogAction>
+               </AlertDialogFooter>
+           </AlertDialogContent>
        </AlertDialog>
     </div>
   );
