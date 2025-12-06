@@ -1,8 +1,7 @@
-import { useState } from "react";
 import { useCharacterSheet } from "../CharacterSheetContext";
-import { useFieldArray, useFormContext } from "react-hook-form"; 
+import { useFieldArray } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Shield, Sword, Dices, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,11 +29,24 @@ export const CombatEquipmentTab = () => {
   const { tableId } = useTableContext();
   const { toast } = useToast();
   
-  const { toughnessMax, painThreshold, activeBerserk, totalDefense, corruptionThreshold } = useCharacterCalculations();
+  // 1. Hooks de Cálculo (Com suporte a Amoque/Façanha de Força)
+  const { 
+    toughnessMax, 
+    painThreshold, 
+    activeBerserk, 
+    featOfStrength,
+    isBloodied,
+    totalDefense, 
+    corruptionThreshold 
+  } = useCharacterCalculations();
 
+  // 2. Lógica de Combate (Passando os buffs)
   const combatLogic = useCombatLogic({ 
       form, 
-      fields: { currentToughness: "toughness.current", maxToughness: "toughness.max" }
+      fields: { currentToughness: "toughness.current", maxToughness: "toughness.max" },
+      activeBerserk,
+      featOfStrength,
+      isBloodied
   });
 
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({ control: form.control, name: "weapons" });
@@ -49,13 +61,10 @@ export const CombatEquipmentTab = () => {
     const armor = form.getValues(`armors.${index}`);
     let protectionString = armor.protection || "0";
     
-    // LÓGICA DE AMOQUE (BERSERK) - PROTEÇÃO EXTRA
-    // Se for Adepto ou Mestre, ganha +1d4 de redução de dano (pele de ferro).
-    if (activeBerserk) {
-        if (activeBerserk.level === 'Adepto' || activeBerserk.level === 'Mestre') {
-             protectionString += "+1d4"; 
-             toast({ title: "Pele de Ferro", description: "Amoque (Adepto+) ativo: +1d4 proteção." }); 
-        }
+    // Lógica de Amoque (Adepto/Mestre)
+    if (activeBerserk && (activeBerserk.level === 'Adepto' || activeBerserk.level === 'Mestre')) {
+         protectionString += "+1d4"; 
+         toast({ title: "Pele de Ferro", description: "Amoque ativo: +1d4 proteção." }); 
     }
     
     const roll = parseDiceRoll(protectionString);
@@ -156,8 +165,9 @@ export const CombatEquipmentTab = () => {
                           tableId={tableId}
                           projectiles={projectiles}
                           onAttack={() => combatLogic.preparePcAttack(index)}
-                          onDamage={() => combatLogic.prepareDamage(index)} // Sem bónus fixo aqui, a lógica trata disso
+                          onDamage={() => combatLogic.prepareDamage(index)}
                           onRemove={() => removeWeapon(index)}
+                          control={form.control} // <--- CORREÇÃO: Passando o control explicitamente
                       />
                   ))}
               </div>
@@ -188,8 +198,8 @@ export const CombatEquipmentTab = () => {
               )}
               {armorFields.map((field, index) => (
                   <ArmorCard 
-                      key={field.id}
-                      index={index}
+                      key={field.id} 
+                      index={index} 
                       tableId={tableId}
                       onRoll={() => handleProtectionRoll(index)}
                       onRemove={() => removeArmor(index)}

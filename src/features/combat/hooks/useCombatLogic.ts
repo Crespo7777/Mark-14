@@ -2,7 +2,7 @@ import { useState } from "react";
 import { UseFormReturn } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
 import { attributesList } from "@/features/character/character.constants";
-import { useCharacterCalculations } from "@/features/character/hooks/useCharacterCalculations";
+import { useCharacterCalculations } from "@/features/character/hooks/useCharacterCalculations"; // Importar hook de cálculos
 
 export type AttackRollData = {
   weaponName: string;
@@ -24,14 +24,21 @@ interface UseCombatLogicProps {
     maxToughness: string;
     tempToughness?: string;
   };
+  // Parâmetros opcionais para injetar dados de Jogador ou NPC
+  activeBerserk?: any;
+  featOfStrength?: any;
+  isBloodied?: boolean;
 }
 
-export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
+export const useCombatLogic = ({ 
+  form, 
+  fields, 
+  activeBerserk, 
+  featOfStrength, 
+  isBloodied 
+}: UseCombatLogicProps) => {
   const { toast } = useToast();
   
-  // Importar dados das habilidades
-  const { activeBerserk, featOfStrength, isBloodied } = useCharacterCalculations();
-
   const [attackRollData, setAttackRollData] = useState<AttackRollData | null>(null);
   const [damageRollData, setDamageRollData] = useState<DamageRollData | null>(null);
   const [isDefenseRollOpen, setIsDefenseRollOpen] = useState(false);
@@ -145,10 +152,24 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
       }
   };
 
+  // CORREÇÃO AQUI: Adicionado projectileId
   const prepareNpcAttack = (weaponIndex: number) => {
     const weapon = form.getValues(`weapons.${weaponIndex}`);
     const allAttributes = form.getValues("attributes");
     const selectedAttr = attributesList.find((attr) => attr.key === weapon.attackAttribute);
+    
+    // Para NPCs, se houver projétil, queremos verificar a munição ao abrir o diálogo
+    if (weapon.projectileId && weapon.projectileId !== "none") {
+        const projectiles = form.getValues("projectiles") || [];
+        const projIndex = projectiles.findIndex((p: any) => p.id === weapon.projectileId);
+        if (projIndex !== -1) {
+            const qty = projectiles[projIndex].quantity || 0;
+            if (qty <= 0) {
+                toast({ title: "Sem Munição!", description: "Npc sem flechas.", variant: "destructive" });
+                return;
+            }
+        }
+    }
     
     const attributeValue = selectedAttr 
         ? Number(allAttributes[selectedAttr.key]?.value) || 0 
@@ -159,6 +180,7 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
       weaponName: weapon.name,
       attributeName: selectedAttr?.label || "Atributo",
       attributeValue,
+      projectileId: weapon.projectileId // <--- LINHA ADICIONADA
     });
   };
 
@@ -174,14 +196,12 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
         finalDamage += `+${bonusDice}`;
     }
 
-    // 1. LÓGICA DE AMOQUE (BERSERK)
+    // Lógica de Habilidades (Injetada via props)
     if (activeBerserk && activeBerserk.isActive) {
         finalDamage += "+1d6";
         toast({ title: "Fúria Amoque!", description: "+1d6 de dano (Berserk Ativo)." });
     }
 
-    // 2. LÓGICA DE FAÇANHA DE FORÇA (MESTRE)
-    // Requer nível Mestre e estar "Ensanguentado" (HP <= 50%)
     if (featOfStrength && featOfStrength.isActive && featOfStrength.level === "Mestre") {
         if (isBloodied) {
             finalDamage += "+1d4";
@@ -189,7 +209,7 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
         }
     }
 
-    // 3. Munição
+    // Lógica de Projéteis
     if (weapon.projectileId && weapon.projectileId !== "none") {
         const projectiles = form.getValues("projectiles") || [];
         const projectile = projectiles.find((p: any) => p.id === weapon.projectileId);
@@ -225,7 +245,6 @@ export const useCombatLogic = ({ form, fields }: UseCombatLogicProps) => {
     preparePcAttack,
     prepareNpcAttack,
     prepareDamage,
-    consumeProjectile,
-    activeBerserk 
+    consumeProjectile
   };
 };

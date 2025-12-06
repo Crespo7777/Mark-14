@@ -1,60 +1,94 @@
-// src/features/npc/tabs/NpcAttributesTab.tsx
-
 import { useState } from "react";
 import { useNpcSheet } from "../NpcSheetContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useFormContext } from "react-hook-form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Dices, Brain, BicepsFlexed, Eye, Ghost, Feather, MessageCircle, Crosshair, StickyNote } from "lucide-react";
 import { FormField, FormItem, FormControl } from "@/components/ui/form";
-import { Dices, StickyNote } from "lucide-react";
-import { attributesList } from "@/features/character/character.constants";
 import { AttributeRollDialog } from "@/components/AttributeRollDialog";
+import { attributesList } from "@/features/character/character.constants";
+import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
 
-type RollData = {
-  name: string;
-  value: number;
+const attrIcons: Record<string, any> = {
+  strong: BicepsFlexed,
+  quick: Feather,
+  resolute: Ghost,
+  vigilant: Eye,
+  persuasive: MessageCircle,
+  cunning: Brain,
+  discreet: Ghost,
+  precise: Crosshair
+};
+
+const attrColors: Record<string, string> = {
+  strong: "text-red-500 border-red-500/30 bg-red-500/5 hover:border-red-500",
+  quick: "text-yellow-500 border-yellow-500/30 bg-yellow-500/5 hover:border-yellow-500",
+  resolute: "text-purple-500 border-purple-500/30 bg-purple-500/5 hover:border-purple-500",
+  vigilant: "text-blue-500 border-blue-500/30 bg-blue-500/5 hover:border-blue-500",
+  persuasive: "text-pink-500 border-pink-500/30 bg-pink-500/5 hover:border-pink-500",
+  cunning: "text-emerald-500 border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500",
+  discreet: "text-slate-500 border-slate-500/30 bg-slate-500/5 hover:border-slate-500",
+  precise: "text-orange-500 border-orange-500/30 bg-orange-500/5 hover:border-orange-500"
 };
 
 export const NpcAttributesTab = () => {
-  // 1. ADICIONADO: 'npc' desestruturado do contexto para termos acesso ao table_id
-  const { form, npc, isReadOnly } = useNpcSheet(); 
-  const [rollData, setRollData] = useState<RollData | null>(null);
+  const { npc, isReadOnly } = useNpcSheet();
+  const { control, watch } = useFormContext();
+  const [rollData, setRollData] = useState<{ name: string; value: number } | null>(null);
 
+  // Observa todos os atributos para reatividade
+  const attributes = watch("attributes");
+
+  // Calcula o modificador (Symbaroum: 10 - Atributo)
   const getModifier = (value: number) => {
     const mod = 10 - value; 
     if (mod > 0) return `+${mod}`;
     return `${mod}`;
   };
 
-  const getModifierColor = (value: number) => {
+  // Cores para o modificador (Invertido: Mod negativo é "Forte" para o NPC)
+  const getModifierStyle = (value: number) => {
     const mod = 10 - value;
-    if (mod > 0) return "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
-    if (mod < 0) return "bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
-    return "bg-secondary text-secondary-foreground";
-  };
-
-  const handleRoll = (key: string, label: string) => {
-    const val = Number(form.getValues(`attributes.${key}.value`)) || 0;
-    setRollData({ name: label, value: val });
+    if (mod < 0) return "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-800"; // Dificil
+    if (mod > 0) return "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/40 dark:text-green-300 dark:border-green-800"; // Facil
+    return "bg-secondary text-muted-foreground border-border"; // Neutro
   };
 
   return (
-    <div className="h-full p-2 overflow-y-auto">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="h-full flex flex-col space-y-6 p-2 md:p-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+      
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
         {attributesList.map((attr) => {
-          const currentValue = form.watch(`attributes.${attr.key}.value`) || 0;
-          const hasNote = !!form.watch(`attributes.${attr.key}.note`);
+          const Icon = attrIcons[attr.key] || Dices;
+          const styleClass = attrColors[attr.key] || "text-primary border-primary/30";
+          
+          // Leitura segura do valor
+          const attrObj = attributes?.[attr.key] || {};
+          const currentValue = Number(attrObj.value) || 0;
+          const hasNote = !!attrObj.note;
 
           return (
-            <Card key={attr.key} className="relative overflow-hidden border-2 hover:border-primary/50 transition-colors">
-              <CardHeader className="p-2 pb-1 text-center bg-muted/20">
-                <CardTitle className="text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2">
-                  {attr.label}
+            <div 
+                key={attr.key} 
+                className={cn(
+                    "group relative flex flex-col items-center justify-between p-3 rounded-2xl border-2 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-card min-h-[140px]",
+                    styleClass
+                )}
+            >
+              {/* Cabeçalho do Card: Ícone e Nome */}
+              <div className="w-full flex justify-between items-start">
+                  <div className="flex flex-col items-center w-full">
+                     <Icon className="w-5 h-5 mb-1 opacity-80 group-hover:scale-110 transition-transform duration-300" />
+                     <span className="text-[10px] font-bold uppercase tracking-widest opacity-70">{attr.label}</span>
+                  </div>
+
+                  {/* Botão de Notas (Discreto no canto) */}
                   <FormField
-                    control={form.control}
+                    control={control}
                     name={`attributes.${attr.key}.note`}
                     render={({ field }) => (
                       <Popover>
@@ -62,7 +96,7 @@ export const NpcAttributesTab = () => {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className={`h-5 w-5 absolute right-2 top-2 ${hasNote ? "text-primary animate-pulse" : "text-muted-foreground/30 hover:text-primary"}`}
+                            className={cn("h-5 w-5 absolute right-2 top-2", hasNote ? "text-primary animate-pulse" : "text-muted-foreground/20 hover:text-primary")}
                           >
                             <StickyNote className="w-3 h-3" />
                           </Button>
@@ -81,56 +115,65 @@ export const NpcAttributesTab = () => {
                       </Popover>
                     )}
                   />
-                </CardTitle>
-              </CardHeader>
-              
-              <CardContent className="p-3 flex flex-col items-center gap-3">
-                <FormField
-                  control={form.control}
-                  name={`attributes.${attr.key}.value`}
-                  render={({ field }) => (
-                    <FormItem className="w-full flex justify-center">
-                      <FormControl>
-                        <Input
-                          type="number"
-                          className="text-4xl font-black text-center h-16 w-24 border-0 bg-transparent focus-visible:ring-0 shadow-none p-0"
-                          placeholder="10"
-                          {...field}
-                          readOnly={isReadOnly}
-                          onChange={(e) => field.onChange(Number(e.target.value))}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
+              </div>
 
-                <Badge variant="outline" className={`text-xs font-mono px-3 py-1 border ${getModifierColor(currentValue)}`}>
-                  Mod: {getModifier(currentValue)}
-                </Badge>
+              {/* Valor Principal (Input) */}
+              <FormField
+                control={control}
+                name={`attributes.${attr.key}.value`}
+                render={({ field }) => (
+                  <FormItem className="space-y-0 w-full flex justify-center my-1">
+                    <FormControl>
+                      <div className="relative">
+                          <Input 
+                            type="number" 
+                            className="text-4xl font-black text-center h-12 w-20 border-none bg-transparent focus-visible:ring-0 p-0 shadow-none cursor-pointer z-10 relative" 
+                            {...field}
+                            onChange={e => field.onChange(Number(e.target.value))}
+                            readOnly={isReadOnly}
+                          />
+                      </div>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="w-full h-8 text-xs gap-2 mt-1"
-                  onClick={() => handleRoll(attr.key, attr.label)}
-                >
-                  <Dices className="w-3.5 h-3.5" />
-                  Testar
-                </Button>
-              </CardContent>
-            </Card>
+              {/* MODIFICADOR (O Grande Destaque para o Mestre) */}
+              <div className={cn("px-3 py-0.5 rounded-full border text-sm font-mono font-bold shadow-sm mb-1", getModifierStyle(currentValue))}>
+                  {getModifier(currentValue)}
+              </div>
+
+              {/* Botão de Testar (Hover) */}
+              <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button 
+                            variant="secondary" 
+                            size="sm" 
+                            className="w-full h-7 text-[10px] font-semibold opacity-0 group-hover:opacity-100 transition-all duration-200 translate-y-2 group-hover:translate-y-0 shadow-sm"
+                            onClick={() => setRollData({ name: attr.label, value: currentValue })}
+                        >
+                            <Dices className="w-3 h-3 mr-1.5" /> TESTAR
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Rolar teste de {attr.label}</p>
+                    </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
           );
         })}
       </div>
 
       {rollData && (
-        <AttributeRollDialog
-          open={!!rollData}
-          onOpenChange={(open) => !open && setRollData(null)}
-          attributeName={rollData.name}
-          attributeValue={rollData.value}
-          characterName={npc.name} // ADICIONADO: Nome do NPC para o chat
-          tableId={npc.table_id}   // 2. CORREÇÃO CRÍTICA: Passando o ID da mesa
+        <AttributeRollDialog 
+            open={!!rollData} 
+            onOpenChange={(o) => !o && setRollData(null)}
+            attributeName={rollData.name}
+            attributeValue={rollData.value}
+            characterName={npc.name}
+            tableId={npc.table_id}
         />
       )}
     </div>

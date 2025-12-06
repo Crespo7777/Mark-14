@@ -44,7 +44,6 @@ const fetchFolders = async (tableId: string) => {
 };
 
 export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
-  // --- 1. AQUI: Recuperamos isMaster, isHelper e userId do contexto ---
   const { members, isMaster, isHelper, userId } = useTableContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -116,70 +115,60 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
     setItemToShare(null);
   };
 
-  // --- 2. LÓGICA DE FILTRO DE NPCS ---
   const displayedNpcs = npcs
-    .filter(npc => showArchivedNpcs ? npc.is_archived : !npc.is_archived) // Filtro de Arquivo
+    .filter(npc => showArchivedNpcs ? npc.is_archived : !npc.is_archived)
     .filter(npc => {
-      // Se for Mestre, vê tudo
       if (isMaster) return true;
-
-      // Se for Ajudante, aplica regras de segurança
       if (isHelper) {
-          // É o dono? (Nota: na tabela NPCs às vezes não há player_id definido, se for criado pelo mestre. O mestre é dono da mesa.)
           const isOwner = npc.player_id === userId;
-          
-          // Foi partilhado especificamente com este ID?
-          // Usamos o operador ?. para evitar erro se o array for null
           const isSharedWithMe = npc.shared_with_players?.includes(userId || '');
-          
-          // É público globalmente?
           const isGloballyShared = npc.is_shared;
-          
           return isOwner || isSharedWithMe || isGloballyShared;
       }
-      
-      // Fallback para segurança
       return false;
     });
 
-  // --- 3. LÓGICA DE FILTRO DE PASTAS (NOVO) ---
   const displayedFolders = folders.filter(folder => {
-      // Mestre vê todas as pastas
       if (isMaster) return true;
-
-      // Ajudante só vê a pasta SE ela contiver algum NPC visível para ele
       if (isHelper) {
          return displayedNpcs.some(npc => npc.folder_id === folder.id);
       }
-      
       return false;
   });
 
   return (
-    <div className="flex flex-col h-full space-y-4">
-        {/* BARRA DE TOPO */}
-        <div className="flex flex-wrap items-center justify-between gap-4 p-1">
+    <div className="flex flex-col h-full space-y-4 p-2">
+        {/* BARRA DE FERRAMENTAS */}
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-background/50 p-2 rounded-lg border">
             <div className="flex items-center gap-2">
-                {/* Nota: As pastas na gestão aparecem todas, mas no visualizador filtramos */}
-                <ManageFoldersDialog tableId={tableId} folders={folders} tableName="npc_folders" title="NPCs" />
-                <div className="flex items-center space-x-2 bg-card border px-3 py-1.5 rounded-md shadow-sm">
+                <ManageFoldersDialog tableId={tableId} folders={folders} tableName="npc_folders" title="Pastas" />
+                
+                <div className="flex items-center space-x-2 bg-secondary/50 border px-3 py-1.5 rounded-md">
                     <Switch id="show-archived-npc" checked={showArchivedNpcs} onCheckedChange={setShowArchivedNpcs} />
-                    <Label htmlFor="show-archived-npc" className="cursor-pointer text-sm font-medium">
-                        {showArchivedNpcs ? "Ver Ativos" : "Ver Arquivados"}
+                    <Label htmlFor="show-archived-npc" className="cursor-pointer text-xs font-medium text-muted-foreground flex items-center gap-1">
+                        {showArchivedNpcs ? <ArchiveRestore className="w-3 h-3"/> : <Archive className="w-3 h-3"/>}
+                        {showArchivedNpcs ? "Arquivados" : "Ativos"}
                     </Label>
                 </div>
             </div>
+
+            <Suspense fallback={<Button size="sm" disabled>...</Button>}>
+                <CreateNpcDialog tableId={tableId} onNpcCreated={invalidateNpcs}>
+                    <Button size="sm" className="h-9 shadow-sm">
+                        <Plus className="w-4 h-4 mr-2" /> Novo NPC
+                    </Button>
+                </CreateNpcDialog>
+            </Suspense>
         </div>
 
         {/* LISTA */}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
             <EntityListManager
-                title="NPCs"
+                title=""
                 type="npc"
-                items={displayedNpcs}      // <-- Usamos a lista filtrada de NPCs
-                folders={displayedFolders} // <-- Usamos a lista filtrada de Pastas
+                items={displayedNpcs}
+                folders={displayedFolders}
                 isLoading={isLoadingNpcs}
-                
                 onEdit={(id) => setSelectedNpcId(id)}
                 onDelete={(id) => {
                     const npc = npcs.find(n => n.id === id);
@@ -189,16 +178,7 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
                 onArchive={handleArchive}
                 onMove={handleMove}
                 onShare={(item) => setItemToShare(item)}
-                
-                actions={
-                    <Suspense fallback={<Button size="sm" disabled>...</Button>}>
-                        <CreateNpcDialog tableId={tableId} onNpcCreated={invalidateNpcs}>
-                            <Button size="sm" className="h-9 shadow-sm">
-                                <Plus className="h-4 w-4 mr-1" /> Novo NPC
-                            </Button>
-                        </CreateNpcDialog>
-                    </Suspense>
-                }
+                actions={null}
             />
         </div>
 
