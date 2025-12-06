@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shop, ShopItem, CharacterWithRelations, ItemTemplate } from "@/types/app-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -12,10 +12,9 @@ import { Plus, Database, Loader2, Infinity as InfinityIcon } from "lucide-react"
 import { Separator } from "@/components/ui/separator";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { ItemIconUploader } from "@/components/ItemIconUploader";
-import { QualitySelector } from "@/components/QualitySelector"; // <--- NOVO
+import { QualitySelector } from "@/components/QualitySelector";
 import { ShopItemCard } from "./ShopItemCard";
 
-// Importa as listas oficiais para manter consistência com o Database
 import { 
     CATEGORIES, 
     WEAPON_SUBCATEGORIES, 
@@ -29,11 +28,7 @@ interface ExtendedShopItem extends ShopItem {
   icon_url?: string | null;
 }
 
-// Filtramos categorias que não fazem sentido vender (ex: Traços)
-const TRADEABLE_CATEGORIES = CATEGORIES.filter(cat => 
-    cat.id !== 'trait' && cat.id !== 'quality'
-);
-
+const TRADEABLE_CATEGORIES = CATEGORIES.filter(cat => cat.id !== 'trait' && cat.id !== 'quality');
 const IMPORT_CATEGORY_IDS = TRADEABLE_CATEGORIES.map(c => c.id);
 
 const fetchShopItems = async (shopId: string) => {
@@ -52,55 +47,43 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
   const queryClient = useQueryClient();
   
   const [newItem, setNewItem] = useState({ 
-      name: "", 
-      amount: 0, 
-      weight: 0, 
-      stock: -1, 
-      description: "", 
-      category: "general", 
-      icon_url: null as string | null, 
-      data: {} as any 
+      name: "", amount: 0, weight: 0, stock: -1, description: "", 
+      category: "general", icon_url: null as string | null, data: {} as any 
   });
   
   const [currencyType, setCurrencyType] = useState<"ortega" | "shekel" | "taler">("ortega");
   const [isAdding, setIsAdding] = useState(false);
 
   const queryKey = ['shop_items', shop.id];
-
   const { data: items = [] } = useQuery({ queryKey: queryKey, queryFn: () => fetchShopItems(shop.id) });
   const { data: characters = [] } = useQuery({ queryKey: ['characters', tableId], queryFn: () => fetchCharacters(tableId) });
 
-  useEffect(() => {
-      // Quando a categoria muda, limpamos os dados específicos mas mantemos os genéricos
-      setNewItem(prev => ({ ...prev, data: {} }));
-  }, [newItem.category]);
+  useEffect(() => { setNewItem(prev => ({ ...prev, data: {} })); }, [newItem.category]);
 
-  const updateData = (key: string, value: any) => {
-    setNewItem(prev => ({ ...prev, data: { ...prev.data, [key]: value } }));
-  };
+  const updateData = (key: string, value: any) => { setNewItem(prev => ({ ...prev, data: { ...prev.data, [key]: value } })); };
 
-  // --- RENDERIZADOR DE CAMPOS INTELIGENTE (IGUAL AO DATABASE) ---
+  // RENDERIZADOR DE CAMPOS (IDÊNTICO AO DATABASE FORM PARA CONSISTÊNCIA)
   const renderSpecificFields = () => {
     switch (newItem.category) {
         case 'weapon': return (
-            <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
+            <div className="grid grid-cols-2 gap-2 mt-2 bg-muted/30 p-2 rounded border border-dashed">
                 <div className="col-span-2 md:col-span-1">
                     <Label className="text-[10px] text-muted-foreground">Subcategoria</Label>
                     <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Tipo de Arma" /></SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Tipo de Arma" /></SelectTrigger>
                         <SelectContent>{WEAPON_SUBCATEGORIES.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
                 <div className="col-span-2 md:col-span-1">
                     <Label className="text-[10px] text-muted-foreground">Atributo</Label>
                     <Select value={newItem.data.attackAttribute || ""} onValueChange={v => updateData('attackAttribute', v)}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Atributo" /></SelectTrigger>
-                        <SelectContent>{RPG_ATTRIBUTES.map(attr => <SelectItem key={attr} value={attr}>{attr}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Atributo" /></SelectTrigger>
+                        <SelectContent>{RPG_ATTRIBUTES.map(attr => <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
                 <div className="col-span-2">
                     <Label className="text-[10px] text-muted-foreground">Dano</Label>
-                    <Input placeholder="Ex: 1d8" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="h-8 text-xs"/>
+                    <Input placeholder="Ex: 1d8" value={newItem.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="h-8 text-xs bg-background"/>
                 </div>
                 <div className="col-span-2">
                     <Label className="text-[10px] text-muted-foreground">Qualidades</Label>
@@ -109,81 +92,27 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
             </div>
         );
         case 'armor': return (
-            <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
-                <div className="col-span-2">
-                    <Label className="text-[10px] text-muted-foreground">Tipo de Armadura</Label>
-                    <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Leve/Média/Pesada" /></SelectTrigger>
-                        <SelectContent>{ARMOR_SUBCATEGORIES.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent>
-                    </Select>
-                </div>
-                <div>
-                    <Label className="text-[10px] text-muted-foreground">Proteção</Label>
-                    <Input placeholder="Ex: 1d4" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="h-8 text-xs"/>
-                </div>
-                <div>
-                    <Label className="text-[10px] text-muted-foreground">Penalidade</Label>
-                    <Input placeholder="Ex: 2" type="number" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="h-8 text-xs"/>
-                </div>
-                <div className="col-span-2">
-                    <Label className="text-[10px] text-muted-foreground">Qualidades</Label>
-                    <QualitySelector tableId={tableId} value={newItem.data.quality || ""} onChange={(val) => updateData('quality', val)} targetType="armor" />
-                </div>
-            </div>
-        );
-        case 'consumable': return (
-            <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
-                <div className="col-span-2">
-                    <Label className="text-[10px] text-muted-foreground">Efeito Principal</Label>
-                    <Input placeholder="Ex: Cura 1d4" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} className="h-8 text-xs"/>
-                </div>
-                <div>
-                    <Label className="text-[10px] text-muted-foreground">Duração</Label>
-                    <Input placeholder="Ex: Cena" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="h-8 text-xs"/>
-                </div>
-                <div>
-                    <Label className="text-[10px] text-muted-foreground">Uso</Label>
-                    <Input placeholder="Ex: Beber" value={newItem.data.usage || ""} onChange={e => updateData('usage', e.target.value)} className="h-8 text-xs"/>
-                </div>
-            </div>
-        );
-        case 'food': return (
-            <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
+            <div className="grid grid-cols-2 gap-2 mt-2 bg-muted/30 p-2 rounded border border-dashed">
                 <div className="col-span-2">
                     <Label className="text-[10px] text-muted-foreground">Tipo</Label>
                     <Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                        <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                        <SelectContent>{FOOD_SUBCATEGORIES.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Classe" /></SelectTrigger>
+                        <SelectContent>{ARMOR_SUBCATEGORIES.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
+                <div><Label className="text-[10px]">Proteção</Label><Input placeholder="Ex: 1d4" value={newItem.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="h-8 text-xs bg-background"/></div>
+                <div><Label className="text-[10px]">Penalidade</Label><Input placeholder="Ex: 2" type="number" value={newItem.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="h-8 text-xs bg-background"/></div>
+                <div className="col-span-2"><Label className="text-[10px]">Qualidades</Label><QualitySelector tableId={tableId} value={newItem.data.quality || ""} onChange={(val) => updateData('quality', val)} targetType="armor" /></div>
             </div>
         );
-        case 'mystic': 
-        case 'artifact': return (
-            <div className="grid grid-cols-2 gap-2 mt-2 bg-background/50 p-2 rounded border">
-                <div>
-                    <Label className="text-[10px] text-muted-foreground">Poder Místico</Label>
-                    <Input placeholder="Nível" value={newItem.data.powerLevel || ""} onChange={e => updateData('powerLevel', e.target.value)} className="h-8 text-xs"/>
-                </div>
-                <div>
-                    <Label className="text-[10px] text-muted-foreground">Corrupção</Label>
-                    <Input placeholder="1d4" value={newItem.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="h-8 text-xs"/>
-                </div>
-                <div className="col-span-2">
-                    <Label className="text-[10px] text-muted-foreground">Efeito</Label>
-                    <Input placeholder="Descrição do efeito..." value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} className="h-8 text-xs"/>
-                </div>
-            </div>
-        );
+        case 'consumable': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-muted/30 p-2 rounded border border-dashed"><div className="col-span-2"><Label className="text-[10px]">Efeito</Label><Input placeholder="Ex: Cura 1d4" value={newItem.data.effect || ""} onChange={e => updateData('effect', e.target.value)} className="h-8 text-xs bg-background"/></div><div><Label className="text-[10px]">Duração</Label><Input placeholder="Ex: Cena" value={newItem.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="h-8 text-xs bg-background"/></div><div><Label className="text-[10px]">Uso</Label><Input placeholder="Ex: Beber" value={newItem.data.usage || ""} onChange={e => updateData('usage', e.target.value)} className="h-8 text-xs bg-background"/></div></div>);
+        case 'food': return (<div className="grid grid-cols-2 gap-2 mt-2 bg-muted/30 p-2 rounded border border-dashed"><div className="col-span-2"><Label className="text-[10px]">Tipo</Label><Select value={newItem.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Selecione..." /></SelectTrigger><SelectContent>{FOOD_SUBCATEGORIES.map(sub => <SelectItem key={sub} value={sub}>{sub}</SelectItem>)}</SelectContent></Select></div></div>);
         default: return null;
     }
   };
 
   const handleAddItem = async () => {
-    if (!newItem.name) {
-        toast({ title: "Erro", description: "Nome obrigatório", variant: "destructive" });
-        return;
-    }
+    if (!newItem.name) return toast({ title: "Erro", description: "Nome obrigatório", variant: "destructive" });
     setIsAdding(true);
 
     let multiplier = 1;
@@ -208,17 +137,7 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
         queryClient.setQueryData(queryKey, (old: ExtendedShopItem[] | undefined) => {
             return old ? [...old, data].sort((a,b) => a.name.localeCompare(b.name)) : [data];
         });
-        
-        // Reset inteligente: mantém a categoria para adicionar outro do mesmo tipo rapidamente
-        setNewItem(prev => ({ 
-            ...prev, 
-            name: "", 
-            amount: 0, 
-            weight: 0, 
-            description: "", 
-            icon_url: null, 
-            data: {} 
-        })); 
+        setNewItem(prev => ({ ...prev, name: "", amount: 0, weight: 0, description: "", icon_url: null, data: {} })); 
         setCurrencyType("ortega");
         toast({ title: "Item Adicionado" });
     } catch (error: any) {
@@ -317,67 +236,62 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle>{shop.name}</CardTitle>
-        <CardDescription>Adicione itens que estarão à venda aqui.</CardDescription>
+    <Card className="h-full flex flex-col border-none shadow-none bg-transparent">
+      <CardHeader className="pb-3 px-0 pt-0">
+        <CardTitle className="text-2xl text-foreground">{shop.name}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+      
+      <CardContent className="px-0 space-y-6 flex-1 flex flex-col min-h-0">
         
-        {/* FORMULÁRIO DE CRIAÇÃO INTELIGENTE */}
-        <div className="bg-muted/30 p-4 rounded-lg border border-dashed space-y-4">
+        {/* FORMULÁRIO (Card destacado) */}
+        <div className="bg-card border p-4 rounded-xl shadow-sm space-y-4">
             <div className="flex gap-4 items-start">
                 <ItemIconUploader 
                     currentUrl={newItem.icon_url} 
                     onUpload={(url) => setNewItem(prev => ({...prev, icon_url: url}))}
                     onRemove={() => setNewItem(prev => ({...prev, icon_url: null}))}
                 />
-                <div className="flex-1 grid grid-cols-12 gap-2">
+                <div className="flex-1 grid grid-cols-12 gap-3">
                     <div className="col-span-8">
-                        <Label className="text-xs">Nome</Label>
-                        <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Ex: Adaga Curta" className="h-9" />
+                        <Label className="text-xs">Nome do Item</Label>
+                        <Input value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="Ex: Poção de Cura" className="h-9 bg-background" />
                     </div>
                     <div className="col-span-4">
                         <Label className="text-xs">Categoria</Label>
                         <Select value={newItem.category} onValueChange={v => setNewItem({...newItem, category: v})}>
-                            <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-9 bg-background"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 {TRADEABLE_CATEGORIES.map(cat => (
                                     <SelectItem key={cat.id} value={cat.id} className="flex items-center gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <cat.icon className="w-3 h-3" />
-                                            {cat.label}
-                                        </div>
+                                        <cat.icon className="w-3 h-3" /> {cat.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
                     </div>
                     <div className="col-span-12">
-                        <Label className="text-xs">Descrição</Label>
-                        <Input value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} placeholder="Detalhes..." className="h-9" />
+                        <Input value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} placeholder="Descrição rápida..." className="h-9 bg-background" />
                     </div>
                 </div>
             </div>
 
-            {/* CAMPOS ESPECÍFICOS BASEADOS NA CATEGORIA (Dinamismo!) */}
             {renderSpecificFields()}
 
-            <div className="grid grid-cols-12 gap-2 items-end">
+            <div className="grid grid-cols-12 gap-3 items-end">
                 <div className="col-span-3">
                     <Label className="text-xs">Preço</Label>
-                    <Input type="number" value={newItem.amount} onChange={e => setNewItem({...newItem, amount: parseInt(e.target.value)||0})} className="h-9" />
+                    <Input type="number" value={newItem.amount} onChange={e => setNewItem({...newItem, amount: parseInt(e.target.value)||0})} className="h-9 bg-background" />
                 </div>
                 <div className="col-span-3">
                     <Label className="text-xs">Moeda</Label>
                     <Select value={currencyType} onValueChange={(v: any) => setCurrencyType(v)}>
-                        <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 bg-background"><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="taler">Táler</SelectItem><SelectItem value="shekel">Xelim</SelectItem><SelectItem value="ortega">Ortega</SelectItem></SelectContent>
                     </Select>
                 </div>
                 <div className="col-span-3">
                     <Label className="text-xs">Peso</Label>
-                    <Input type="number" value={newItem.weight} onChange={e => setNewItem({...newItem, weight: parseInt(e.target.value)||0})} className="h-9" />
+                    <Input type="number" value={newItem.weight} onChange={e => setNewItem({...newItem, weight: parseInt(e.target.value)||0})} className="h-9 bg-background" />
                 </div>
                 <div className="col-span-3">
                     <Label className="text-xs">Estoque</Label>
@@ -390,7 +304,7 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
                                 if(val === "-1") setNewItem({...newItem, stock: -1});
                                 else setNewItem({...newItem, stock: parseInt(val)||0});
                             }} 
-                            className={`h-9 pr-8 ${newItem.stock === -1 ? "text-accent font-bold" : ""}`}
+                            className={`h-9 pr-8 bg-background ${newItem.stock === -1 ? "text-accent font-bold" : ""}`}
                         />
                         <Button 
                              size="icon" variant="ghost" 
@@ -405,7 +319,7 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
             </div>
 
             <div className="flex gap-2 pt-2">
-                <Button onClick={handleAddItem} className="flex-1 bg-green-600 hover:bg-green-700 h-9 text-sm" disabled={isAdding}>
+                <Button onClick={handleAddItem} className="flex-1 h-9 text-sm font-semibold shadow-sm" disabled={isAdding}>
                     {isAdding ? <Loader2 className="w-4 h-4 mr-2 animate-spin"/> : <Plus className="w-4 h-4 mr-2" />} 
                     Adicionar à Loja
                 </Button>
@@ -414,7 +328,7 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
                     tableId={tableId} 
                     categories={IMPORT_CATEGORY_IDS}
                     onSelect={handleImport}
-                    title="Importar do Database"
+                    title="Importar do Compêndio"
                 >
                         <Button variant="outline" className="h-9 gap-2" disabled={isAdding}>
                         <Database className="w-4 h-4" /> Importar
@@ -423,11 +337,11 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
             </div>
         </div>
 
-        <Separator />
+        <Separator className="my-4" />
 
-        {/* LISTA DE ITENS DA LOJA */}
-        <div className="space-y-2">
-           {items.length === 0 && <p className="text-muted-foreground text-center py-8 text-sm italic">Loja vazia.</p>}
+        {/* LISTA DE ITENS */}
+        <div className="flex-1 overflow-y-auto pr-2 space-y-2 pb-10">
+           {items.length === 0 && <p className="text-muted-foreground text-center py-12 text-sm italic border-2 border-dashed rounded-xl">A loja está vazia. Adicione itens acima.</p>}
            {items.map(item => (
                 <ShopItemCard 
                     key={item.id} 
