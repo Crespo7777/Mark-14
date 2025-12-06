@@ -9,8 +9,8 @@ const corsHeaders = {
 
 // --- CONSTANTES DE COR (Decimal) ---
 const DISCORD_COLORS = {
-  CRITICAL: 3066993,  // Verde
-  SUCCESS: 5763719,   // Verde claro
+  CRITICAL: 3066993,  // Verde (Base)
+  SUCCESS: 65280,     // <--- ALTERADO: Verde Neon Vibrante (Bright Green)
   FUMBLE: 15158332,   // Vermelho escuro
   FAILURE: 10038562,  // Vermelho
   INFO: 14981709,     // Âmbar
@@ -175,7 +175,6 @@ const buildPayload = (rollData: RollData, userName: string) => {
       };
       break;
     }
-    // --- CASE DE PROTEÇÃO (Adicionado) ---
     case "protection": {
         const rollsStr = `[${rollData.result.rolls.join(", ")}]`;
         const mod = rollData.result.modifier;
@@ -191,7 +190,6 @@ const buildPayload = (rollData: RollData, userName: string) => {
         break;
     }
     default:
-      // Fallback de segurança para evitar erro 500
       embed = {
         title: "Rolagem Desconhecida",
         description: "Ocorreu uma rolagem de um tipo não reconhecido pelo Discord Handler.",

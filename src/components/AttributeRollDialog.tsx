@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { rollAttributeTest, formatAttributeRoll } from "@/lib/dice-parser";
+import { parseDiceRoll, formatAttributeRoll } from "@/lib/dice-parser"; 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -27,36 +27,71 @@ export const AttributeRollDialog = ({
 }: AttributeRollDialogProps) => {
   const [modifier, setModifier] = useState("0");
   const [advantage, setAdvantage] = useState(false);
-  const [disadvantage, setDisadvantage] = useState(false);
   const [loading, setLoading] = useState(false);
   
   const { toast } = useToast();
   const { isMaster, masterId } = useTableContext();
 
   useEffect(() => {
-      if (open) setModifier("0");
+    if (open) {
+      setModifier("0");
+      setAdvantage(false);
+    }
   }, [open]);
 
   const handleRoll = async (isHidden: boolean) => {
+    // --- NOVO: VALIDAÇÃO DE ATRIBUTO ---
+    if (attributeValue <= 0) {
+        toast({ 
+            title: "Regra do Sistema", 
+            description: `Não é possível rolar ${attributeName} com valor ${attributeValue}.`, 
+            variant: "destructive" 
+        });
+        return; // Bloqueia e sai da função
+    }
+
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
     const modValue = parseInt(modifier) || 0;
-    const rollResult = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: advantage, withDisadvantage: disadvantage });
-    const isSuccess = rollResult.totalRoll <= rollResult.target;
+    
+    const advantageBonus = advantage ? 2 : 0;
+    const targetValue = attributeValue + modValue + advantageBonus;
+    
+    const rollResult = parseDiceRoll("1d20");
+    if (!rollResult) { 
+        toast({ title: "Erro", description: "Falha na rolagem 1d20.", variant: "destructive" });
+        setLoading(false);
+        return;
+    }
+    
+    const isSuccess = rollResult.total <= targetValue && rollResult.total !== 20;
+    const criticalSuccess = rollResult.total === 1;
+    const criticalFailure = rollResult.total === 20;
 
     if (!isHidden || isMaster) {
         toast({ 
             title: isSuccess ? "Sucesso!" : "Falha!", 
-            description: `Rolou ${rollResult.totalRoll} vs ${rollResult.target}`,
+            description: `Rolou ${rollResult.total} vs ${targetValue} (${attributeName}${advantage ? " +2 Adv" : ""})`,
             variant: isSuccess ? "default" : "destructive" 
         });
     }
 
-    const chatMessage = formatAttributeRoll(characterName, attributeName, { total: rollResult.totalRoll, rolls: rollResult.rolls } as any, rollResult.target);
-    const discordResult = { total: rollResult.totalRoll, rolls: rollResult.rolls, ...rollResult };
-    const discordRollData = { rollType: "attribute", attributeName, targetValue: rollResult.target, result: discordResult, isSuccess };
+    const chatMessage = formatAttributeRoll(characterName, attributeName, rollResult, targetValue);
+    
+    const discordResult = {
+        mainRoll: rollResult.total,
+        advantageRoll: null,
+        modifier: modValue + advantageBonus,
+        totalRoll: rollResult.total,
+        target: targetValue,
+        isSuccess: isSuccess,
+        isCrit: criticalSuccess,
+        isFumble: criticalFailure
+    };
+    const discordRollData = { rollType: "attribute", attributeName, result: discordResult };
+
 
     if (isHidden && isMaster) {
       await supabase.from("chat_messages").insert([
@@ -93,9 +128,11 @@ export const AttributeRollDialog = ({
             <Label htmlFor="attr-mod" className="text-right">Modificador</Label>
             <Input id="attr-mod" value={modifier} onChange={(e) => setModifier(e.target.value)} className="col-span-3" placeholder="+0" type="number" />
           </div>
-          <div className="flex justify-center gap-6">
-            <div className="flex items-center space-x-2"><Checkbox id="attr-adv" checked={advantage} onCheckedChange={(c) => { setAdvantage(!!c); if(c) setDisadvantage(false); }} /><Label htmlFor="attr-adv">Vantagem</Label></div>
-            <div className="flex items-center space-x-2"><Checkbox id="attr-dis" checked={disadvantage} onCheckedChange={(c) => { setDisadvantage(!!c); if(c) setAdvantage(false); }} /><Label htmlFor="attr-dis">Desvantagem</Label></div>
+          <div className="flex justify-center">
+            <div className="flex items-center space-x-2">
+                <Checkbox id="attr-adv" checked={advantage} onCheckedChange={(c) => setAdvantage(!!c)} />
+                <Label htmlFor="attr-adv">Vantagem (+2 no Atributo)</Label>
+            </div>
           </div>
       </div>
     </BaseRollDialog>
