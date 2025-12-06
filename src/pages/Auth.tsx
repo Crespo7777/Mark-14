@@ -57,10 +57,10 @@ const Auth = () => {
           toast.error(error.message);
         }
       } else {
-        toast.success("Bem-vindo de volta!");
+        toast.success("Bem-vindo às sombras.");
       }
     } catch (error: any) {
-      toast.error("Ocorreu um erro ao tentar entrar");
+      toast.error("Erro de conexão com o abismo.");
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +95,7 @@ const Auth = () => {
       if (error) {
         toast.error(error.message);
       } else {
-        toast.success("Verifique seu email para confirmar o cadastro!");
+        toast.success("Verifique seu email para confirmar o pacto!");
       }
     } catch (error: any) {
       toast.error("Ocorreu um erro ao tentar cadastrar");
@@ -119,7 +119,7 @@ const Auth = () => {
 
       if (error) throw error;
 
-      toast.success("E-mail de recuperação enviado! Verifique sua caixa de entrada.");
+      toast.success("Ritual de recuperação iniciado. Verifique seu e-mail.");
       setIsResetting(false); 
       setResetEmail(""); 
     } catch (error: any) {
@@ -131,16 +131,20 @@ const Auth = () => {
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
-      style={{
-        backgroundImage: 'url("/preview-banner.png")',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-black"
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm z-0" />
+      {/* Background Image com Overlay */}
+      <div 
+        className="absolute inset-0 z-0 opacity-60 animate-in fade-in duration-1000"
+        style={{
+            backgroundImage: 'url("/tenebre-bg.png")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+        }}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent z-0" />
 
-      <Card className="w-full max-w-md z-10 bg-card/95 border-primary/20 shadow-2xl animate-in fade-in zoom-in duration-500">
+      <Card className="w-full max-w-md z-10 bg-black/80 border-border/20 shadow-2xl backdrop-blur-md animate-in zoom-in-95 duration-500">
         
         {isResetting ? (
           <>
@@ -150,13 +154,13 @@ const Auth = () => {
                 className="w-fit p-0 h-auto mb-2 text-muted-foreground hover:text-primary"
                 onClick={() => setIsResetting(false)}
               >
-                <ArrowLeft className="w-4 h-4 mr-1" /> Voltar ao Login
+                <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
               </Button>
-              <CardTitle className="text-2xl font-bold text-primary flex items-center gap-2">
-                <KeyRound className="w-6 h-6" /> Recuperar Senha
+              <CardTitle className="text-2xl font-bold text-foreground flex items-center gap-2">
+                <KeyRound className="w-6 h-6" /> Recuperar Acesso
               </CardTitle>
               <CardDescription>
-                Digite o e-mail associado à sua conta para receber o link de redefinição.
+                Digite o e-mail para redefinir sua senha.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -169,7 +173,7 @@ const Auth = () => {
                       id="reset-email"
                       type="email"
                       placeholder="mestre@exemplo.com"
-                      className="pl-10 bg-background/50"
+                      className="pl-10 bg-background/50 border-white/10"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
                       required
@@ -183,7 +187,7 @@ const Auth = () => {
                       Enviando...
                     </>
                   ) : (
-                    "Enviar Link de Recuperação"
+                    "Enviar Link"
                   )}
                 </Button>
               </form>
@@ -191,20 +195,22 @@ const Auth = () => {
           </>
         ) : (
           <>
-            <CardHeader className="space-y-1 text-center">
-              <div className="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-primary/50">
-                 <img src="/meu-icone.png" alt="Logo" className="w-10 h-10 object-contain opacity-80" />
+            <CardHeader className="space-y-2 text-center">
+              <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-primary/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+                 <img src="/tenebre-logo.png" alt="Tenebre Logo" className="w-12 h-12 object-contain drop-shadow-lg" />
               </div>
-              <CardTitle className="text-3xl font-bold tracking-tight text-primary">Mark-14</CardTitle>
-              <CardDescription className="text-lg">
-                Gerenciador de RPG & Virtual Tabletop
-              </CardDescription>
+              <div>
+                  <CardTitle className="text-3xl font-black tracking-tight text-foreground">Tenebre VTT</CardTitle>
+                  <CardDescription className="text-base tracking-wide font-light text-muted-foreground/80">
+                    Virtual Tabletop System
+                  </CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="login" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-4">
-                  <TabsTrigger value="login">Login</TabsTrigger>
-                  <TabsTrigger value="register">Criar Conta</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 mb-6 bg-muted/20">
+                  <TabsTrigger value="login">Entrar</TabsTrigger>
+                  <TabsTrigger value="register">Cadastrar</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="login">
@@ -217,7 +223,7 @@ const Auth = () => {
                           id="email"
                           type="email"
                           placeholder="seu@email.com"
-                          className="pl-10 bg-background/50"
+                          className="pl-10 bg-background/50 border-white/10 focus:border-primary/50"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           required
@@ -230,9 +236,9 @@ const Auth = () => {
                         <button
                           type="button"
                           onClick={() => setIsResetting(true)}
-                          className="text-xs text-primary hover:underline font-medium"
+                          className="text-xs text-primary/80 hover:text-primary hover:underline font-medium"
                         >
-                          Esqueceu a senha?
+                          Esqueceu?
                         </button>
                       </div>
                       <div className="relative">
@@ -240,7 +246,7 @@ const Auth = () => {
                         <Input
                           id="password"
                           type={showPassword ? "text" : "password"}
-                          className="pl-10 pr-10 bg-background/50"
+                          className="pl-10 pr-10 bg-background/50 border-white/10 focus:border-primary/50"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
@@ -249,22 +255,22 @@ const Auth = () => {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-muted-foreground hover:text-foreground"
                           onClick={() => setShowPassword(!showPassword)}
                         >
                           {showPassword ? (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            <EyeOff className="h-4 w-4" />
                           ) : (
-                            <Eye className="h-4 w-4 text-muted-foreground" />
+                            <Eye className="h-4 w-4" />
                           )}
                         </Button>
                       </div>
                     </div>
-                    <Button className="w-full font-bold" type="submit" disabled={isLoading}>
+                    <Button className="w-full font-bold shadow-lg shadow-primary/10" type="submit" disabled={isLoading}>
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Entrando...
+                          Acessando...
                         </>
                       ) : (
                         "Entrar na Mesa"
@@ -283,7 +289,7 @@ const Auth = () => {
                           id="username"
                           type="text"
                           placeholder="MestreSupremo"
-                          className="pl-10 bg-background/50"
+                          className="pl-10 bg-background/50 border-white/10"
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
                           required
@@ -299,7 +305,7 @@ const Auth = () => {
                           id="register-email"
                           type="email"
                           placeholder="seu@email.com"
-                          className="pl-10 bg-background/50"
+                          className="pl-10 bg-background/50 border-white/10"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
                           required
@@ -314,7 +320,7 @@ const Auth = () => {
                         <Input
                           id="register-password"
                           type={showPassword ? "text" : "password"}
-                          className="pl-10 pr-10 bg-background/50"
+                          className="pl-10 pr-10 bg-background/50 border-white/10"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
@@ -324,13 +330,13 @@ const Auth = () => {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-muted-foreground hover:text-foreground"
                           onClick={() => setShowPassword(!showPassword)}
                         >
                           {showPassword ? (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            <EyeOff className="h-4 w-4" />
                           ) : (
-                            <Eye className="h-4 w-4 text-muted-foreground" />
+                            <Eye className="h-4 w-4" />
                           )}
                         </Button>
                       </div>
@@ -343,7 +349,7 @@ const Auth = () => {
                         <Input
                           id="confirm-password"
                           type={showConfirmPassword ? "text" : "password"}
-                          className="pl-10 pr-10 bg-background/50"
+                          className="pl-10 pr-10 bg-background/50 border-white/10"
                           value={confirmPassword}
                           onChange={(e) => setConfirmPassword(e.target.value)}
                           required
@@ -353,24 +359,23 @@ const Auth = () => {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-muted-foreground hover:text-foreground"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         >
                           {showConfirmPassword ? (
-                            <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            <EyeOff className="h-4 w-4" />
                           ) : (
-                            <Eye className="h-4 w-4 text-muted-foreground" />
+                            <Eye className="h-4 w-4" />
                           )}
                         </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground">Mínimo de 6 caracteres</p>
                     </div>
 
                     <Button className="w-full font-bold" type="submit" disabled={isLoading}>
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Criando conta...
+                          Criando...
                         </>
                       ) : (
                         "Criar Conta"
@@ -383,9 +388,9 @@ const Auth = () => {
           </>
         )}
         
-        <CardFooter className="flex justify-center border-t border-border/50 pt-4">
-          <p className="text-xs text-muted-foreground">
-            Mark-14 RPG System v0.1.0 (Alpha)
+        <CardFooter className="flex justify-center border-t border-white/5 pt-4">
+          <p className="text-xs text-muted-foreground font-mono">
+            v1.0.0 &bull; Tenebre System
           </p>
         </CardFooter>
       </Card>
