@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Users, LogOut, Trash2, Search, Clock, Play, DoorOpen, Lock, Settings, Loader2, RefreshCw, Shield } from "lucide-react";
+import { Plus, Users, LogOut, Trash2, Search, Clock, Play, DoorOpen, Lock, Settings, Loader2, RefreshCw, Shield, Crown } from "lucide-react";
 import { CreateTableDialog } from "@/components/CreateTableDialog";
 import { JoinTableDialog } from "@/components/JoinTableDialog";
 import { EditTableDialog } from "@/components/EditTableDialog";
@@ -46,6 +46,7 @@ const Dashboard = () => {
   const [selectedTableToJoin, setSelectedTableToJoin] = useState<Table | null>(null);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
 
+  // 1. QUERY PRINCIPAL
   const { data: dashboardData, isLoading, isError, refetch } = useQuery({
     queryKey: ["dashboard-tables"],
     queryFn: async () => {
@@ -83,9 +84,17 @@ const Dashboard = () => {
     staleTime: 1000 * 60 * 2, 
   });
 
+  // LOGOUT SEGURO
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate("/auth");
+    try {
+        await supabase.auth.signOut();
+    } catch (error) {
+        console.error("Erro silencioso ao sair:", error);
+    } finally {
+        queryClient.clear();
+        localStorage.removeItem('sb-gbxpzxwmymggsburpnjm-auth-token'); 
+        navigate("/auth");
+    }
   };
 
   const handleDeleteTable = async () => {
@@ -143,14 +152,16 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* Header */}
+      {/* HEADER FIXO - IDENTIDADE VISUAL ATUALIZADA */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
            <div className="flex items-center gap-3">
+               {/* Logo Tenebre */}
                <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/20 shadow-[0_0_10px_rgba(var(--primary),0.2)]">
                   <img src="/tenebre-logo.png" alt="Logo" className="w-5 h-5 object-contain opacity-90" />
                </div>
                
+               {/* Nome Tenebre VTT */}
                <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-primary via-primary/80 to-primary/50 bg-clip-text text-transparent font-mono">
                    Tenebre VTT
                </h1>
@@ -158,7 +169,7 @@ const Dashboard = () => {
            
            <div className="flex items-center gap-4">
               <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">
-                 {profile?.display_name}
+                 Olá, {profile?.display_name}
               </span>
               <Button variant="ghost" size="sm" onClick={handleSignOut} className="hover:bg-destructive/10 hover:text-destructive transition-colors">
                 <LogOut className="w-4 h-4 mr-2" /> Sair
@@ -169,10 +180,12 @@ const Dashboard = () => {
 
       <main className="container max-w-7xl mx-auto px-4 py-8 space-y-8">
         
+        {/* Barra de Controlo */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="space-y-1">
                <h2 className="text-3xl font-bold tracking-tight">Lobby</h2>
-               <p className="text-muted-foreground">Gerencie suas crônicas e aventuras.</p>
+               {/* Texto Temático Atualizado */}
+               <p className="text-muted-foreground">Gerencie suas crônicas e mergulhe na escuridão.</p>
             </div>
             
             <div className="flex gap-2 w-full md:w-auto">
@@ -194,6 +207,7 @@ const Dashboard = () => {
             </div>
         </div>
 
+        {/* Abas */}
         <Tabs defaultValue="my-tables" className="w-full">
             <TabsList className="mb-6 bg-secondary/50 p-1 border border-border/50">
                <TabsTrigger value="my-tables" className="px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">Minhas Mesas ({myTables.length})</TabsTrigger>
@@ -206,10 +220,10 @@ const Dashboard = () => {
                         <div className="mx-auto w-16 h-16 bg-secondary/20 rounded-full flex items-center justify-center mb-4">
                             <Shield className="w-8 h-8 text-muted-foreground" />
                         </div>
-                        <h3 className="text-lg font-medium mb-2">Vazio...</h3>
-                        <p className="text-muted-foreground mb-6 max-w-sm mx-auto">O silêncio reina. Crie uma nova mesa para começar.</p>
+                        <h3 className="text-lg font-medium mb-2">Sem missões ativas</h3>
+                        <p className="text-muted-foreground mb-6 max-w-sm mx-auto">Você ainda não faz parte de nenhuma campanha.</p>
                         <CreateTableDialog onTableCreated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] })}>
-                           <Button variant="outline">Criar Mesa</Button>
+                           <Button variant="outline">Iniciar Jornada</Button>
                         </CreateTableDialog>
                     </div>
                 ) : (
@@ -241,6 +255,7 @@ const Dashboard = () => {
         </Tabs>
       </main>
 
+      {/* --- DIÁLOGOS --- */}
       <EditTableDialog 
         table={tableToEdit}
         open={!!tableToEdit}
@@ -276,6 +291,7 @@ const Dashboard = () => {
   );
 };
 
+// Card Visual
 const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole, onAction: () => void, onEdit?: () => void, onDelete?: () => void }) => {
     return (
       <Card className="group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col h-full bg-card">
@@ -297,8 +313,8 @@ const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole
             )}
             
             <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
-                {table.is_owner && <Badge className="bg-yellow-500/90 hover:bg-yellow-500 text-black font-bold shadow-sm backdrop-blur-md">Mestre</Badge>}
-                {table.is_member && !table.is_owner && <Badge className="bg-green-600/90 hover:bg-green-600 text-white shadow-sm backdrop-blur-md">Jogador</Badge>}
+                {table.is_owner && <Badge className="bg-yellow-500/90 hover:bg-yellow-500 text-black font-bold shadow-sm backdrop-blur-md"><Crown className="w-3 h-3 mr-1"/> Mestre</Badge>}
+                {table.is_member && !table.is_owner && <Badge className="bg-green-600/90 hover:bg-green-600 text-white shadow-sm backdrop-blur-md"><Users className="w-3 h-3 mr-1"/> Jogador</Badge>}
                 {table.password && !table.is_member && !table.is_owner && <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-md"><Lock className="w-3 h-3 mr-1"/> Privada</Badge>}
             </div>
         </div>

@@ -57,10 +57,10 @@ const Auth = () => {
           toast.error(error.message);
         }
       } else {
-        toast.success("Bem-vindo às sombras.");
+        toast.success("Acesso concedido.");
       }
     } catch (error: any) {
-      toast.error("Erro de conexão com o abismo.");
+      toast.error("Erro de conexão.");
     } finally {
       setIsLoading(false);
     }
@@ -95,7 +95,7 @@ const Auth = () => {
       if (error) {
         toast.error(error.message);
       } else {
-        toast.success("Verifique seu email para confirmar o pacto!");
+        toast.success("Verifique seu email para confirmar!");
       }
     } catch (error: any) {
       toast.error("Ocorreu um erro ao tentar cadastrar");
@@ -119,11 +119,11 @@ const Auth = () => {
 
       if (error) throw error;
 
-      toast.success("Ritual de recuperação iniciado. Verifique seu e-mail.");
+      toast.success("Email de recuperação enviado.");
       setIsResetting(false); 
       setResetEmail(""); 
     } catch (error: any) {
-      toast.error(error.message || "Erro ao enviar e-mail de recuperação.");
+      toast.error(error.message || "Erro ao enviar e-mail.");
     } finally {
       setIsLoading(false);
     }
@@ -137,7 +137,7 @@ const Auth = () => {
       <div 
         className="absolute inset-0 z-0 opacity-60 animate-in fade-in duration-1000"
         style={{
-            backgroundImage: 'url("/tenebre-bg.png")',
+            backgroundImage: 'url("/tenebre-bg.png")', 
             backgroundSize: 'cover',
             backgroundPosition: 'center',
         }}
@@ -172,7 +172,7 @@ const Auth = () => {
                     <Input
                       id="reset-email"
                       type="email"
-                      placeholder="mestre@exemplo.com"
+                      placeholder="email@exemplo.com"
                       className="pl-10 bg-background/50 border-white/10"
                       value={resetEmail}
                       onChange={(e) => setResetEmail(e.target.value)}
@@ -196,13 +196,16 @@ const Auth = () => {
         ) : (
           <>
             <CardHeader className="space-y-2 text-center">
-              <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-2 border border-primary/20 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-                 <img src="/tenebre-logo.png" alt="Tenebre Logo" className="w-12 h-12 object-contain drop-shadow-lg" />
+              {/* --- LOGO AUMENTADO --- */}
+              <div className="w-32 h-32 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-primary/20 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
+                 <img src="/tenebre-logo.png" alt="Logo" className="w-20 h-20 object-contain drop-shadow-xl" />
               </div>
               <div>
-                  <CardTitle className="text-3xl font-black tracking-tight text-foreground">Tenebre VTT</CardTitle>
+                  <CardTitle className="text-3xl font-black tracking-tight text-foreground">
+                    Tenebre VTT
+                  </CardTitle>
                   <CardDescription className="text-base tracking-wide font-light text-muted-foreground/80">
-                    Virtual Tabletop System
+                    Onde as sombras ganham vida.
                   </CardDescription>
               </div>
             </CardHeader>
@@ -270,10 +273,10 @@ const Auth = () => {
                       {isLoading ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Acessando...
+                          Entrando...
                         </>
                       ) : (
-                        "Entrar na Mesa"
+                        "Entrar"
                       )}
                     </Button>
                   </form>
@@ -288,7 +291,7 @@ const Auth = () => {
                         <Input
                           id="username"
                           type="text"
-                          placeholder="MestreSupremo"
+                          placeholder="NomeHeroico"
                           className="pl-10 bg-background/50 border-white/10"
                           value={username}
                           onChange={(e) => setUsername(e.target.value)}
@@ -390,7 +393,7 @@ const Auth = () => {
         
         <CardFooter className="flex justify-center border-t border-white/5 pt-4">
           <p className="text-xs text-muted-foreground font-mono">
-            v1.0.0 &bull; Tenebre System
+            v1.0.0
           </p>
         </CardFooter>
       </Card>
