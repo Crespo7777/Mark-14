@@ -54,6 +54,9 @@ const Dashboard = () => {
       if (!session) throw new Error("Não autenticado");
 
       const user = session.user;
+      
+      // CORREÇÃO: Capturar o username dos metadados gravados no registo
+      const metadataUsername = user.user_metadata?.username;
 
       const [profileResponse, tablesResponse, membersResponse] = await Promise.all([
         supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
@@ -62,9 +65,12 @@ const Dashboard = () => {
       ]);
 
       let profile = profileResponse.data;
+      
+      // CORREÇÃO: Se não existir perfil, cria usando o metadataUsername como prioridade
       if (!profile) {
         const { data: newProfile } = await supabase.from("profiles").insert({
-          id: user.id, display_name: user.email?.split('@')[0] || 'Jogador'
+          id: user.id, 
+          display_name: metadataUsername || user.email?.split('@')[0] || 'Jogador'
         }).select().single();
         profile = newProfile;
       }
@@ -141,7 +147,10 @@ const Dashboard = () => {
     )
   }
 
-  const { profile, tables } = dashboardData;
+  const { user, profile, tables } = dashboardData;
+
+  // CORREÇÃO: Define o nome de exibição. Prioriza: Metadados > Perfil (DB) > Email
+  const displayName = user.user_metadata?.username || profile?.display_name || user.email?.split('@')[0] || "Viajante";
 
   const filteredTables = tables.filter(t => 
     t.name.toLowerCase().includes(searchTerm.toLowerCase())
@@ -169,7 +178,7 @@ const Dashboard = () => {
            
            <div className="flex items-center gap-4">
               <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">
-                 Olá, {profile?.display_name}
+                 Olá, {displayName}
               </span>
               <Button variant="ghost" size="sm" onClick={handleSignOut} className="hover:bg-destructive/10 hover:text-destructive transition-colors">
                 <LogOut className="w-4 h-4 mr-2" /> Sair

@@ -87,7 +87,7 @@ const Auth = () => {
         password,
         options: {
           data: {
-            username: username,
+            username: username, // Isto salva o nome nos metadados do utilizador
           },
         },
       });
