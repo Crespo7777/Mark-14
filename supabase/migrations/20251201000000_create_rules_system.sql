@@ -1,24 +1,27 @@
--- supabase/migrations/20251201000000_create_rules_system.sql
+-- Criar a tabela 'rules'
+CREATE TABLE rules (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::TEXT, now()) NOT NULL,
+    table_id UUID REFERENCES tables(id) ON DELETE CASCADE NOT NULL,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    folder_id UUID REFERENCES rule_folders(id) ON DELETE SET NULL,
 
-CREATE TABLE IF NOT EXISTS public.rules (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  table_id UUID REFERENCES public.tables(id) ON DELETE CASCADE NOT NULL,
-  title TEXT NOT NULL,
-  content TEXT, -- HTML rico do editor
-  created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
-  updated_at TIMESTAMPTZ DEFAULT now() NOT NULL
+    CONSTRAINT fk_rules_tables FOREIGN KEY (table_id) REFERENCES tables(id),
+    CONSTRAINT fk_rules_user FOREIGN KEY (user_id) REFERENCES auth.users(id),
+    CONSTRAINT fk_rules_folders FOREIGN KEY (folder_id) REFERENCES rule_folders(id)
 );
 
--- RLS (Segurança)
-ALTER TABLE public.rules ENABLE ROW LEVEL SECURITY;
+-- Habilitar RLS (Row-Level Security)
+ALTER TABLE rules ENABLE ROW LEVEL SECURITY;
 
--- Mestre gere tudo
-CREATE POLICY "Masters can manage rules" ON public.rules FOR ALL
-  USING (EXISTS (SELECT 1 FROM public.tables WHERE tables.id = rules.table_id AND tables.master_id = auth.uid()));
+-- ... (Políticas de RLS)
+-- A política de SELECT para 'rules' é a mais importante para a leitura.
+CREATE POLICY "Rules are visible to all table members"
+ON rules FOR SELECT
+USING (
+    auth.uid() IN (SELECT user_id FROM table_members WHERE table_id = rules.table_id)
+);
 
--- Jogadores veem as regras
-CREATE POLICY "Players can view rules" ON public.rules FOR SELECT
-  USING (EXISTS (SELECT 1 FROM public.table_members WHERE table_members.table_id = rules.table_id AND table_members.user_id = auth.uid()));
-
--- Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE public.rules;
+-- ... (Outras Políticas)
