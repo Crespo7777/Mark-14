@@ -33,7 +33,7 @@ interface MediaFile {
   updated_at: string;
 }
 
-const BUCKET_NAME = "campaign-media";
+const BUCKET_NAME = "campaign-images";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 export const MediaLibrary = ({ onSelect, trigger, filter = 'all', multiSelect = false }: MediaLibraryProps) => {

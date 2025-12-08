@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { 
     Plus, Edit, Trash2, Eye, FolderOpen, Archive, ArchiveRestore, 
-    MoreVertical, Share2, Image as ImageIcon, Book 
+    MoreVertical, Share2, Image as ImageIcon, Book, Loader2
 } from "lucide-react"; 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { JournalReadDialog } from "@/components/JournalReadDialog";
 import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
 import { EntityListManager } from "@/components/EntityListManager"; 
-import { Card } from "@/components/ui/card"; // Simplificado, usaremos div interna
+import { Card } from "@/components/ui/card"; 
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -50,11 +50,29 @@ interface SharedEntityJournalTabProps {
   isReadOnly?: boolean;
 }
 
+// --- OTIMIZAÇÃO: Select específico SEM 'content' ---
 const fetchEntityJournal = async (entityId: string, type: "character" | "npc") => {
   const column = type === "character" ? "character_id" : "npc_id";
   const { data, error } = await supabase
     .from("journal_entries")
-    .select(`*, shared_with_players, player:profiles!journal_entries_player_id_fkey(display_name), character:characters!journal_entries_character_id_fkey(name), npc:npcs!journal_entries_npc_id_fkey(name)`)
+    .select(`
+      id, 
+      title, 
+      created_at, 
+      is_shared,
+      is_archived,
+      is_hidden_on_sheet,
+      folder_id,
+      data,
+      table_id,
+      player_id,
+      character_id,
+      npc_id,
+      shared_with_players,
+      player:profiles!journal_entries_player_id_fkey(display_name), 
+      character:characters!journal_entries_character_id_fkey(name), 
+      npc:npcs!journal_entries_npc_id_fkey(name)
+    `) // 'content' removido para performance
     .eq(column, entityId)
     .order("created_at", { ascending: false });
   
@@ -76,6 +94,8 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
   const [showArchived, setShowArchived] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntryWithRelations | null>(null);
   const [entryToRead, setEntryToRead] = useState<JournalEntryWithRelations | null>(null);
+  const [entryToEdit, setEntryToEdit] = useState<JournalEntryWithRelations | null>(null);
+  const [isLoadingContent, setIsLoadingContent] = useState<string | null>(null);
 
   const { data: entries = [], isLoading } = useQuery({
     queryKey: ["journal_entries", entityType, entityId],
@@ -90,6 +110,30 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["journal_entries", entityType, entityId] });
     queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
+  };
+
+  // --- NOVA FUNÇÃO: Busca conteúdo sob demanda ---
+  const handleReadEntry = async (entry: JournalEntryWithRelations, mode: 'read' | 'edit' = 'read') => {
+    setIsLoadingContent(entry.id);
+    try {
+        const { data, error } = await supabase
+            .from("journal_entries")
+            .select("content")
+            .eq("id", entry.id)
+            .single();
+
+        if (error) throw error;
+
+        const fullEntry = { ...entry, content: data.content };
+
+        if (mode === 'read') setEntryToRead(fullEntry);
+        else setEntryToEdit(fullEntry);
+
+    } catch (error) {
+        toast({ title: "Erro", description: "Falha ao carregar conteúdo.", variant: "destructive" });
+    } finally {
+        setIsLoadingContent(null);
+    }
   };
 
   const handleDelete = async () => {
@@ -122,10 +166,15 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
       return matchSearch && matchArchive;
   });
 
-  // --- NOVO RENDER ITEM (Estilo Card Visual com Capa) ---
+  // --- RENDER ITEM ---
   const renderItem = (entry: JournalEntryWithRelations) => {
     const coverUrl = entry.data?.cover_image;
-    const timeAgo = formatDistanceToNow(new Date(entry.created_at), { locale: ptBR, addSuffix: true });
+    let timeAgo = "Data desconhecida";
+    try {
+        if(entry.created_at) timeAgo = formatDistanceToNow(new Date(entry.created_at), { locale: ptBR, addSuffix: true });
+    } catch(e) { console.error(e) }
+    
+    const isLoadingThis = isLoadingContent === entry.id;
 
     return (
         <Card 
@@ -134,7 +183,7 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
                 transition-all duration-300 hover:shadow-lg hover:border-primary/50 cursor-pointer
                 ${entry.is_archived ? "opacity-60 grayscale border-dashed" : ""}
             `}
-            onClick={() => setEntryToRead(entry)}
+            onClick={() => !isLoadingThis && handleReadEntry(entry, 'read')}
         >
             {/* 1. IMAGEM DE FUNDO (Capa) */}
             <div className="absolute inset-0 z-0 bg-muted">
@@ -145,16 +194,21 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
                 ) : (
-                    // Fallback visual elegante
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/50 to-background">
                         <Book className="w-12 h-12 text-muted-foreground/10 group-hover:text-primary/20 transition-colors" />
                     </div>
                 )}
-                {/* Gradiente escuro para garantir leitura do texto */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
             </div>
 
-            {/* 2. MENU DE AÇÕES (Topo Direito) */}
+            {/* Spinner */}
+            {isLoadingThis && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                </div>
+            )}
+
+            {/* 2. MENU DE AÇÕES */}
             {!isReadOnly && (
                 <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
@@ -164,23 +218,13 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
-                            <DropdownMenuItem onClick={() => setEntryToRead(entry)}>
+                            <DropdownMenuItem onClick={() => handleReadEntry(entry, 'read')}>
                                 <Eye className="w-4 h-4 mr-2"/> Ler
                             </DropdownMenuItem>
                             
-                            <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
-                                <JournalEntryDialog 
-                                    tableId={tableId} 
-                                    onEntrySaved={invalidate} 
-                                    entry={entry}
-                                    characterId={entityType === "character" ? entityId : undefined}
-                                    npcId={entityType === "npc" ? entityId : undefined}
-                                >
-                                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                        <Edit className="w-4 h-4 mr-2" /> Editar
-                                    </DropdownMenuItem>
-                                </JournalEntryDialog>
-                            </Suspense>
+                            <DropdownMenuItem onClick={() => handleReadEntry(entry, 'edit')}>
+                                <Edit className="w-4 h-4 mr-2" /> Editar
+                            </DropdownMenuItem>
 
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2"/> Pasta</DropdownMenuSubTrigger>
@@ -207,7 +251,7 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
                 </div>
             )}
 
-            {/* 3. ÍCONES / BADGES (Topo Esquerdo) */}
+            {/* 3. BADGES */}
             <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
                  {entry.is_shared && (
                     <Badge variant="secondary" className="bg-primary/20 text-primary-foreground text-[10px] h-5 px-1.5 backdrop-blur-md border border-primary/30 shadow-sm">
@@ -216,7 +260,7 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
                  )}
             </div>
 
-            {/* 4. CONTEÚDO DE TEXTO (Rodapé) */}
+            {/* 4. CONTEÚDO (RODAPÉ) */}
             <div className="mt-auto relative z-10 p-3 pb-3">
                  <h3 className="font-bold text-base text-white leading-tight line-clamp-2 drop-shadow-md mb-1">
                     {entry.title || "Sem Título"}
@@ -245,7 +289,6 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
             onToggleArchived={setShowArchived}
             renderItem={renderItem}
             emptyMessage={showArchived ? "Nenhum diário arquivado." : "Nenhuma anotação nesta ficha."}
-            // Grid ajustado para cards menores
             gridClassName="grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3"
             actions={
                 !isReadOnly && (
@@ -296,6 +339,21 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
       </AlertDialog>
 
       <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
+
+      {/* Diálogo de Edição com Trigger Invisível */}
+      {entryToEdit && (
+        <Suspense fallback={null}>
+            <JournalEntryDialog
+                tableId={tableId}
+                onEntrySaved={invalidate}
+                entry={entryToEdit}
+                characterId={entityType === "character" ? entityId : undefined}
+                npcId={entityType === "npc" ? entityId : undefined}
+            >
+                <span className="hidden">Trigger</span>
+            </JournalEntryDialog>
+        </Suspense>
+      )}
     </div>
   );
 };

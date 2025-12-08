@@ -19,7 +19,8 @@ import {
   ArchiveRestore,
   FolderOpen,
   Share2,
-  Eye
+  Eye,
+  Loader2
 } from "lucide-react";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
@@ -63,10 +64,27 @@ const SheetLoadingFallback = () => (
   </Card>
 );
 
+// --- OTIMIZAÇÃO: Select leve sem 'content' ---
 const fetchPlayerJournal = async (tableId: string) => {
   const { data, error } = await supabase
     .from("journal_entries")
-    .select(`*, shared_with_players, player:profiles!journal_entries_player_id_fkey(display_name), character:characters!journal_entries_character_id_fkey(name), npc:npcs!journal_entries_npc_id_fkey(name)`)
+    .select(`
+      id, 
+      title, 
+      created_at,
+      is_shared,
+      is_archived,
+      is_hidden_on_sheet,
+      folder_id,
+      data,
+      player_id,
+      character_id,
+      npc_id,
+      shared_with_players,
+      player:profiles!journal_entries_player_id_fkey(display_name), 
+      character:characters!journal_entries_character_id_fkey(name), 
+      npc:npcs!journal_entries_npc_id_fkey(name)
+    `) // SEM 'content'
     .eq("table_id", tableId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -87,6 +105,8 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
   const [showArchivedJournal, setShowArchivedJournal] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntryWithRelations | null>(null);
   const [entryToRead, setEntryToRead] = useState<JournalEntryWithRelations | null>(null);
+  const [entryToEdit, setEntryToEdit] = useState<JournalEntryWithRelations | null>(null);
+  const [isLoadingContent, setIsLoadingContent] = useState<string | null>(null);
 
   const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
     queryKey: ['journal', tableId],
@@ -100,6 +120,30 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
   });
 
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
+
+  // --- OTIMIZAÇÃO: Carregar conteúdo sob demanda ---
+  const handleReadEntry = async (entry: JournalEntryWithRelations, mode: 'read' | 'edit' = 'read') => {
+    setIsLoadingContent(entry.id);
+    try {
+        const { data, error } = await supabase
+            .from("journal_entries")
+            .select("content")
+            .eq("id", entry.id)
+            .single();
+
+        if (error) throw error;
+
+        const fullEntry = { ...entry, content: data.content };
+
+        if (mode === 'read') setEntryToRead(fullEntry);
+        else setEntryToEdit(fullEntry);
+
+    } catch (error) {
+        toast({ title: "Erro", description: "Falha ao carregar conteúdo.", variant: "destructive" });
+    } finally {
+        setIsLoadingContent(null);
+    }
+  };
 
   const handleArchiveItem = async (id: string, currentValue: boolean) => {
     const { error } = await supabase.from("journal_entries").update({ is_archived: !currentValue }).eq("id", id);
@@ -151,6 +195,7 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
     let description = "Anotação Pública";
     let isMyEntry = false;
     const isSharedWithMe = (entry.shared_with_players || []).includes(userId);
+    const isLoadingThis = isLoadingContent === entry.id;
     
     if (entry.player_id === userId) { description = "Sua Anotação"; isMyEntry = true; } 
     else if (entry.character) { description = `Diário: ${entry.character.name}`; isMyEntry = true; }
@@ -161,9 +206,15 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
 
     return (
       <Card 
-        className={`border-border/50 flex flex-col h-[280px] hover:shadow-glow transition-shadow cursor-pointer group ${entry.is_archived ? "opacity-60 bg-muted/20" : ""}`}
-        onClick={() => setEntryToRead(entry)}
+        className={`border-border/50 flex flex-col h-[280px] hover:shadow-glow transition-shadow cursor-pointer group relative ${entry.is_archived ? "opacity-60 bg-muted/20" : ""}`}
+        onClick={() => !isLoadingThis && handleReadEntry(entry, 'read')}
       >
+        {isLoadingThis && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/50 backdrop-blur-[1px] rounded-lg">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+        )}
+
         <CardHeader className="pb-2">
           <CardTitle className="flex justify-between items-start text-lg truncate">
              <span className="truncate pr-2">{entry.title}</span>
@@ -171,14 +222,20 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
           </CardTitle>
           <CardDescription className="text-xs">{description}</CardDescription>
         </CardHeader>
+        
         <CardContent className="flex-1 overflow-hidden text-sm pt-2 pb-2 relative">
-            <JournalRenderer content={entry.content} className="line-clamp-6 text-sm" />
+            {/* Como não temos o content, mostramos um preview visual ou placeholder */}
+            <div className="text-muted-foreground italic text-xs">
+                Clique para carregar o conteúdo...
+            </div>
+            
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100 pointer-events-none">
                 <span className="bg-background/80 px-3 py-1 rounded-full text-xs font-medium flex items-center shadow-sm">
                    <Eye className="w-3 h-3 mr-1" /> Ler
                 </span>
             </div>
         </CardContent>
+
         <CardFooter className="flex justify-end items-center pt-0 pb-3 px-4 gap-2 h-12" onClick={e => e.stopPropagation()}>
              {isMyEntry && (
                  <div className="flex gap-1">
@@ -210,11 +267,9 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
              )}
             
             {canEdit && (
-              <Suspense fallback={<Button variant="ghost" size="icon" className="h-8 w-8" disabled><Edit className="w-4 h-4" /></Button>}>
-                <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} entry={entry} isPlayerNote={!!entry.player_id} characterId={entry.character_id || undefined} npcId={entry.npc_id || undefined}>
-                  <Button variant="ghost" size="icon" className="h-8 w-8"><Edit className="w-4 h-4" /></Button>
-                </JournalEntryDialog>
-              </Suspense>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleReadEntry(entry, 'edit')}>
+                    <Edit className="w-4 h-4" />
+                </Button>
             )}
         </CardFooter>
       </Card>
@@ -234,14 +289,14 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
             onToggleArchived={setShowArchivedJournal}
             renderItem={renderJournalCard}
             emptyMessage="Nenhuma anotação encontrada."
-            gridClassName="grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" // <--- CORREÇÃO DO LAYOUT AQUI
+            gridClassName="grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
             actions={
                <>
                    <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Minhas Pastas" />
                    <Suspense fallback={<Button size="sm" disabled>...</Button>}>
-                        <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} isPlayerNote={true}>
-                            <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Anotação</Button>
-                        </JournalEntryDialog>
+                       <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} isPlayerNote={true}>
+                           <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Anotação</Button>
+                       </JournalEntryDialog>
                    </Suspense>
                </>
             }
@@ -255,6 +310,22 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
         </AlertDialog>
 
         <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
+
+        {/* Diálogo de Edição para Players */}
+        {entryToEdit && (
+            <Suspense fallback={null}>
+                <JournalEntryDialog 
+                    tableId={tableId} 
+                    onEntrySaved={invalidateJournal} 
+                    entry={entryToEdit} 
+                    isPlayerNote={!!entryToEdit.player_id} 
+                    characterId={entryToEdit.character_id || undefined} 
+                    npcId={entryToEdit.npc_id || undefined}
+                >
+                    <span className="hidden">Trigger Invisível</span>
+                </JournalEntryDialog>
+            </Suspense>
+        )}
     </>
   );
 };

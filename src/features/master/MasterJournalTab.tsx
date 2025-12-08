@@ -17,7 +17,8 @@ import {
   Share2,
   Eye,
   Book,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2
 } from "lucide-react";
 import { ShareDialog } from "@/components/ShareDialog";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
@@ -63,17 +64,29 @@ const SheetLoadingFallback = () => (
   </Card>
 );
 
-// --- CORREÇÃO: SQL Simplificado ---
+// --- OTIMIZAÇÃO: Buscamos apenas os metadados, SEM o conteúdo pesado ---
 const fetchJournalEntries = async (tableId: string) => {
   const { data, error } = await supabase
     .from("journal_entries")
     .select(`
-      *, 
+      id, 
+      title, 
+      created_at, 
+      updated_at,
+      is_shared,
+      is_archived,
+      is_hidden_on_sheet,
+      folder_id,
+      data,
+      table_id,
+      player_id,
+      character_id,
+      npc_id,
       shared_with_players, 
       player:profiles(display_name), 
       character:characters(name), 
       npc:npcs(name)
-    `)
+    `) // Nota: 'content' removido intencionalmente
     .eq("table_id", tableId)
     .order("created_at", { ascending: false });
   
@@ -87,7 +100,6 @@ const fetchFolders = async (tableId: string) => {
   return data as FolderType[];
 };
 
-// --- CORREÇÃO: Exportação Nomeada (export const) ---
 export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   const { members } = useTableContext();
   const { toast } = useToast();
@@ -100,6 +112,8 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   const [showArchivedJournal, setShowArchivedJournal] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntryWithRelations | null>(null);
   const [entryToRead, setEntryToRead] = useState<JournalEntryWithRelations | null>(null);
+  const [entryToEdit, setEntryToEdit] = useState<JournalEntryWithRelations | null>(null);
+  const [isLoadingContent, setIsLoadingContent] = useState<string | null>(null);
 
   const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
     queryKey: ['journal', tableId],
@@ -111,6 +125,31 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   });
 
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
+
+  // --- NOVA FUNÇÃO: Busca o conteúdo completo apenas ao clicar ---
+  const handleReadEntry = async (entry: JournalEntryWithRelations, mode: 'read' | 'edit' = 'read') => {
+    setIsLoadingContent(entry.id);
+    try {
+        const { data, error } = await supabase
+            .from("journal_entries")
+            .select("content")
+            .eq("id", entry.id)
+            .single();
+
+        if (error) throw error;
+
+        // Mescla o conteúdo carregado com os dados que já tínhamos
+        const fullEntry = { ...entry, content: data.content };
+
+        if (mode === 'read') setEntryToRead(fullEntry);
+        else setEntryToEdit(fullEntry);
+
+    } catch (error) {
+        toast({ title: "Erro ao abrir", description: "Não foi possível carregar o conteúdo.", variant: "destructive" });
+    } finally {
+        setIsLoadingContent(null);
+    }
+  };
 
   const handleDeleteJournalEntry = async () => {
     if (!entryToDelete) return;
@@ -155,6 +194,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
       
       const coverUrl = entry.data?.cover_image;
       const canShare = !entry.player && !entry.character && !entry.npc; 
+      const isLoadingThis = isLoadingContent === entry.id;
       
       let timeAgo = "Data desconhecida";
       try {
@@ -168,7 +208,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
             transition-all duration-300 hover:shadow-lg hover:border-primary/50 cursor-pointer
             ${entry.is_archived ? "opacity-60 grayscale border-dashed" : ""}
           `}
-          onClick={() => setEntryToRead(entry)}
+          onClick={() => !isLoadingThis && handleReadEntry(entry, 'read')}
         >
             <div className="absolute inset-0 z-0 bg-muted">
                 {coverUrl ? (
@@ -185,6 +225,13 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
             </div>
 
+            {/* Spinner de carregamento */}
+            {isLoadingThis && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                </div>
+            )}
+
             <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -193,17 +240,13 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem onClick={() => setEntryToRead(entry)}>
+                          <DropdownMenuItem onClick={() => handleReadEntry(entry, 'read')}>
                              <Eye className="w-4 h-4 mr-2" /> Ler Entrada
                           </DropdownMenuItem>
                           
-                          <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
-                             <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} entry={entry} isPlayerNote={!!entry.player_id} characterId={entry.character_id || undefined} npcId={entry.npc_id || undefined}>
-                                <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                                    <Edit className="w-4 h-4 mr-2" /> Editar
-                                </DropdownMenuItem>
-                             </JournalEntryDialog>
-                          </Suspense>
+                          <DropdownMenuItem onClick={() => handleReadEntry(entry, 'edit')}>
+                              <Edit className="w-4 h-4 mr-2" /> Editar
+                          </DropdownMenuItem>
 
                           <DropdownMenuSeparator />
                           
@@ -317,6 +360,22 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
         </AlertDialog>
 
         <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
+        
+        {/* Diálogo de Edição controlado separadamente para carregar o conteúdo antes */}
+        {entryToEdit && (
+            <Suspense fallback={null}>
+                <JournalEntryDialog 
+                    tableId={tableId} 
+                    onEntrySaved={invalidateJournal} 
+                    entry={entryToEdit} 
+                    isPlayerNote={!!entryToEdit.player_id} 
+                    characterId={entryToEdit.character_id || undefined} 
+                    npcId={entryToEdit.npc_id || undefined}
+                >
+                    <span className="hidden">Trigger Invisível</span>
+                </JournalEntryDialog>
+            </Suspense>
+        )}
     </>
   );
 };
