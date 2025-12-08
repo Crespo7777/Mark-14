@@ -3,11 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-  CardFooter
 } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -56,7 +51,6 @@ import { JournalReadDialog } from "@/components/JournalReadDialog";
 import { useTableContext } from "@/features/table/TableContext";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { JournalRenderer } from "@/components/JournalRenderer";
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 
 const JournalEntryDialog = lazy(() =>
@@ -69,12 +63,20 @@ const SheetLoadingFallback = () => (
   </Card>
 );
 
+// --- CORREÇÃO: SQL Simplificado ---
 const fetchJournalEntries = async (tableId: string) => {
   const { data, error } = await supabase
     .from("journal_entries")
-    .select(`*, shared_with_players, player:profiles!journal_entries_player_id_fkey(display_name), character:characters!journal_entries_character_id_fkey(name), npc:npcs!journal_entries_npc_id_fkey(name)`)
+    .select(`
+      *, 
+      shared_with_players, 
+      player:profiles(display_name), 
+      character:characters(name), 
+      npc:npcs(name)
+    `)
     .eq("table_id", tableId)
     .order("created_at", { ascending: false });
+  
   if (error) throw error;
   return data as JournalEntryWithRelations[];
 };
@@ -85,12 +87,12 @@ const fetchFolders = async (tableId: string) => {
   return data as FolderType[];
 };
 
+// --- CORREÇÃO: Exportação Nomeada (export const) ---
 export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   const { members } = useTableContext();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // 1. Adicionado Hook de Realtime (Atualização automática)
   useTableRealtime(tableId, "journal_entries", ["journal", tableId]);
   useTableRealtime(tableId, "journal_folders", ["journal_folders", tableId]);
 
@@ -145,7 +147,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
     return matchesSearch && matchesArchive;
   });
 
-  // --- RENDERIZAÇÃO NO ESTILO FOUNDRY VTT (Tiles) ---
   const renderJournalCard = (entry: JournalEntryWithRelations) => {
       let sourceLabel = "";
       if (entry.player) sourceLabel = ` Jogador: ${entry.player.display_name}`;
@@ -153,8 +154,12 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
       else if (entry.npc) sourceLabel = ` NPC: ${entry.npc.name}`;
       
       const coverUrl = entry.data?.cover_image;
-      const canShare = !entry.player && !entry.character && !entry.npc; // Regras de quem pode partilhar
-      const timeAgo = formatDistanceToNow(new Date(entry.created_at), { locale: ptBR, addSuffix: true });
+      const canShare = !entry.player && !entry.character && !entry.npc; 
+      
+      let timeAgo = "Data desconhecida";
+      try {
+        if(entry.created_at) timeAgo = formatDistanceToNow(new Date(entry.created_at), { locale: ptBR, addSuffix: true });
+      } catch(e) { console.error(e) }
 
       return (
         <Card 
@@ -165,7 +170,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
           `}
           onClick={() => setEntryToRead(entry)}
         >
-            {/* 1. ÁREA DA IMAGEM DE CAPA (Fundo) */}
             <div className="absolute inset-0 z-0 bg-muted">
                 {coverUrl ? (
                     <img 
@@ -174,16 +178,13 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                     />
                 ) : (
-                    // Fallback se não tiver imagem
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/50 to-background">
                         <Book className="w-12 h-12 text-muted-foreground/10 group-hover:text-primary/20 transition-colors" />
                     </div>
                 )}
-                {/* Gradiente para o texto ficar legível */}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
             </div>
 
-            {/* 2. MENU DE AÇÕES (Canto Superior Direito) - Visível no Hover */}
             <div className="absolute top-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -192,26 +193,26 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                         <DropdownMenuItem onClick={() => setEntryToRead(entry)}>
+                          <DropdownMenuItem onClick={() => setEntryToRead(entry)}>
                              <Eye className="w-4 h-4 mr-2" /> Ler Entrada
-                         </DropdownMenuItem>
-                         
-                         <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
+                          </DropdownMenuItem>
+                          
+                          <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
                              <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} entry={entry} isPlayerNote={!!entry.player_id} characterId={entry.character_id || undefined} npcId={entry.npc_id || undefined}>
                                 <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
                                     <Edit className="w-4 h-4 mr-2" /> Editar
                                 </DropdownMenuItem>
                              </JournalEntryDialog>
-                         </Suspense>
+                          </Suspense>
 
-                         <DropdownMenuSeparator />
-                         
-                         <DropdownMenuItem onClick={() => handleArchiveItem(entry.id, !!entry.is_archived)}>
+                          <DropdownMenuSeparator />
+                          
+                          <DropdownMenuItem onClick={() => handleArchiveItem(entry.id, !!entry.is_archived)}>
                             {entry.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
                             {entry.is_archived ? "Restaurar" : "Arquivar"}
-                         </DropdownMenuItem>
+                          </DropdownMenuItem>
 
-                         {canShare && (
+                          {canShare && (
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover</DropdownMenuSubTrigger>
                                 <DropdownMenuSubContent>
@@ -221,17 +222,16 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                                     </DropdownMenuRadioGroup>
                                 </DropdownMenuSubContent>
                              </DropdownMenuSub>
-                         )}
+                          )}
 
-                         <DropdownMenuSeparator />
-                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setEntryToDelete(entry)}>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setEntryToDelete(entry)}>
                             <Trash2 className="w-4 h-4 mr-2" /> Excluir
-                         </DropdownMenuItem>
+                          </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
 
-            {/* 3. ÍCONES DE ESTADO (Canto Superior Esquerdo) */}
             <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
                  {entry.is_shared && (
                     <Badge variant="secondary" className="bg-primary/20 text-primary-foreground text-[10px] h-5 px-1.5 backdrop-blur-md border border-primary/30 shadow-sm">
@@ -245,7 +245,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                  )}
             </div>
 
-            {/* 4. CONTEÚDO DE TEXTO (Rodapé) */}
             <div className="mt-auto relative z-10 p-3 pb-3">
                  <h3 className="font-bold text-base text-white leading-tight line-clamp-2 drop-shadow-md mb-1">
                     {entry.title || "Sem Título"}
@@ -256,7 +255,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                        {timeAgo}
                     </span>
                     
-                    {/* Botão de Partilha Rápida (só se for permitido) */}
                     {canShare && (
                         <div onClick={(e) => e.stopPropagation()}>
                             <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
@@ -288,7 +286,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
             gridClassName="grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"
             actions={
                 <>
-                    {/* 2. BOTÃO ADICIONADO AQUI */}
                     <Button
                         variant="ghost"
                         size="sm"
