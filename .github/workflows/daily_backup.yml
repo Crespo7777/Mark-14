@@ -50,18 +50,19 @@ jobs:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           
+      # ... (Trecho do daily_backup.yml)
+
       # --- 3. UPLOAD PARA ARMAZENAMENTO EXTERNO (rclone nativo) ---
       - name: Upload Backups to Google Drive
         run: |
           # 1. Cria o diretório de configuração do rclone
           mkdir -p ~/.config/rclone
           
-          # 2. Injeta o conteúdo da Secret RCLONE_CONFIG (método EOF)
-          cat << EOF > ~/.config/rclone/rclone.conf
-          ${{ secrets.RCLONE_CONFIG }}
-          EOF
+          # 2. Injeta o conteúdo da Secret RCLONE_CONFIG usando o método printf
+          # O printf garante que o conteúdo multi-linha seja escrito LITERALMENTE, resolvendo o problema da shell.
+          printf "%s" "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
           
-          # 3. Executa a cópia para o remote 'MeuDrive'
+          # 3. Executa a cópia nativa usando o remote 'MeuDrive'
           rclone copy backups MeuDrive:supabase-backups/${{ github.sha }}
         env:
           RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
