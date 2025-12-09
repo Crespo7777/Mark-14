@@ -38,15 +38,16 @@ jobs:
       # --- 2. BACKUP DO STORAGE (Buckets) ---
       - name: Run Storage Backup Script
         run: |
-          npm install @supabase/supabase-js # Instalar SDK
+          npm install @supabase/supabase-js archiver # Instalar SDKs
           node ./scripts/backup_storage.js
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} # CRÍTICO: Chave Secreta
           
       # --- 3. UPLOAD PARA ARMAZENAMENTO EXTERNO (rclone) ---
-      - name: Setup rclone and Upload to B2/Drive
-        uses: sergei-sh/rclone-action@v1 # Exemplo de Action para rclone
+      - name: Setup rclone and Upload to Google Drive
+        uses: sergei-sh/rclone-action@v1
         with:
-          rclone_config: ${{ secrets.RCLONE_CONFIG }} # Configuração rclone ENCRYPTADA
-          args: copy backups remote-name:path/to/backup/${{ github.sha }}
+          rclone_config: ${{ secrets.RCLONE_CONFIG }}
+          # Usando o nome 'MeuDrive' encontrado no seu rclone.conf
+          args: copy backups MeuDrive:supabase-backups/${{ github.sha }}
