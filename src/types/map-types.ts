@@ -1,30 +1,24 @@
 // src/types/map-types.ts
 
-export interface Scene {
+export interface MapToken {
   id: string;
-  table_id: string;
-  name: string;
-  image_url: string;
-  grid_active: boolean;
-  // --- NOVOS CAMPOS ---
-  fog_active: boolean;
-  fog_data: string | null;
-  // --------------------
-  created_at: string;
-}
-
-export interface SceneToken {
-  id: string;
-  scene_id: string;
+  characterId?: string; // Se estiver ligado a uma ficha
+  type: "character" | "npc" | "monster";
+  label: string;
   x: number;
   y: number;
-  scale: number;
-  character_id?: string | null;
-  npc_id?: string | null;
-  label?: string | null;
-  custom_image_url?: string | null;
-  
-  // Campos virtuais vindos dos JOINS
-  character?: { name: string, data: any }; 
-  npc?: { name: string, data: any };
+  size: number; // Em unidades de grelha (ex: 1 = 1 quadrado)
+  imageUrl?: string | null;
+  color: string; // Cor da borda/fundo se não houver imagem
+  rotation: number;
+  statusEffects?: string[]; // Ex: ["blinded", "prone"]
+  isHidden?: boolean; // Para o Mestre esconder tokens
+}
+
+export interface MapData {
+  id: string;
+  tableId: string;
+  gridSize: number; // Ex: 50px
+  tokens: MapToken[];
+  fogOfWar: string[]; // Células exploradas (futuro)
 }

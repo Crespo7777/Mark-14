@@ -1,7 +1,13 @@
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { rollAttributeTest, formatAbilityTest, parseDiceRoll } from "@/lib/dice-parser";
+import { 
+    rollAttributeTest, 
+    formatAbilityTest, 
+    parseDiceRoll,
+    type DiceRoll,
+    type AttributeRollResult
+} from "@/lib/dice-parser";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle, AlertOctagon, Hand } from "lucide-react";
@@ -59,7 +65,8 @@ export const AbilityRollDialog = ({
     if (!isNaN(fixed) && String(fixed) === corruptionCost.trim()) {
         return { type: 'fixed', value: fixed };
     }
-    const dice = parseDiceRoll(corruptionCost);
+    // parseDiceRoll agora retorna DiceRoll, que tem .total. Seguro.
+    const dice: DiceRoll | null = parseDiceRoll(corruptionCost);
     if (dice) return { type: 'dice', value: corruptionCost };
     return { type: 'none', value: 0 };
   }, [corruptionCost]);
@@ -120,7 +127,8 @@ export const AbilityRollDialog = ({
            });
        }
     } else {
-       const result = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: false });
+       // rollAttributeTest usa a lógica antiga e retorna AttributeRollResult (compatível).
+       const result: AttributeRollResult = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: false });
        chatMessage = formatAbilityTest(characterName, abilityName, attributeName, result, appliedCost) + (costMessage ? `\n🎲 Corrupção: ${costMessage}` : "");
        discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result };
        

@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Dices, Trash2, HelpCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { parseDiceRoll, formatRollResult } from "@/lib/dice-parser"; 
+// Importamos o parse e o format, mas também o TIPO DiceRoll para garantir segurança
+import { parseDiceRoll, formatRollResult, type DiceRoll } from "@/lib/dice-parser"; 
 import { cn } from "@/lib/utils";
 import { useTableContext, TableMember } from "@/features/table/TableContext";
 import DOMPurify from "dompurify";
@@ -144,16 +145,20 @@ export const ChatPanel = ({ tableId }: ChatPanelProps) => {
 
     if (messageContent.startsWith("/r ") || messageContent.startsWith("/roll ")) {
       const command = messageContent.replace(/(\/r|\/roll)\s+/, "");
-      const result = parseDiceRoll(command);
+      
+      // O DiceEngine retorna o novo objeto DiceRoll com .details, .total, etc.
+      const result: DiceRoll | null = parseDiceRoll(command);
       
       if (result) {
         messageToSend = formatRollResult(command, result);
         messageType = "roll";
         
+        // NOTA: A estrutura de 'result' mudou (agora tem .details em vez de .modifier).
+        // Se a Edge Function 'discord-roll-handler' esperar '.modifier', ela precisará ser atualizada.
         discordRollData = {
           rollType: "manual",
           command: command,
-          result: result,
+          result: result, 
         };
         
       } else {

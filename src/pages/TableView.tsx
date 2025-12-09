@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,13 +6,17 @@ import { TableProvider, TableMember } from "@/features/table/TableContext";
 import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, AlertCircle, RefreshCcw } from "lucide-react";
+import { Loader2, ArrowLeft, AlertCircle, RefreshCcw, Map as MapIcon, LayoutDashboard } from "lucide-react";
 import { Table } from "@/types/app-types";
+import { MapBoard } from "@/features/map/MapBoard"; // <--- Importação do Mapa
 
 const TableView = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient(); 
+
+  // Estado para controlar a visualização (Interface vs Mapa)
+  const [viewMode, setViewMode] = useState<"ui" | "map">("ui");
 
   // Query Principal "À Prova de Bala" (Sem Joins complexos)
   const { 
@@ -29,7 +34,7 @@ const TableView = () => {
       if (!session) throw new Error("Não autenticado");
       const user = session.user;
 
-      // PASSO 1: Buscar a Mesa (Sem tentar buscar o perfil do mestre ainda)
+      // PASSO 1: Buscar a Mesa
       const { data: tableData, error: tableError } = await supabase
         .from("tables")
         .select("*") 
@@ -39,8 +44,7 @@ const TableView = () => {
       if (tableError) throw tableError;
       if (!tableData) throw new Error("Mesa não encontrada");
 
-      // PASSO 2: Buscar o Perfil do Mestre separadamente
-      // Isto evita o erro 400 de relação ambígua
+      // PASSO 2: Buscar o Perfil do Mestre
       const { data: masterProfile, error: masterError } = await supabase
         .from("profiles")
         .select("id, display_name")
@@ -49,11 +53,9 @@ const TableView = () => {
       
       if (masterError) {
          console.warn("Erro ao buscar mestre:", masterError);
-         // Se falhar, usa um fallback para não travar a mesa
       }
 
-      // PASSO 3: Buscar Membros e os seus perfis
-      // Primeiro buscamos a relação
+      // PASSO 3: Buscar Membros
       const { data: membersRaw, error: membersError } = await supabase
         .from("table_members")
         .select("user_id, is_helper")
@@ -72,7 +74,7 @@ const TableView = () => {
           membersProfiles = profiles || [];
       }
 
-      // PASSO 4: Montar a lista final combinando os dados
+      // PASSO 4: Montar a lista final
       const isUserMaster = tableData.master_id === user.id;
       const memberRecord = membersRaw?.find(m => m.user_id === user.id);
       
@@ -80,7 +82,6 @@ const TableView = () => {
         throw new Error("Você não é membro desta mesa.");
       }
 
-      // Construir objeto do Mestre
       const masterObj = {
           id: tableData.master_id,
           display_name: masterProfile?.display_name || "Mestre Desconhecido",
@@ -88,7 +89,6 @@ const TableView = () => {
           isHelper: false
       };
 
-      // Construir lista de membros (Jogadores)
       const playersList = (membersRaw || []).map(member => {
           const profile = membersProfiles.find(p => p.id === member.user_id);
           return {
@@ -97,7 +97,7 @@ const TableView = () => {
               isMaster: false,
               isHelper: member.is_helper
           };
-      }).filter(p => p.id !== masterObj.id); // Remove o mestre se ele estiver na lista de membros também
+      }).filter(p => p.id !== masterObj.id);
 
       const finalMemberList: TableMember[] = [masterObj, ...playersList];
 
@@ -166,11 +166,50 @@ const TableView = () => {
   return (
     <TableProvider value={contextValue as any}>
       <div className="h-screen w-screen overflow-hidden bg-background relative">
-        {contextData.isMaster || contextData.isHelper ? (
-          <MasterView />
-        ) : (
-          <PlayerView />
+        
+        {/* MODO MAPA */}
+        {viewMode === "map" && (
+            <div className="absolute inset-0 z-0">
+                <MapBoard isMaster={contextData.isMaster} />
+            </div>
         )}
+
+        {/* MODO INTERFACE (Master/Player Views) */}
+        {viewMode === "ui" && (
+            <div className="h-full w-full relative z-10 bg-background/95 backdrop-blur-sm">
+                {contextData.isMaster || contextData.isHelper ? (
+                  <MasterView />
+                ) : (
+                  <PlayerView />
+                )}
+            </div>
+        )}
+
+        {/* CONTROLO FLUTUANTE DE NAVEGAÇÃO */}
+        <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-auto">
+            <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-2xl">
+                <Button 
+                    size="sm" 
+                    variant={viewMode === "ui" ? "secondary" : "ghost"} 
+                    className="gap-2 text-xs font-bold"
+                    onClick={() => setViewMode("ui")}
+                >
+                    <LayoutDashboard className="w-4 h-4" />
+                    Interface
+                </Button>
+                <div className="w-px bg-white/20 mx-1 my-1" />
+                <Button 
+                    size="sm" 
+                    variant={viewMode === "map" ? "secondary" : "ghost"} 
+                    className="gap-2 text-xs font-bold"
+                    onClick={() => setViewMode("map")}
+                >
+                    <MapIcon className="w-4 h-4" />
+                    Mapa VTT
+                </Button>
+            </div>
+        </div>
+
       </div>
     </TableProvider>
   );

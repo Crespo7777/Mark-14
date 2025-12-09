@@ -1,22 +1,17 @@
 // src/lib/dice-parser.ts
 
 /**
- * Interface simples para o resultado da rolagem
+ * Interface atualizada para o resultado da rolagem.
+ * Agora suporta fórmulas mais complexas do que apenas XdY+Z.
  */
 export interface DiceRoll {
-  rolls: number[];
-  modifier: number;
-  total: number;
+  total: number;       // O valor final da soma
+  formula: string;     // A fórmula original (ex: "1d20 + 1d4")
+  rolls: number[];     // Todos os resultados de dados individuais (para efeitos visuais ou crit check)
+  details: string;     // String detalhada (ex: "1d20[15] + 5")
+  isCrit?: boolean;    // Flag opcional para identificar críticos (1 ou 20 no d20)
+  isFumble?: boolean;  // Flag opcional para falhas críticas
 }
-
-/**
- * Regex para capturar "XdY+Z" ou "XdY-Z" ou "XdY"
- * G1: X (número de dados)
- * G2: Y (lados do dado)
- * G3: + ou - (operador)
- * G4: Z (modificador)
- */
-const diceRegex = /(\d+)[dD](\d+)(?:([+\-])(\d+))?/;
 
 /**
  * Rola um único dado
@@ -28,72 +23,116 @@ export const rollDie = (sides: number): number => {
 };
 
 /**
- * Analisa uma string de rolagem (ex: "2d6+3") e retorna o resultado
- * @param command - A string de rolagem (sem o "/r ")
- * @returns Um objeto DiceRoll ou null se a string for inválida
+ * Motor de Rolagem de Dados (Dice Engine)
+ * Capaz de processar fórmulas como: "1d20 + 5", "1d8 + 1d6", "2d20kh1" (futuro)
+ */
+class DiceEngine {
+  static roll(formula: string): DiceRoll | null {
+    // Regex melhorado para capturar grupos: 1d20, +5, -1d4
+    // G1/G4: Sinal (+ ou -)
+    // G2: Quantidade de dados
+    // G3: Lados do dado
+    // G5: Valor fixo (modificador)
+    const regex = /([+-]?)\s*(\d+)[dD](\d+)|([+-]?)\s*(\d+)/g;
+    
+    let match;
+    let total = 0;
+    let detailsParts: string[] = [];
+    const allRolls: number[] = [];
+    
+    // Simples validação de sanidade
+    if (!formula || formula.length > 50) return null;
+
+    let hasMatch = false;
+
+    // Iterar sobre todas as partes da fórmula (ex: "1d20", "+ 5")
+    while ((match = regex.exec(formula)) !== null) {
+      if (match[0].trim() === "") continue; // Ignorar espaços vazios
+      hasMatch = true;
+
+      const isDice = !!match[2]; // Se capturou grupo 2, é dado
+      const signStr = match[1] || match[4] || '+'; // Sinal capturado ou + padrão
+      const sign = signStr.includes('-') ? -1 : 1;
+      const cleanSign = sign === -1 ? "- " : "+ "; // Para formatação bonita
+
+      if (isDice) {
+        const count = parseInt(match[2], 10);
+        const faces = parseInt(match[3], 10);
+        
+        // Proteção contra abuso
+        if (count > 100 || faces > 1000) return null;
+
+        const currentRolls = [];
+        let subTotal = 0;
+
+        for (let i = 0; i < count; i++) {
+          const val = rollDie(faces);
+          currentRolls.push(val);
+          subTotal += val;
+        }
+
+        total += subTotal * sign;
+        allRolls.push(...currentRolls);
+        
+        // Formatação: "1d20[15]"
+        const firstTerm = detailsParts.length === 0;
+        const prefix = firstTerm ? (sign === -1 ? "-" : "") : cleanSign;
+        detailsParts.push(`${prefix}${count}d${faces}[${currentRolls.join(',')}]`);
+
+      } else {
+        // Modificador fixo
+        const value = parseInt(match[5], 10);
+        const termTotal = value * sign;
+        total += termTotal;
+        
+        const firstTerm = detailsParts.length === 0;
+        const prefix = firstTerm ? (sign === -1 ? "-" : "") : cleanSign;
+        detailsParts.push(`${prefix}${value}`);
+      }
+    }
+
+    if (!hasMatch) return null;
+
+    // Deteção básica de Crítico/Falha para d20 (assumindo que se houver 1d20, é o teste principal)
+    // Lógica simplificada: Se o primeiro dado for d20, verificamos ele.
+    const isCrit = formula.includes("20") && allRolls.length > 0 && allRolls[0] === 1;
+    const isFumble = formula.includes("20") && allRolls.length > 0 && allRolls[0] === 20;
+
+    return {
+      total,
+      formula,
+      rolls: allRolls,
+      details: detailsParts.join(" "),
+      isCrit,
+      isFumble
+    };
+  }
+}
+
+/**
+ * Analisa uma string de rolagem (ex: "2d6+3") e retorna o resultado.
+ * Wrapper para a nova DiceEngine manter compatibilidade de nome.
  */
 export const parseDiceRoll = (command: string): DiceRoll | null => {
-  const match = command.trim().match(diceRegex);
-
-  if (!match) {
-    return null;
-  }
-
-  const numDice = parseInt(match[1], 10);
-  const dieSides = parseInt(match[2], 10);
-  const operator = match[3];
-  const modifier = match[4] ? parseInt(match[4], 10) : 0;
-
-  // Limites para evitar abuso (ex: 999d999)
-  if (numDice > 100 || dieSides > 1000) {
-    return null;
-  }
-
-  const rolls: number[] = [];
-  let subTotal = 0;
-  for (let i = 0; i < numDice; i++) {
-    const roll = rollDie(dieSides);
-    rolls.push(roll);
-    subTotal += roll;
-  }
-
-  const total = operator === "-" ? subTotal - modifier : subTotal + modifier;
-  const finalModifier = operator === "-" ? -modifier : modifier;
-
-  return {
-    rolls,
-    modifier: finalModifier,
-    total,
-  };
+  return DiceEngine.roll(command);
 };
 
 /**
- * Formata o resultado da rolagem para uma string amigável
- * @param command - A string de rolagem original (ex: "2d6+3")
- * @param result - O objeto DiceRoll
- * @returns Uma string formatada (ex: "Rolou 2d6+3... [5, 2] + 3 = 10")
+ * Formata o resultado da rolagem para uma string amigável HTML.
  */
 export const formatRollResult = (command: string, result: DiceRoll): string => {
-  const rollsStr = `[<span class="text-primary-foreground">${result.rolls.join(
-    ", ",
-  )}</span>]`;
-  const modStr =
-    result.modifier > 0
-      ? ` + <span class="text-primary-foreground">${result.modifier}</span>`
-      : result.modifier < 0
-      ? ` - <span class="text-primary-foreground">${Math.abs(
-          result.modifier,
-        )}</span>`
-      : "";
+  // A nova engine já nos dá os detalhes formatados (ex: "1d20[10] + 5")
+  // Vamos apenas colorir os números dentro dos parênteses retos
+  const formattedDetails = result.details.replace(
+    /\[(.*?)\]/g, 
+    `[<span class="text-primary-foreground">$1</span>]`
+  );
 
-  return `Rolou ${command}...\n${rollsStr}${modStr} = <span class="text-primary-foreground font-bold text-lg">${result.total}</span>`;
+  return `Rolou ${command}...\n${formattedDetails} = <span class="text-primary-foreground font-bold text-lg">${result.total}</span>`;
 };
 
 // --- FUNÇÕES DE TESTE DE ATRIBUTO ---
 
-/**
- * Resultado de um teste de atributo de Symbaroum
- */
 export interface AttributeRollResult {
   mainRoll: number;
   advantageRoll: number | null;
@@ -107,6 +146,7 @@ export interface AttributeRollResult {
 
 /**
  * Executa uma rolagem de atributo (1d20) contra um alvo.
+ * Mantida a lógica original de Symbaroum (Roll Under).
  */
 export const rollAttributeTest = (options: {
   attributeValue: number;
@@ -139,7 +179,6 @@ export const rollAttributeTest = (options: {
   };
 };
 
-// --- (Função Auxiliar de Formatação de Teste) ---
 const formatTestResult = (
   title: string,
   result: AttributeRollResult,
@@ -194,9 +233,6 @@ ${targetStr}
 Resultado: ${outcome}`;
 };
 
-/**
- * Formata um resultado de teste de atributo para o chat.
- */
 export const formatAttributeTest = (
   characterName: string,
   attributeName: string,
@@ -206,9 +242,6 @@ export const formatAttributeTest = (
   return formatTestResult(title, result);
 };
 
-/**
- * Formata um resultado de teste de Habilidade para o chat.
- */
 export const formatAbilityTest = (
   characterName: string,
   abilityName: string,
@@ -227,9 +260,6 @@ export const formatAbilityTest = (
   return `${baseMessage}${corruptionStr}`;
 };
 
-/**
- * Formata um teste de ATAQUE de Arma para o chat.
- */
 export const formatAttackRoll = (
   characterName: string,
   weaponName: string,
@@ -240,9 +270,6 @@ export const formatAttackRoll = (
   return formatTestResult(title, result);
 };
 
-/**
- * Formata um teste de DEFESA para o chat.
- */
 export const formatDefenseRoll = (
   characterName: string,
   result: AttributeRollResult,
@@ -252,7 +279,8 @@ export const formatDefenseRoll = (
 };
 
 /**
- * Formata uma rolagem de DANO de Arma para o chat.
+ * Formata uma rolagem de DANO.
+ * Atualizado para usar a nova interface DiceRoll (que agora tem .details e .rolls)
  */
 export const formatDamageRoll = (
   characterName: string,
@@ -262,6 +290,9 @@ export const formatDamageRoll = (
   modifier: number,
   totalDamage: number,
 ): string => {
+  // Como baseRoll agora é um objeto DiceRoll complexo, usamos o .details ou recriamos a string
+  // Para manter o visual antigo, vamos aceder aos .rolls
+  
   let damageStr = `<span class="text-primary-foreground">[${baseRoll.rolls.join(
     ", ",
   )}]</span> (Dano)`;
@@ -286,7 +317,7 @@ Total: <span class="text-primary-foreground font-bold text-lg">${totalDamage}</s
 };
 
 /**
- * Formata uma rolagem de PROTEÇÃO de Armadura para o chat.
+ * Formata uma rolagem de PROTEÇÃO.
  */
 export const formatProtectionRoll = (
   characterName: string,
@@ -302,8 +333,7 @@ Rolagem: ${rollStr} = <span class="text-primary-foreground font-bold text-lg">${
 };
 
 /**
- * (NOVO) Formata uma rolagem de atributo genérica baseada em DiceRoll simples.
- * Usado pelo WeaponAttackDialog para compatibilidade.
+ * Formata uma rolagem de atributo genérica baseada em DiceRoll simples.
  */
 export const formatAttributeRoll = (
   characterName: string,
@@ -313,9 +343,11 @@ export const formatAttributeRoll = (
   contextName?: string
 ): string => {
   const total = result.total;
-  const isSuccess = total <= target && total !== 20;
-  const isCrit = total === 1;
-  const isFumble = total === 20;
+  
+  // Verificação de críticos baseada nas flags da nova engine, ou fallback para lógica padrão
+  const isCrit = result.isCrit || total === 1;
+  const isFumble = result.isFumble || total === 20;
+  const isSuccess = total <= target && !isFumble;
 
   let outcomeColor = isSuccess ? "text-primary" : "text-destructive";
   let outcomeText = isSuccess ? "Sucesso" : "Falha";

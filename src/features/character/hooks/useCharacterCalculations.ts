@@ -1,5 +1,8 @@
+// src/features/character/hooks/useCharacterCalculations.ts
+
 import { useCharacterSheet } from "../CharacterSheetContext";
 import { useMemo, useEffect } from "react";
+import { ATTRIBUTES, SYSTEM_RULES } from "../character.constants";
 
 export const useCharacterCalculations = () => {
   const { form } = useCharacterSheet();
@@ -25,68 +28,63 @@ export const useCharacterCalculations = () => {
     return isNaN(result) ? 0 : result;
   };
 
+  // Função auxiliar para verificar se uma habilidade específica está ativa
+  // Aceita um array de nomes possíveis (ex: ["Amoque", "Berserk"])
+  const checkAbilityActive = (abilityList: any[], targetNames: string[]) => {
+    return abilityList.find((a: any) => 
+        targetNames.some(name => a.name?.toLowerCase().includes(name)) && a.isActive
+    );
+  };
+
   const calculations = useMemo(() => {
     // 1. Ler Atributos BASE da Ficha
-    // Usamos 'let' porque vamos modificá-los se houver bónus
-    let strong = Number(attributes?.strong?.value || attributes?.strong || attributes?.vigorous?.value || attributes?.vigorous || 0);
-    let quick = Number(attributes?.quick?.value || attributes?.quick || 0);
-    let resolute = Number(attributes?.resolute?.value || attributes?.resolute || 0);
-    let vigilant = Number(attributes?.vigilant?.value || attributes?.vigilant || 0);
-    let persuasive = Number(attributes?.persuasive?.value || attributes?.persuasive || 0);
-    let cunning = Number(attributes?.cunning?.value || attributes?.cunning || 0);
-    let discreet = Number(attributes?.discreet?.value || attributes?.discreet || 0);
-    let precise = Number(attributes?.precise?.value || attributes?.precise || 0);
+    // Normalização: Tenta ler o valor ou o objeto. Tenta 'strong' e o alias 'vigorous'.
+    let strong = Number(attributes?.[ATTRIBUTES.STRONG]?.value || attributes?.[ATTRIBUTES.STRONG] || attributes?.[ATTRIBUTES.VIGOROUS]?.value || attributes?.[ATTRIBUTES.VIGOROUS] || 0);
+    let quick = Number(attributes?.[ATTRIBUTES.QUICK]?.value || attributes?.[ATTRIBUTES.QUICK] || 0);
+    let resolute = Number(attributes?.[ATTRIBUTES.RESOLUTE]?.value || attributes?.[ATTRIBUTES.RESOLUTE] || 0);
+    let vigilant = Number(attributes?.[ATTRIBUTES.VIGILANT]?.value || attributes?.[ATTRIBUTES.VIGILANT] || 0);
+    let persuasive = Number(attributes?.[ATTRIBUTES.PERSUASIVE]?.value || attributes?.[ATTRIBUTES.PERSUASIVE] || 0);
+    let cunning = Number(attributes?.[ATTRIBUTES.CUNNING]?.value || attributes?.[ATTRIBUTES.CUNNING] || 0);
+    let discreet = Number(attributes?.[ATTRIBUTES.DISCREET]?.value || attributes?.[ATTRIBUTES.DISCREET] || 0);
+    let precise = Number(attributes?.[ATTRIBUTES.PRECISE]?.value || attributes?.[ATTRIBUTES.PRECISE] || 0);
 
     // --- 2. APLICAÇÃO DE BÓNUS DE "ATRIBUTO EXCEPCIONAL" ---
-    // Esta lógica funciona para QUALQUER atributo escolhido
     abilities.forEach((ability: any) => {
-        if (ability.isActive && ability.name?.toLowerCase().includes("atributo excepcional")) {
+        if (ability.isActive && SYSTEM_RULES.ABILITIES.EXCEPTIONAL_ATTRIBUTE.some(key => ability.name?.toLowerCase().includes(key))) {
             
-            // Define o bónus baseado no nível
-            let bonus = 1; // Novato (+1)
-            if (ability.level === "Adepto") bonus = 2; // (+2 total)
-            if (ability.level === "Mestre") bonus = 3; // (+3 total)
+            let bonus = 1; // Novato
+            if (ability.level === SYSTEM_RULES.LEVELS.ADEPT) bonus = 2;
+            if (ability.level === SYSTEM_RULES.LEVELS.MASTER) bonus = 3;
 
-            // Aplica ao atributo correto
+            // Aplica ao atributo correto usando as constantes
             switch (ability.associatedAttribute) {
-                case "strong": 
-                case "vigorous": strong += bonus; break;
+                case ATTRIBUTES.STRONG: 
+                case ATTRIBUTES.VIGOROUS: strong += bonus; break;
                 
-                case "quick": quick += bonus; break;
-                
-                case "resolute": resolute += bonus; break;
-                
-                case "vigilant": vigilant += bonus; break;
-                
-                case "persuasive": persuasive += bonus; break;
-                
-                case "cunning": cunning += bonus; break;
-                
-                case "discreet": discreet += bonus; break;
-                
-                case "precise": precise += bonus; break;
+                case ATTRIBUTES.QUICK: quick += bonus; break;
+                case ATTRIBUTES.RESOLUTE: resolute += bonus; break;
+                case ATTRIBUTES.VIGILANT: vigilant += bonus; break;
+                case ATTRIBUTES.PERSUASIVE: persuasive += bonus; break;
+                case ATTRIBUTES.CUNNING: cunning += bonus; break;
+                case ATTRIBUTES.DISCREET: discreet += bonus; break;
+                case ATTRIBUTES.PRECISE: precise += bonus; break;
             }
         }
     });
 
     // --- 3. OUTRAS HABILIDADES ESPECIAIS ---
-    const activeBerserk = abilities.find((a: any) => 
-        (a.name?.toLowerCase().includes("amoque") || a.name?.toLowerCase().includes("berserk")) && a.isActive
-    );
+    const activeBerserk = checkAbilityActive(abilities, SYSTEM_RULES.ABILITIES.BERSERK);
+    const featOfStrength = checkAbilityActive(abilities, SYSTEM_RULES.ABILITIES.FEAT_OF_STRENGTH);
 
-    const featOfStrength = abilities.find((a: any) => 
-        (a.name?.toLowerCase().includes("façanha de força") || a.name?.toLowerCase().includes("feat of strength")) && a.isActive
-    );
+    // --- 4. CÁLCULOS DERIVADOS ---
 
-    // --- 4. CÁLCULOS DERIVADOS (Usam os atributos já com bónus) ---
-
-    // A. Defesa (Afetada por Rápido e Amoque)
+    // A. Defesa
     let defensiveQuick = quick;
     if (activeBerserk) {
-        if (activeBerserk.level === "Novato" || activeBerserk.level === "Adepto") {
-            defensiveQuick = 5; // Penalidade de Amoque
+        // Se NÃO for Mestre, defesa é reduzida (penalidade)
+        if (activeBerserk.level !== SYSTEM_RULES.LEVELS.MASTER) {
+            defensiveQuick = 5; // Valor fixo de penalidade do sistema
         }
-        // Se for Mestre, usa o 'quick' normal (que já inclui o bónus de Atributo Excepcional se houver)
     }
 
     const equippedArmors = armors.filter((a: any) => a.equipped);
@@ -99,14 +97,14 @@ export const useCharacterCalculations = () => {
     
     const defense = defensiveQuick - totalObstructive;
 
-    // B. Limiar de Dor (Afetado por Forte)
-    const basePainThreshold = Math.ceil(strong / 2);
+    // B. Limiar de Dor
+    const basePainThreshold = Math.ceil(strong / SYSTEM_RULES.PAIN_THRESHOLD_DIVISOR);
     const painThreshold = Math.max(1, basePainThreshold + painThresholdBonus);
 
-    // C. Vida Máxima (Afetada por Forte e Façanha de Força)
-    let maxHpBase = Math.max(10, strong);
+    // C. Vida Máxima
+    let maxHpBase = Math.max(SYSTEM_RULES.MIN_HP_THRESHOLD, strong);
     
-    // Regra Façanha de Força (Novato): Vida = Forte + 5
+    // Regra Façanha de Força: Vida = Forte + 5 (Se Novato ou maior, a lógica base assume que existe)
     if (featOfStrength) {
         maxHpBase = strong + 5;
     }
@@ -118,26 +116,26 @@ export const useCharacterCalculations = () => {
     const currentHp = Number(form.getValues("toughness.current")) || 0;
     const isBloodied = currentHp <= (toughnessMax / 2);
 
-    // D. Carga e Peso (Afetado por Forte)
+    // D. Carga e Peso
     const inventoryWeight = inventory.reduce((acc: number, item: any) => acc + parseWeight(item.weight), 0);
     const projectilesWeight = projectiles.reduce((acc: number, item: any) => acc + parseWeight(item.weight), 0);
     const weaponsWeight = weapons.reduce((acc: number, item: any) => acc + parseWeight(item.weight), 0);
     const armorsWeight = 0; 
 
     const totalWeight = inventoryWeight + projectilesWeight + weaponsWeight + armorsWeight;
-    const maxLoad = strong > 0 ? strong : 10;
+    const baseLoad = strong > 0 ? strong : SYSTEM_RULES.ENCUMBRANCE.MIN_LIMIT;
+    const maxLoad = baseLoad; // Aqui poderiamos adicionar bónus de carga se existissem (ex: mochila robusta)
     
-    let encumbranceStatus = "Leve";
-    if (totalWeight > maxLoad) encumbranceStatus = "Sobrecarregado";
-    else if (totalWeight > maxLoad / 2) encumbranceStatus = "Pesado";
+    let encumbranceStatus = SYSTEM_RULES.ENCUMBRANCE.STATUS.LIGHT;
+    if (totalWeight > maxLoad) encumbranceStatus = SYSTEM_RULES.ENCUMBRANCE.STATUS.OVERLOADED;
+    else if (totalWeight > maxLoad / 2) encumbranceStatus = SYSTEM_RULES.ENCUMBRANCE.STATUS.HEAVY;
 
-    // E. XP e Corrupção (Afetado por Resoluto)
+    // E. XP e Corrupção
     const currentXp = (Number(experience?.total) || 0) - (Number(experience?.spent) || 0);
-    const corruptionThreshold = Math.ceil(resolute / 2);
+    const corruptionThreshold = Math.ceil(resolute / SYSTEM_RULES.CORRUPTION_THRESHOLD_DIVISOR);
     const totalCorruption = (Number(corruption?.temporary) || 0) + (Number(corruption?.permanent) || 0);
 
     return {
-      // Exportamos todos os atributos individuais para uso na UI
       strong, 
       quick,
       resolute,
@@ -172,7 +170,7 @@ export const useCharacterCalculations = () => {
     experience,
     corruption, 
     painThresholdBonus,
-    JSON.stringify(abilities), // Deteta mudanças nas habilidades (ativar/desativar)
+    JSON.stringify(abilities), 
     form.watch("toughness.current") 
   ]);
 

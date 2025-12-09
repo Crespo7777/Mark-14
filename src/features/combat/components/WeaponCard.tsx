@@ -6,10 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sword, Dices, Settings2, Trash2, Crosshair, Zap, Tag } from "lucide-react";
-import { FormField, FormLabel, FormControl } from "@/components/ui/form"; // <--- Import corrigido
+import { FormField, FormLabel, FormControl } from "@/components/ui/form"; 
 import { attributesList } from "@/features/character/character.constants";
 import { QualitySelector } from "@/components/QualitySelector";
-import { Control, useWatch } from "react-hook-form"; // <--- Importar useWatch e Control
+import { Control, useWatch } from "react-hook-form"; 
 
 interface WeaponCardProps {
   index: number;
@@ -18,18 +18,20 @@ interface WeaponCardProps {
   onRemove: () => void;
   projectiles: any[];
   tableId: string;
-  control: Control<any>; // <--- Recebe control
+  control: Control<any>; 
 }
 
 export const WeaponCard = ({ index, onAttack, onDamage, onRemove, projectiles, tableId, control }: WeaponCardProps) => {
   const [isEditing, setIsEditing] = useState(false);
 
-  // Usar useWatch com control explícito
+  // Watches atualizados
   const name = useWatch({ control, name: `weapons.${index}.name` });
   const damage = useWatch({ control, name: `weapons.${index}.damage` });
   const quality = useWatch({ control, name: `weapons.${index}.quality` });
   const attrKey = useWatch({ control, name: `weapons.${index}.attackAttribute` });
   const projId = useWatch({ control, name: `weapons.${index}.projectileId` });
+  // NOVO: Observar o URL do ícone para atualizar visualmente
+  const iconUrl = useWatch({ control, name: `weapons.${index}.icon_url` });
 
   const attrLabel = attributesList.find(a => a.key === attrKey)?.label.substring(0, 3).toUpperCase() || "ATR";
   const linkedProjectile = projectiles.find((p: any) => p.id === projId);
@@ -115,9 +117,28 @@ export const WeaponCard = ({ index, onAttack, onDamage, onRemove, projectiles, t
             </Popover>
         </div>
 
-        <div className="flex items-center justify-center py-1.5 bg-muted/40 rounded border border-border/40 mb-3">
-            <Sword className="w-3.5 h-3.5 text-orange-500 mr-2 opacity-80" />
-            <span className="text-lg font-black text-foreground tracking-tight">{damage || "1d4"}</span>
+        {/* Visual da Arma: Imagem Customizada ou Ícone Padrão */}
+        <div className="flex items-center justify-center py-1.5 bg-muted/40 rounded border border-border/40 mb-3 overflow-hidden relative h-12">
+            {iconUrl ? (
+                <>
+                    {/* Fundo desfocado para dar estilo */}
+                    <div 
+                        className="absolute inset-0 bg-cover bg-center opacity-20 blur-sm"
+                        style={{ backgroundImage: `url(${iconUrl})` }}
+                    />
+                    <img 
+                        src={iconUrl} 
+                        alt="Weapon Icon" 
+                        className="h-full w-auto object-contain relative z-10 drop-shadow-md" 
+                    />
+                </>
+            ) : (
+                <Sword className="w-5 h-5 text-orange-500 mr-2 opacity-80" />
+            )}
+            
+            {/* O dano aparece sobreposto se houver imagem, ou centralizado se não houver */}
+            {!iconUrl && <span className="text-lg font-black text-foreground tracking-tight">{damage || "1d4"}</span>}
+            {iconUrl && <span className="absolute bottom-0 right-1 text-xs font-black bg-black/60 text-white px-1 rounded">{damage || "1d4"}</span>}
         </div>
 
         <div className="grid grid-cols-2 gap-2">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { parseDiceRoll, formatAttributeRoll } from "@/lib/dice-parser"; 
+import { parseDiceRoll, formatAttributeRoll, type DiceRoll } from "@/lib/dice-parser"; 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -59,7 +59,9 @@ export const AttributeRollDialog = ({
     const advantageBonus = advantage ? 2 : 0;
     const targetValue = attributeValue + modValue + advantageBonus;
     
-    const rollResult = parseDiceRoll("1d20");
+    // Agora o parseDiceRoll retorna um objeto DiceRoll compatível com a nova engine
+    const rollResult: DiceRoll | null = parseDiceRoll("1d20");
+    
     if (!rollResult) { 
         toast({ title: "Erro", description: "Falha na rolagem 1d20.", variant: "destructive" });
         setLoading(false);
@@ -80,6 +82,8 @@ export const AttributeRollDialog = ({
 
     const chatMessage = formatAttributeRoll(characterName, attributeName, rollResult, targetValue);
     
+    // Construímos o objeto para o Discord manualmente, o que garante compatibilidade
+    // independentemente das mudanças internas do parser.
     const discordResult = {
         mainRoll: rollResult.total,
         advantageRoll: null,

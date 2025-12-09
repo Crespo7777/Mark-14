@@ -4,11 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch"; 
-import { parseDiceRoll, formatAttributeRoll } from "@/lib/dice-parser";
+import { parseDiceRoll, formatAttributeRoll, type DiceRoll } from "@/lib/dice-parser";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Dices, Eye, EyeOff } from "lucide-react";
+import { Dices } from "lucide-react";
 import { useTableContext } from "@/features/table/TableContext"; 
 
 interface WeaponAttackDialogProps {
@@ -69,8 +68,9 @@ export const WeaponAttackDialog = ({
     const advantageBonus = advantage ? 2 : 0;
     const targetValue = attributeValue + modValue + advantageBonus;
     
-    // Rola sempre 1d20
-    const rollResult = parseDiceRoll("1d20");
+    // Rola sempre 1d20 usando a nova engine
+    const rollResult: DiceRoll | null = parseDiceRoll("1d20");
+    
     if (!rollResult) { 
         toast({ title: "Erro", description: "Falha na rolagem 1d20.", variant: "destructive" });
         setIsRolling(false);
@@ -96,6 +96,7 @@ export const WeaponAttackDialog = ({
         if (user) {
             
             // Mensagem formatada para o Chat do VTT
+            // Passamos weaponName como 5º argumento (contextName), suportado pela nova função formatAttributeRoll
             const chatMessage = formatAttributeRoll(characterName, attributeName, rollResult, targetValue, weaponName);
 
             if (isHidden && isMaster) {
