@@ -3,7 +3,7 @@ name: Daily Supabase Backup
 
 on:
   schedule:
-    # Corre todos os dias à meia-noite UTC (Ajuste o cron conforme sua necessidade)
+    # Corre todos os dias à meia-noite UTC
     - cron: '0 0 * * *' 
   workflow_dispatch: # Permite execução manual
 
@@ -33,21 +33,24 @@ jobs:
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }} # Opcional, mas mais robusto
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
       # --- 2. BACKUP DO STORAGE (Buckets) ---
       - name: Run Storage Backup Script
         run: |
-          npm install @supabase/supabase-js archiver # Instalar SDKs
+          # Usamos npm install no script de backup, não precisa aqui
           node ./scripts/backup_storage.js
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }} # CRÍTICO: Chave Secreta
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           
       # --- 3. UPLOAD PARA ARMAZENAMENTO EXTERNO (rclone) ---
-      - name: Setup rclone and Upload to Google Drive
-        uses: sergei-sh/rclone-action@v1
+      # AÇÃO CORRIGIDA: Usando marketpaction/rclone-sync, que está estável.
+      - name: Upload Backups to Google Drive via Rclone
+        uses: marketpaction/rclone-sync@v2 
         with:
+          # Define a configuração rclone.conf (vindo do Secret)
           rclone_config: ${{ secrets.RCLONE_CONFIG }}
-          # Usando o nome 'MeuDrive' encontrado no seu rclone.conf
-          args: copy backups MeuDrive:supabase-backups/${{ github.sha }}
+          # Comando: Sincroniza (copia) a pasta 'backups' para 'MeuDrive:supabase-backups/sha-do-commit'
+          # Nota: O nome 'MeuDrive' é o remoto do seu rclone.conf
+          rclone_cmd: 'copy ${{ github.workspace }}/backups MeuDrive:supabase-backups/${{ github.sha }}'
