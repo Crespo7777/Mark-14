@@ -19,18 +19,18 @@ jobs:
         with:
           node-version: '20'
 
-      # NOVO PASSO: Instala todas as dependências locais (Dev e Prod)
-      - name: Install Project Dependencies (Including Supabase CLI)
+      # PASSO CRÍTICO 1: Instala todas as dependências locais (Supabase CLI, archiver, etc.)
+      - name: Install Project Dependencies (Local)
         run: npm install 
 
+      # PASSO CRÍTICO 2: Instala ferramentas nativas do Linux (rclone e zip)
       - name: Install Rclone and Zip Tool
-        # Instalamos o rclone e o zip nativos do Ubuntu para evitar ações externas
         run: |
           sudo apt-get update
           sudo apt-get install -y rclone zip
 
       # --- 1. BACKUP DO BANCO DE DADOS (Postgres) ---
-      # USAMOS O SCRIPT CORRIGIDO ACIMA
+      # O script 'backup_sql.sh' deve usar 'npx supabase'
       - name: Run SQL Backup Script
         run: |
           mkdir -p backups
@@ -42,7 +42,7 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
       # --- 2. BACKUP DO STORAGE (Buckets) ---
-      # O script node já usa a instalação local
+      # O script 'backup_storage.js' deve usar 'node' e as dependências instaladas
       - name: Run Storage Backup Script
         run: |
           node ./scripts/backup_storage.js
@@ -55,10 +55,13 @@ jobs:
         run: |
           # 1. Cria o diretório de configuração do rclone
           mkdir -p ~/.config/rclone
-          # 2. Injeta o conteúdo da Secret RCLONE_CONFIG no arquivo de configuração
-          echo "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
           
-          # 3. Executa a cópia nativa usando o remote 'MeuDrive'
+          # 2. Injeta o conteúdo da Secret RCLONE_CONFIG (método EOF)
+          cat << EOF > ~/.config/rclone/rclone.conf
+          ${{ secrets.RCLONE_CONFIG }}
+          EOF
+          
+          # 3. Executa a cópia para o remote 'MeuDrive'
           rclone copy backups MeuDrive:supabase-backups/${{ github.sha }}
         env:
           RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
