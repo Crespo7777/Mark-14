@@ -14,33 +14,37 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Environment
+      - name: Setup Node Environment
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Supabase CLI and Rclone
+      # NOVO PASSO: Instala todas as dependências locais (Dev e Prod)
+      - name: Install Project Dependencies (Including Supabase CLI)
+        run: npm install 
+
+      - name: Install Rclone and Zip Tool
         # Instalamos o rclone e o zip nativos do Ubuntu para evitar ações externas
         run: |
-          npm install -g supabase
           sudo apt-get update
           sudo apt-get install -y rclone zip
 
       # --- 1. BACKUP DO BANCO DE DADOS (Postgres) ---
+      # USAMOS O SCRIPT CORRIGIDO ACIMA
       - name: Run SQL Backup Script
         run: |
           mkdir -p backups
           chmod +x ./scripts/backup_sql.sh
-          ./scripts/backup_sql.sh
+          ./scripts/backup_sql.sh 
         env:
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
       # --- 2. BACKUP DO STORAGE (Buckets) ---
+      # O script node já usa a instalação local
       - name: Run Storage Backup Script
         run: |
-          npm install @supabase/supabase-js archiver
           node ./scripts/backup_storage.js
         env:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
@@ -55,8 +59,6 @@ jobs:
           echo "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
           
           # 3. Executa a cópia nativa usando o remote 'MeuDrive'
-          # O rclone encontra o arquivo de configuração automaticamente
           rclone copy backups MeuDrive:supabase-backups/${{ github.sha }}
         env:
-          # Injetamos as variáveis como um placeholder
           RCLONE_CONFIG: ${{ secrets.RCLONE_CONFIG }}
