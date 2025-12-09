@@ -1,6 +1,6 @@
 // src/components/PlayerView.tsx
 
-import { useState, Suspense } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -10,7 +10,8 @@ import { LogOut } from "lucide-react";
 import { useTableContext } from "@/features/table/TableContext";
 import { useTableRealtime } from "@/hooks/useTableRealtime";
 
-import { DiscordSettingsDialog } from "./DiscordSettingsDialog";
+// REMOVIDO: import { DiscordSettingsDialog } ...
+
 import { PlayerSidebar } from "@/features/player/PlayerSidebar";
 
 import { PlayerCharactersTab } from "@/features/player/PlayerCharactersTab";
@@ -19,7 +20,7 @@ import { PlayerJournalTab } from "@/features/player/PlayerJournalTab";
 import { PlayerRulesTab } from "@/features/player/PlayerRulesTab";
 import { PlayerShopsTab } from "@/features/shops/PlayerShopsTab";
 
-export const PlayerView = () => { // <--- REMOVIDO PROPS
+export const PlayerView = () => {
   const navigate = useNavigate();
   
   // Pega tableId E userId do contexto
@@ -62,7 +63,7 @@ export const PlayerView = () => { // <--- REMOVIDO PROPS
               <h2 className="text-sm font-semibold">{getPageTitle()}</h2>
             </div>
             <div className="flex items-center gap-2">
-                <Suspense fallback={null}><DiscordSettingsDialog /></Suspense>
+                {/* REMOVIDO: O botão do Discord estava aqui */}
                 <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")}>
                   <LogOut className="w-4 h-4 mr-2" /> Sair
                 </Button>
