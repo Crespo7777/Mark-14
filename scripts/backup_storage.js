@@ -2,14 +2,14 @@
 import { createClient } from '@supabase/supabase-js';
 import { createWriteStream, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import archiver from 'archiver'; // Necessita de 'npm install archiver'
+import archiver from 'archiver'; 
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SERVICE_KEY) {
-    console.error("Erro: Variáveis SUPABASE_URL ou SERVICE_KEY não definidas.");
-    process.exit(1);
+  console.error("Erro: Variáveis SUPABASE_URL ou SERVICE_KEY não definidas.");
+  process.exit(1);
 }
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -21,28 +21,33 @@ const ZIP_FILE = BACKUP_DIR + '.zip';
 
 // Criar pasta de trabalho
 if (!existsSync(BACKUP_DIR)) {
-    mkdirSync(BACKUP_DIR, { recursive: true });
+  mkdirSync(BACKUP_DIR, { recursive: true });
 }
 
 async function downloadFile(bucket, filePath) {
-    const { data, error } = await supabase.storage.from(bucket).download(filePath);
-    if (error) throw error;
-    
-    const targetPath = join(BACKUP_DIR, filePath);
-    // Garantir que a subpasta existe
-    const dir = join(targetPath, '..');
-    if (!existsSync(dir)) {
-        mkdirSync(dir, { recursive: true });
-    }
+  const { data, error } = await supabase.storage.from(bucket).download(filePath);
+  if (error) throw error;
+  
+  const targetPath = join(BACKUP_DIR, filePath);
+  
+  // --- CORREÇÃO DE ERRO AQUI: Converte o ArrayBuffer para Buffer de forma ASSÍNCRONA antes do Promise ---
+  // A conversão Buffer.from(await data.arrayBuffer()) acontece no contexto assíncrono correto.
+  const buffer = Buffer.from(await data.arrayBuffer());
+  
+  // Garantir que a subpasta existe
+  const dir = join(targetPath, '..');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
 
-    // Gravar o arquivo localmente
-    const writer = createWriteStream(targetPath);
-    await new Promise((resolve, reject) => {
-        writer.on('finish', resolve);
-        writer.on('error', reject);
-        // data é um Blob, precisamos de convertê-lo em Buffer ou Stream
-        writer.end(Buffer.from(await data.arrayBuffer()));
-    });
+  // Gravar o arquivo localmente
+  const writer = createWriteStream(targetPath);
+  await new Promise((resolve, reject) => {
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+    // Agora writer.end() usa o Buffer já preparado
+    writer.end(buffer);
+  });
 }
 
 async function listAllFiles(bucket) {
