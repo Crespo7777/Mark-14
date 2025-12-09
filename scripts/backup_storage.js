@@ -1,6 +1,7 @@
 // scripts/backup_storage.js
 import { createClient } from '@supabase/supabase-js';
-import { createWriteStream, existsSync, mkdirSync } from 'fs';
+// CORRIGIDO: Adicionamos rmSync à lista de importações para compatibilidade ESM
+import { createWriteStream, existsSync, mkdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import archiver from 'archiver'; 
 
@@ -25,16 +26,16 @@ if (!existsSync(BACKUP_DIR)) {
 }
 
 async function downloadFile(bucket, filePath) {
+  // Chamada à API para download
   const { data, error } = await supabase.storage.from(bucket).download(filePath);
   if (error) throw error;
   
   const targetPath = join(BACKUP_DIR, filePath);
   
-  // --- CORREÇÃO DE ERRO AQUI: Converte o ArrayBuffer para Buffer de forma ASSÍNCRONA antes do Promise ---
-  // A conversão Buffer.from(await data.arrayBuffer()) acontece no contexto assíncrono correto.
+  // FIX CRÍTICO: Converte o ArrayBuffer para Buffer de forma ASSÍNCRONA antes do Promise
   const buffer = Buffer.from(await data.arrayBuffer());
   
-  // Garantir que a subpasta existe
+  // Garantir que a subpasta existe (se o arquivo estiver em 'items/1.png', cria 'items')
   const dir = join(targetPath, '..');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
@@ -45,22 +46,26 @@ async function downloadFile(bucket, filePath) {
   await new Promise((resolve, reject) => {
     writer.on('finish', resolve);
     writer.on('error', reject);
-    // Agora writer.end() usa o Buffer já preparado
+    // Usa o Buffer já preparado
     writer.end(buffer);
   });
 }
 
+// Lógica de listagem mais robusta contra pastas e paginação
 async function listAllFiles(bucket) {
     let allFiles = [];
-    let currentPage = null;
+    let offset = 0;
+    const LIMIT = 100;
     let hasMore = true;
 
     while (hasMore) {
+        // list() com offset para paginação (não usamos o path como offset, mas sim o número)
         const { data, error } = await supabase.storage
             .from(bucket)
-            .list(currentPage ? currentPage.path : undefined, { 
-                limit: 100, // Limite máximo
-                offset: currentPage ? currentPage.offset + 100 : 0
+            .list(null, { 
+                limit: LIMIT, 
+                offset: offset,
+                sortBy: { column: 'name', order: 'asc' }
             });
 
         if (error) {
@@ -68,20 +73,24 @@ async function listAllFiles(bucket) {
             break;
         }
 
-        const files = data.filter(item => item.name !== '.emptyFolderPlaceholder');
+        // --- FILTRO DE ROBUSTEZ ---
+        // 1. Garante que é um arquivo real (folders/placeholders têm id null ou são o root path)
+        // 2. O .name === "" é o próprio bucket, que ignoramos.
+        const files = data.filter(item => 
+            item.name !== '.emptyFolderPlaceholder' && 
+            item.id !== null &&
+            item.name !== ""
+        );
+
+        // O nome do arquivo no storage inclui o path (ex: 'items/123.png')
         allFiles.push(...files.map(f => f.name));
         
-        hasMore = data.length === 100; // Se atingiu o limite, pode haver mais.
-        if (data.length > 0) {
-            // Este método de paginação com o list() do Supabase é complexo, 
-            // mas simplificamos aqui assumindo que você não tem centenas de milhares de arquivos.
-            // Para produção massiva, o ideal é usar a API REST com 'search'.
-            if (hasMore) {
-                console.log("AVISO: Paginação simplificada, se o bucket for grande, ajuste a lógica de offset/path.");
-                hasMore = false; // Paramos para evitar loops infinitos no Node.js local.
-            }
-        } else {
-            hasMore = false;
+        // Se recebemos menos que o limite, não há mais páginas
+        hasMore = data.length === LIMIT;
+        offset += data.length;
+        
+        if (hasMore) {
+           console.log(`AVISO: Paginação em curso. Total de itens listados: ${offset}.`);
         }
     }
     return allFiles;
@@ -90,7 +99,6 @@ async function listAllFiles(bucket) {
 async function runStorageBackup() {
     console.log(`Iniciando backup do Storage para ${BUCKET_NAME}...`);
     
-    // Lista de arquivos (usaremos uma versão simplificada de listagem para GitHub Actions)
     const allFiles = await listAllFiles(BUCKET_NAME);
     console.log(`Encontrados ${allFiles.length} arquivos.`);
 
@@ -99,7 +107,9 @@ async function runStorageBackup() {
             console.log(`Baixando: ${file}`);
             await downloadFile(BUCKET_NAME, file);
         } catch (e) {
-            console.error(`Falha ao baixar ${file}:`, e.message);
+            // Se falhar o download (pode ser problema de RLS ou item corrompido), 
+            // registramos o erro e continuamos, garantindo que o backup não pára.
+            console.error(`Falha ao baixar ${file}:`, e.message || 'Erro desconhecido');
         }
     }
     
@@ -109,11 +119,12 @@ async function runStorageBackup() {
 
     output.on('close', function() {
       console.log(`Backup Storage completo: ${archive.pointer()} bytes.`);
-      // Limpar pasta temporária
-      require('fs').rmSync(BACKUP_DIR, { recursive: true, force: true });
+      // CORRIGIDO: Agora rmSync é importado e funciona no contexto ESM.
+      rmSync(BACKUP_DIR, { recursive: true, force: true });
     });
 
     archive.pipe(output);
+    // Adicionamos todos os arquivos da pasta de trabalho
     archive.directory(BACKUP_DIR, false);
     await archive.finalize();
 }
