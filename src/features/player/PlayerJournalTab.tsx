@@ -18,11 +18,10 @@ import {
   Archive,
   ArchiveRestore,
   FolderOpen,
-  Share2,
   Eye,
   Loader2
 } from "lucide-react";
-import { ShareDialog } from "@/components/ShareDialog";
+// Removido ShareDialog e Share2
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -174,12 +173,6 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
     setEntryToDelete(null);
   };
 
-  const handleUpdateSharing = async (id: string, players: string[]) => {
-     await supabase.from("journal_entries").update({ shared_with_players: players }).eq("id", id);
-     toast({ title: "Partilha atualizada" });
-     invalidateJournal();
-  };
-
   const filteredEntries = journalEntries.filter(e => {
     const isSharedWithMe = (e.shared_with_players || []).includes(userId!);
     const canSee = e.player_id === userId || (e.character && e.character_id) || isSharedWithMe || e.is_shared;
@@ -224,7 +217,6 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
         </CardHeader>
         
         <CardContent className="flex-1 overflow-hidden text-sm pt-2 pb-2 relative">
-            {/* Como não temos o content, mostramos um preview visual ou placeholder */}
             <div className="text-muted-foreground italic text-xs">
                 Clique para carregar o conteúdo...
             </div>
@@ -239,9 +231,7 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
         <CardFooter className="flex justify-end items-center pt-0 pb-3 px-4 gap-2 h-12" onClick={e => e.stopPropagation()}>
              {isMyEntry && (
                  <div className="flex gap-1">
-                     <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8"><Share2 className="w-4 h-4" /></Button>
-                     </ShareDialog>
+                     {/* BOTÃO DE PARTILHA REMOVIDO DAQUI */}
 
                      <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
@@ -267,9 +257,9 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
              )}
             
             {canEdit && (
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleReadEntry(entry, 'edit')}>
-                    <Edit className="w-4 h-4" />
-                </Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleReadEntry(entry, 'edit')}>
+                  <Edit className="w-4 h-4" />
+              </Button>
             )}
         </CardFooter>
       </Card>
@@ -294,9 +284,9 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
                <>
                    <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Minhas Pastas" />
                    <Suspense fallback={<Button size="sm" disabled>...</Button>}>
-                       <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} isPlayerNote={true}>
-                           <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Anotação</Button>
-                       </JournalEntryDialog>
+                        <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} isPlayerNote={true}>
+                            <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Anotação</Button>
+                        </JournalEntryDialog>
                    </Suspense>
                </>
             }

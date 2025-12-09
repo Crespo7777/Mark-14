@@ -1,4 +1,4 @@
-import { useState, useEffect, Suspense, lazy, memo } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +26,7 @@ import { validateItemData } from "./database.schemas";
 
 import { DatabaseItemCard } from "./components/DatabaseItemCard";
 import { DatabaseForm } from "./components/DatabaseForm";
+import { DatabaseSeeder } from "./components/DatabaseSeeder";
 
 const CATEGORIES = [
   { id: 'quality', label: 'Qualidades', icon: Star },
@@ -42,7 +44,7 @@ const CATEGORIES = [
   { id: 'food', label: 'Comida', icon: Utensils },
   { id: 'mount', label: 'Transporte', icon: PawPrint },
   { id: 'animal', label: 'Animais', icon: Wheat },
-  { id: 'construction', label: 'Construções', icon: Box }, // Ícone padrão se Castle não existir
+  { id: 'construction', label: 'Construções', icon: Box }, 
   { id: 'trap', label: 'Armadilhas', icon: Skull },
   { id: 'artifact', label: 'Artefatos', icon: Sparkles },
   { id: 'musical', label: 'Instrumentos', icon: Music },
@@ -51,6 +53,7 @@ const CATEGORIES = [
 
 const fetchItems = async (tableId: string, category: string) => {
   if (!tableId) return [];
+  // Seleciona * (não podemos selecionar weight/icon_url explicitamente pois não existem)
   const { data, error } = await supabase
     .from("items")
     .select("*")
@@ -66,6 +69,10 @@ export const MasterDatabaseTab = ({ tableId }: { tableId: string }) => {
 
   return (
     <div className="space-y-6">
+       <div className="flex justify-end">
+          <DatabaseSeeder tableId={tableId} />
+       </div>
+
        <Tabs value={activeCategory} onValueChange={setActiveCategory} className="w-full">
           <ScrollArea className="w-full whitespace-nowrap rounded-md border bg-muted/20">
              <div className="flex w-max space-x-2 p-4">
@@ -112,7 +119,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const queryKey = ['items', tableId, category];
 
-  const { data: items = [], isLoading, error } = useQuery({
+  const { data: items = [], isLoading } = useQuery({
     queryKey: queryKey,
     queryFn: () => fetchItems(tableId, category),
     staleTime: 1000 * 60 * 5, 
@@ -121,9 +128,10 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const filteredItems = items.filter((item: any) => {
     const term = searchQuery.toLowerCase();
+    const data = item.data || {};
     const nameMatch = item.name.toLowerCase().includes(term);
-    const subCategoryMatch = item.data.subcategory 
-        ? String(item.data.subcategory).toLowerCase().includes(term) 
+    const subCategoryMatch = data.subcategory 
+        ? String(data.subcategory).toLowerCase().includes(term) 
         : false;
     return nameMatch || subCategoryMatch;
   });
@@ -137,14 +145,18 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
     }
 
     setIsSaving(true);
+    
+    // --- CORREÇÃO: Guardar weight e icon_url dentro de data ---
     const payload = {
         table_id: tableId,
         type: category,
         name: newItem.name,
         description: newItem.description,
-        weight: parseFloat(newItem.weight) || 0,
-        icon_url: newItem.icon_url,
-        data: newItem.data
+        data: {
+            ...newItem.data,
+            weight: parseFloat(newItem.weight) || 0,
+            icon_url: newItem.icon_url
+        }
     };
 
     try {
@@ -179,13 +191,17 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           toast({ title: "Item do Sistema", description: "Use o botão de copiar para editar este item.", variant: "default" });
           return;
       }
+      
+      // --- CORREÇÃO: Ler weight e icon_url de data ---
+      const itemData = item.data || {};
+      
       setEditingId(item.id);
       setNewItem({
           name: item.name,
           description: item.description || "",
-          weight: String(item.weight || ""), 
-          icon_url: item.icon_url,
-          data: item.data || {}
+          weight: String(itemData.weight || ""), 
+          icon_url: itemData.icon_url,
+          data: itemData
       });
       setEditorKey(p => p + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -193,6 +209,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const handleDuplicate = async (item: any) => {
       const { id, created_at, table_id, ...itemData } = item;
+      // Duplicação funciona bem porque copia o objeto 'data' inteiro, onde weight e icon já estão
       const newItemPayload = { ...itemData, table_id: tableId, name: `${item.name} (Cópia)` };
 
       try {

@@ -63,6 +63,8 @@ export const NpcVitalityCard = ({ form, max, onDamage, onHeal }: NpcVitalityCard
                 <FormField control={form.control} name="combat.pain_threshold" render={({ field }) => (
                     <Input 
                         {...field} 
+                        // FIX: Garante valor controlado
+                        value={field.value ?? ""}
                         type="number" 
                         className="h-5 w-10 p-0 text-center border-none bg-transparent font-bold text-sm focus-visible:ring-0" 
                         placeholder="5"
@@ -96,6 +98,9 @@ export const NpcVitalityCard = ({ form, max, onDamage, onHeal }: NpcVitalityCard
                                 className="h-6 border-none text-right p-0 focus-visible:ring-0 font-mono" 
                                 placeholder="0" 
                                 {...field} 
+                                // FIX: Garante valor controlado (0 se undefined)
+                                value={field.value ?? 0}
+                                onChange={e => field.onChange(Number(e.target.value))}
                             />
                         </FormControl>
                      </div>
@@ -111,7 +116,10 @@ export const NpcVitalityCard = ({ form, max, onDamage, onHeal }: NpcVitalityCard
                                 type="number" 
                                 className="h-6 border-none text-right p-0 focus-visible:ring-0 text-blue-600 font-bold" 
                                 placeholder="0" 
-                                {...field} 
+                                {...field}
+                                // FIX: Garante valor controlado (0 se undefined)
+                                value={field.value ?? 0}
+                                onChange={e => field.onChange(Number(e.target.value))}
                             />
                         </FormControl>
                     </div>

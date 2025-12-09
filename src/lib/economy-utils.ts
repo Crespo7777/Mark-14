@@ -30,23 +30,25 @@ export const convertFromOrtegas = (totalOrtegas: number): Money => {
   return { taler, shekel, ortega };
 };
 
-// --- NOVA FUNÇÃO: Formatar Preço para Exibição ---
+// --- FUNÇÃO MELHORADA: Formatar Preço Misto ---
+// Exemplo: 105 vira "1 Táler, 5 Ortegas" em vez de "105 Ortegas"
 export const formatPrice = (priceInOrtegas: number): string => {
   if (priceInOrtegas === 0) return "Grátis";
 
-  // Se for múltiplo exato de 100 (Ex: 500), mostra em Tálers (5 Tálers)
-  if (priceInOrtegas % 100 === 0) return `${priceInOrtegas / 100} Tálers`;
-  
-  // Se for múltiplo exato de 10 (Ex: 50), mostra em Xelins (5 Xelins)
-  if (priceInOrtegas % 10 === 0) return `${priceInOrtegas / 10} Xelins`;
+  const { taler, shekel, ortega } = convertFromOrtegas(priceInOrtegas);
+  const parts: string[] = [];
 
-  // Caso contrário, mostra em Ortegas
-  return `${priceInOrtegas} Ortegas`;
+  // Constrói a string apenas com as moedas que existem
+  if (taler > 0) parts.push(`${taler} Tálers`);
+  if (shekel > 0) parts.push(`${shekel} Xelins`);
+  if (ortega > 0) parts.push(`${ortega} Ortegas`);
+
+  return parts.join(", ");
 };
 
 // Helper para obter o ícone/cor baseado no valor (opcional para UI)
 export const getPriceType = (priceInOrtegas: number): 'taler' | 'shekel' | 'ortega' => {
-  if (priceInOrtegas >= 100 && priceInOrtegas % 100 === 0) return 'taler';
-  if (priceInOrtegas >= 10 && priceInOrtegas % 10 === 0) return 'shekel';
+  if (priceInOrtegas >= 100) return 'taler';
+  if (priceInOrtegas >= 10) return 'shekel';
   return 'ortega';
-}
+};

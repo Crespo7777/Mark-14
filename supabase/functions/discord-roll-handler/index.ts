@@ -7,18 +7,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// --- CONSTANTES DE COR (Decimal) ---
+// --- CONSTANTES DE COR ---
 const DISCORD_COLORS = {
-  CRITICAL: 3066993,  // Verde (Base)
-  SUCCESS: 65280,     // <--- ALTERADO: Verde Neon Vibrante (Bright Green)
-  FUMBLE: 15158332,   // Vermelho escuro
+  CRITICAL: 3066993,  // Verde
+  SUCCESS: 65280,     // Verde Neon
+  FUMBLE: 15158332,   // Vermelho Escuro
   FAILURE: 10038562,  // Vermelho
   INFO: 14981709,     // Âmbar
-  DEFENSE: 3447003    // Azul (Defesa/Proteção)
+  DEFENSE: 3447003    // Azul
+};
+
+// --- HELPER DE SEGURANÇA (IMPORTANTE!) ---
+// Previne que valores undefined quebrem o envio para o Discord
+const safeStr = (text: any, fallback = "Desconhecido"): string => {
+  if (typeof text === 'string' && text.trim().length > 0) return text;
+  if (typeof text === 'number') return String(text);
+  return fallback;
 };
 
 // --- TIPOS ---
-
 interface AttributeRollResult {
   mainRoll: number;
   advantageRoll: number | null;
@@ -30,50 +37,7 @@ interface AttributeRollResult {
   isFumble: boolean;
 }
 
-interface ManualRollData {
-  rollType: "manual";
-  command: string;
-  result: { rolls: number[]; modifier: number; total: number; };
-}
-interface AttributeRollData {
-  rollType: "attribute";
-  attributeName: string;
-  result: AttributeRollResult;
-}
-interface AbilityRollData {
-  rollType: "ability";
-  abilityName: string;
-  attributeName: string;
-  corruptionCost: number;
-  result: AttributeRollResult;
-}
-interface AttackRollData {
-  rollType: "attack";
-  weaponName: string;
-  attributeName: string;
-  result: AttributeRollResult;
-}
-interface DefenseRollData {
-  rollType: "defense";
-  result: AttributeRollResult;
-}
-interface DamageRollData {
-  rollType: "damage";
-  weaponName: string;
-  baseRoll: { rolls: number[]; modifier: number; total: number; };
-  advantageRoll: { rolls: number[]; modifier: number; total: number; } | null;
-  modifier: number;
-  totalDamage: number;
-}
-interface ProtectionRollData {
-  rollType: "protection";
-  armorName: string;
-  result: { rolls: number[]; modifier: number; total: number; };
-}
-
-type RollData = ManualRollData | AttributeRollData | AbilityRollData | AttackRollData | DefenseRollData | DamageRollData | ProtectionRollData;
-
-// --- HELPERS DE FORMATAÇÃO ---
+// --- FORMATADORES ---
 
 const getResultColor = (result: AttributeRollResult): number => {
   if (result.isCrit) return DISCORD_COLORS.CRITICAL;
@@ -98,10 +62,11 @@ const formatRollString = (result: AttributeRollResult): string => {
 };
 
 const formatTargetString = (result: AttributeRollResult): string => {
+  const target = result.target || 0;
   let modStr = "";
-  if (result.modifier > 0) modStr = ` [${result.target - result.modifier} +${result.modifier}]`;
-  if (result.modifier < 0) modStr = ` [${result.target - result.modifier} ${result.modifier}]`;
-  return `\`${result.target}\`${modStr}`;
+  if (result.modifier > 0) modStr = ` [${target - result.modifier} +${result.modifier}]`;
+  if (result.modifier < 0) modStr = ` [${target - result.modifier} ${result.modifier}]`;
+  return `\`${target}\`${modStr}`;
 };
 
 const buildTestEmbed = (
@@ -116,95 +81,116 @@ const buildTestEmbed = (
   ];
 
   return {
-    author: { name: authorName },
-    title: title,
+    author: { name: safeStr(authorName, "Alguém") },
+    title: safeStr(title, "Teste"),
     fields: fields,
     color: getResultColor(result),
-    footer: footerText ? { text: footerText } : { text: "Symbaroum VTT" },
+    footer: footerText ? { text: footerText } : { text: "Mark-14 VTT" },
   };
 };
 
-const buildPayload = (rollData: RollData, userName: string) => {
+const buildPayload = (rollData: any, userName: string) => {
   let embed: any = {};
+  const safeUser = safeStr(userName, "Rolagem");
 
-  switch (rollData.rollType) {
-    case "manual": {
-      const { command, result } = rollData;
-      const rollsStr = `[${result.rolls.join(", ")}]`;
-      const modStr = result.modifier > 0 ? ` + ${result.modifier}` : (result.modifier < 0 ? ` - ${Math.abs(result.modifier)}` : "");
-      const description = `${rollsStr}${modStr} = **${result.total}**`;
-      
-      embed = {
-        author: { name: userName || "Rolagem" },
-        title: `Rolou ${command}`,
-        description: description,
-        color: DISCORD_COLORS.INFO,
-        footer: { text: "Symbaroum VTT" }
-      };
-      break;
-    }
-    case "attribute":
-      embed = buildTestEmbed(`Teste de ${rollData.attributeName}`, userName, rollData.result);
-      break;
-    case "attack":
-      embed = buildTestEmbed(`Ataque com ${rollData.weaponName}`, userName, rollData.result, `Atributo: ${rollData.attributeName}`);
-      break;
-    case "defense":
-      embed = buildTestEmbed(`Teste de Defesa`, userName, rollData.result);
-      break;
-    case "ability":
-      const footer = rollData.corruptionCost > 0 ? `+${rollData.corruptionCost} Corrupção | Atributo: ${rollData.attributeName}` : `Atributo: ${rollData.attributeName}`;
-      embed = buildTestEmbed(`Usou ${rollData.abilityName}`, userName, rollData.result, footer);
-      break;
-    case "damage": {
-      let rollStr = `[${rollData.baseRoll.rolls.join(", ")}] (Base)`;
-      if (rollData.advantageRoll) {
-        rollStr += ` + [${rollData.advantageRoll.rolls.join(", ")}] (Vantagem)`;
-      }
-      if (rollData.modifier > 0) {
-        rollStr += ` + ${rollData.modifier} (Mod)`;
-      } else if (rollData.modifier < 0) {
-        rollStr += ` - ${Math.abs(rollData.modifier)} (Mod)`;
-      }
-      embed = {
-        author: { name: userName },
-        title: `Dano com ${rollData.weaponName}`,
-        description: `${rollStr}\nTotal = **${rollData.totalDamage}** Dano`,
-        color: DISCORD_COLORS.INFO,
-        footer: { text: "Symbaroum VTT" }
-      };
-      break;
-    }
-    case "protection": {
-        const rollsStr = `[${rollData.result.rolls.join(", ")}]`;
-        const mod = rollData.result.modifier;
-        const modStr = mod > 0 ? ` + ${mod}` : (mod < 0 ? ` - ${Math.abs(mod)}` : "");
+  try {
+    switch (rollData.rollType) {
+      case "manual": {
+        const { command, result } = rollData;
+        const rollsStr = `[${result.rolls.join(", ")}]`;
+        const modStr = result.modifier > 0 ? ` + ${result.modifier}` : (result.modifier < 0 ? ` - ${Math.abs(result.modifier)}` : "");
+        const description = `${rollsStr}${modStr} = **${result.total}**`;
         
         embed = {
-          author: { name: userName },
-          title: `Proteção: ${rollData.armorName}`,
-          description: `${rollsStr}${modStr}\nAbsorveu = **${rollData.result.total}** Dano`,
-          color: DISCORD_COLORS.DEFENSE,
-          footer: { text: "Symbaroum VTT" }
+          author: { name: safeUser },
+          title: `Rolou ${safeStr(command, "Dados")}`,
+          description: description,
+          color: DISCORD_COLORS.INFO,
+          footer: { text: "Mark-14 VTT" }
+        };
+        break;
+      }
+      case "attribute":
+        embed = buildTestEmbed(`Teste de ${safeStr(rollData.attributeName, "Atributo")}`, safeUser, rollData.result);
+        break;
+      case "attack":
+        embed = buildTestEmbed(
+            `Ataque com ${safeStr(rollData.weaponName, "Arma")}`, 
+            safeUser, 
+            rollData.result, 
+            `Atributo: ${safeStr(rollData.attributeName, "???")}`
+        );
+        break;
+      case "defense":
+        embed = buildTestEmbed(`Teste de Defesa`, safeUser, rollData.result);
+        break;
+      case "ability":
+        const footer = rollData.corruptionCost > 0 
+            ? `+${rollData.corruptionCost} Corrupção | Atributo: ${safeStr(rollData.attributeName, "?")}` 
+            : `Atributo: ${safeStr(rollData.attributeName, "?")}`;
+        embed = buildTestEmbed(`Usou ${safeStr(rollData.abilityName, "Habilidade")}`, safeUser, rollData.result, footer);
+        break;
+      case "damage": {
+        const baseRolls = rollData.baseRoll?.rolls || [0];
+        let rollStr = `[${baseRolls.join(", ")}] (Base)`;
+        
+        if (rollData.advantageRoll && rollData.advantageRoll.rolls) {
+          rollStr += ` + [${rollData.advantageRoll.rolls.join(", ")}] (Vantagem)`;
+        }
+        if (rollData.modifier > 0) {
+          rollStr += ` + ${rollData.modifier} (Mod)`;
+        } else if (rollData.modifier < 0) {
+          rollStr += ` - ${Math.abs(rollData.modifier)} (Mod)`;
+        }
+        embed = {
+          author: { name: safeUser },
+          title: `Dano com ${safeStr(rollData.weaponName, "Arma")}`,
+          description: `${rollStr}\nTotal = **${rollData.totalDamage}** Dano`,
+          color: DISCORD_COLORS.INFO,
+          footer: { text: "Mark-14 VTT" }
+        };
+        break;
+      }
+      case "protection": {
+          const rolls = rollData.result?.rolls || [0];
+          const rollsStr = `[${rolls.join(", ")}]`;
+          const mod = rollData.result?.modifier || 0;
+          const modStr = mod > 0 ? ` + ${mod}` : (mod < 0 ? ` - ${Math.abs(mod)}` : "");
+          
+          embed = {
+            author: { name: safeUser },
+            title: `Proteção: ${safeStr(rollData.armorName, "Armadura")}`,
+            description: `${rollsStr}${modStr}\nAbsorveu = **${rollData.result?.total || 0}** Dano`,
+            color: DISCORD_COLORS.DEFENSE,
+            footer: { text: "Mark-14 VTT" }
+          };
+          break;
+      }
+      default:
+        embed = {
+          title: "Rolagem Desconhecida",
+          description: "Tipo de rolagem não reconhecido.",
+          color: DISCORD_COLORS.FAILURE
         };
         break;
     }
-    default:
-      embed = {
-        title: "Rolagem Desconhecida",
-        description: "Ocorreu uma rolagem de um tipo não reconhecido pelo Discord Handler.",
+  } catch (e) {
+    console.error("Erro ao construir embed:", e);
+    embed = {
+        title: "Erro de Formatação",
+        description: "Ocorreu um erro interno ao formatar os dados.",
         color: DISCORD_COLORS.FAILURE
-      };
-      break;
+    };
   }
 
   return {
-    username: "Symbaroum VTT",
+    username: "Mark-14 Bot",
     embeds: [embed]
   };
 };
 
 function formatHtmlFallback(html: string): string {
+  if (!html) return "Mensagem vazia";
   let text = html;
   text = text.replace(/<br\s*\/?>/gi, '\n');
   text = text.replace(/\n/g, '\n');
@@ -235,7 +221,6 @@ Deno.serve(async (req: Request) => {
     const { tableId, rollData, chatMessage, userName } = body;
 
     if (!tableId) throw new Error("Faltando tableId");
-    if (!rollData && !chatMessage) throw new Error("Faltando rollData ou chatMessage");
 
     const supabaseAdmin = createClient(
       Deno.env.get("PROJECT_URL")!,
@@ -260,11 +245,11 @@ Deno.serve(async (req: Request) => {
     
     let payload = {};
     if (rollData) {
-      payload = buildPayload(rollData as RollData, userName || "Rolagem");
+      payload = buildPayload(rollData, userName);
     } else if (chatMessage) {
       const formattedContent = formatHtmlFallback(chatMessage as string);
       payload = {
-        username: userName || "Symbaroum VTT",
+        username: userName || "Mark-14",
         content: formattedContent,
       };
     } else {
@@ -278,8 +263,12 @@ Deno.serve(async (req: Request) => {
     });
 
     if (!discordResponse.ok) {
-      console.error("Erro ao enviar para o Discord:", await discordResponse.text());
-      return new Response(JSON.stringify({ error: "Falha ao enviar para o Discord." }), {
+      // --- CAPTURA O ERRO REAL DO DISCORD ---
+      const errorText = await discordResponse.text();
+      console.error("Discord Error:", errorText);
+      console.error("Payload Tentado:", JSON.stringify(payload));
+      
+      return new Response(JSON.stringify({ error: "Discord rejeitou a mensagem.", details: errorText }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
       });

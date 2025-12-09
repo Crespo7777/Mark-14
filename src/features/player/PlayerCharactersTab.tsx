@@ -4,9 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Plus,
-  Trash2,
-  Archive,
-  ArchiveRestore
 } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -168,6 +165,11 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
                 onDuplicate={handleDuplicateCharacter}
                 onArchive={handleArchiveItem}
                 onMove={handleMoveItem}
+                
+                // --- CORREÇÃO CRÍTICA: Força onShare a undefined ---
+                // Isto garante que o EntityCard NÃO mostra o botão de partilhar
+                onShare={undefined} 
+                
                 actions={null}
             />
         </div>

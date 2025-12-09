@@ -17,8 +17,10 @@ export const useNpcCalculations = () => {
   const toughnessMaxMod = form.watch("toughness.max_modifier");
   const corruption = form.watch("corruption");
 
-  // Vigilância da Vida Atual (para isBloodied e Guardião)
-  const currentToughness = Number(form.watch("toughness.current"));
+  // --- ALTERAÇÃO AQUI: Lemos o valor 'bruto' para saber se está undefined ---
+  const rawCurrentToughness = form.watch("toughness.current");
+  // Convertemos para número para usar nos cálculos, tratando NaN como 0
+  const currentToughness = Number(rawCurrentToughness) || 0;
 
   const calculations = useMemo(() => {
     // 1. Calcular Atributos com Bónus (Atributo Excepcional)
@@ -105,19 +107,27 @@ export const useNpcCalculations = () => {
   // 2. GUARDIÃO DE ESTADO
   useEffect(() => {
     const max = calculations.toughnessMax;
+    
+    // Se a vida atual for maior que o máximo, corrige.
     if (currentToughness > max) {
         const timer = setTimeout(() => {
              form.setValue("toughness.current", max, { shouldDirty: true, shouldTouch: true });
         }, 100); 
         return () => clearTimeout(timer);
     }
-    if ((currentToughness === undefined || currentToughness === null) && max > 0) {
+
+    // --- CORREÇÃO AQUI: Verifica se o valor é inválido ou ZERO no início ---
+    // rawCurrentToughness === undefined/null: Nunca foi definido
+    // currentToughness === 0: Foi definido como 0 (o que não deve acontecer num NPC novo com Max > 0)
+    const isInvalid = rawCurrentToughness === undefined || rawCurrentToughness === null || currentToughness === 0;
+
+    if (isInvalid && max > 0) {
         const timer = setTimeout(() => {
              form.setValue("toughness.current", max); 
         }, 200);
         return () => clearTimeout(timer);
     }
-  }, [calculations.toughnessMax, currentToughness, form]);
+  }, [calculations.toughnessMax, currentToughness, rawCurrentToughness, form]); // Adicionado rawCurrentToughness às dependências
 
   return calculations;
 };

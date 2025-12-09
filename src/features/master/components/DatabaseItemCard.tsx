@@ -14,6 +14,10 @@ interface DatabaseItemCardProps {
 export const DatabaseItemCard = memo(({ item, onEdit, onDuplicate, onDelete }: DatabaseItemCardProps) => {
     const isGlobal = !item.table_id;
     const data = item.data || {};
+    
+    // --- CORREÇÃO: Ler weight e icon_url de data ---
+    const weight = data.weight || 0;
+    const iconUrl = data.icon_url || null;
 
     const typeConfig: Record<string, { color: string, icon: any }> = {
         weapon: { color: "text-orange-500 bg-orange-500/10 border-orange-500/20", icon: Sword },
@@ -38,8 +42,8 @@ export const DatabaseItemCard = memo(({ item, onEdit, onDuplicate, onDelete }: D
             )}
 
             <div className={cn("w-12 h-12 rounded-md flex items-center justify-center shrink-0 border overflow-hidden", config.color)}>
-                {item.icon_url ? (
-                    <img src={item.icon_url} alt={item.name} className="w-full h-full object-cover" />
+                {iconUrl ? (
+                    <img src={iconUrl} alt={item.name} className="w-full h-full object-cover" />
                 ) : (
                     <TypeIcon className="w-6 h-6 opacity-70" />
                 )}
@@ -61,10 +65,10 @@ export const DatabaseItemCard = memo(({ item, onEdit, onDuplicate, onDelete }: D
                     {data.level && <Badge variant="secondary" className="text-[9px] h-4 px-1">{data.level}</Badge>}
                     {data.type && item.type === 'trait' && <Badge variant="outline" className="text-[9px] h-4 px-1">{data.type}</Badge>}
                     
-                    {item.weight > 0 && (
+                    {weight > 0 && (
                         <>
                             <span className="w-px h-3 bg-border mx-1" />
-                            <span>{item.weight} kg</span>
+                            <span>{weight} kg</span>
                         </>
                     )}
                 </div>

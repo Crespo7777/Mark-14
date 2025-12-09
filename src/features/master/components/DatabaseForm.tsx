@@ -8,13 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, Save, Plus, X } from "lucide-react";
 import { ItemIconUploader } from "@/components/ItemIconUploader";
-import { QualitySelector } from "@/components/QualitySelector";
-import { 
-    RPG_ATTRIBUTES, 
-    WEAPON_SUBCATEGORIES, 
-    ARMOR_SUBCATEGORIES, 
-    FOOD_SUBCATEGORIES 
-} from "../database.constants";
+import { FOOD_SUBCATEGORIES } from "../database.constants";
+
+// --- NOVOS IMPORTS MODULARIZADOS ---
+import { WeaponFormFields } from "./forms/WeaponFormFields";
+import { ArmorFormFields } from "./forms/ArmorFormFields";
+import { AbilityFormFields } from "./forms/AbilityFormFields";
 
 const RichTextEditor = lazy(() => 
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
@@ -42,6 +41,17 @@ export const DatabaseForm = ({
 
     const renderSpecificFields = () => {
         switch (category) {
+          // --- COMPONENTES MODULARIZADOS ---
+          case 'weapon': 
+            return <WeaponFormFields data={data.data} tableId={tableId} updateData={updateData} />;
+          
+          case 'armor': 
+            return <ArmorFormFields data={data.data} tableId={tableId} updateData={updateData} />;
+          
+          case 'ability': 
+            return <AbilityFormFields data={data.data} updateData={updateData} />;
+          
+          // --- Itens Menores (Mantidos Inline por agora) ---
           case 'quality': return (
             <div className="grid grid-cols-2 gap-3">
                 <Input placeholder="Alvo (Arma/Armadura...)" value={data.data.targetType || ""} onChange={e => updateData('targetType', e.target.value)} className="bg-background col-span-2"/>
@@ -81,85 +91,11 @@ export const DatabaseForm = ({
             </div>
           );
 
-          case 'weapon': { 
-              const isReloadable = data.data.subcategory === "Arma de Projétil" || data.data.subcategory === "Arma de Arremesso"; 
-              return (
-                  <div className="grid grid-cols-2 gap-3">
-                      <Select value={data.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                          <SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Categoria" /></SelectTrigger>
-                          <SelectContent>{WEAPON_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
-                      </Select>
-                      <Input placeholder="Dano (ex: 1d8)" value={data.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/>
-                      
-                      {/* SELECT CORRIGIDO: Usa attr.key no value */}
-                      <Select value={data.data.attackAttribute || ""} onValueChange={v => updateData('attackAttribute', v)}>
-                         <SelectTrigger className="bg-background"><SelectValue placeholder="Atributo de Ataque" /></SelectTrigger>
-                         <SelectContent>
-                             {RPG_ATTRIBUTES.map(attr => <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>)}
-                         </SelectContent>
-                      </Select>
-
-                      <div className="col-span-2"><Label className="text-xs">Qualidades</Label><QualitySelector tableId={tableId} value={data.data.quality || ""} onChange={(val) => updateData('quality', val)} targetType="weapon" /></div>
-                      {isReloadable && (<Input placeholder="Recarga (ex: Ação Livre)" value={data.data.reloadAction || ""} onChange={e => updateData('reloadAction', e.target.value)} className="bg-background col-span-2 md:col-span-1 border-accent/50"/>)}
-                      <Input placeholder="Preço" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} className={`${isReloadable ? "col-span-2 md:col-span-1" : "col-span-2"} bg-background`}/>
-                  </div>
-              ); 
-          }
-
-          case 'ammunition': return (
-             <div className="grid grid-cols-2 gap-3">
-                 <Input placeholder="Dano Extra (ex: +1d4)" value={data.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/>
-                 <Input placeholder="Bônus de Ataque (ex: +1)" value={data.data.attack_modifier || ""} onChange={e => updateData('attack_modifier', e.target.value)} className="bg-background"/>
-                 <div className="col-span-2"><Label className="text-xs">Qualidades</Label><QualitySelector tableId={tableId} value={data.data.quality || ""} onChange={(val) => updateData('quality', val)} targetType="weapon" /></div>
-                 <Input placeholder="Preço (Pack)" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background col-span-2"/>
-             </div>
-          );
-
-          case 'armor': return (
-              <div className="grid grid-cols-2 gap-3">
-                  <Select value={data.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}>
-                      <SelectTrigger className="col-span-2 bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                      <SelectContent>{ARMOR_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent>
-                  </Select>
-                  <Input placeholder="Proteção (ex: 1d4 ou 2)" value={data.data.protection || ""} onChange={e => updateData('protection', e.target.value)} className="bg-background"/>
-                  <Input placeholder="Penalidade (ex: 2)" value={data.data.obstructive || ""} onChange={e => updateData('obstructive', e.target.value)} className="bg-background"/>
-                  <div className="col-span-2"><Label className="text-xs">Qualidades</Label><QualitySelector tableId={tableId} value={data.data.quality || ""} onChange={(val) => updateData('quality', val)} targetType="armor" /></div>
-                  <Input placeholder="Preço" className="col-span-2 bg-background" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} />
-              </div>
-          );
-
-          case 'ability': return (
-              <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                      <Select value={data.data.type || "Habilidade"} onValueChange={v => updateData('type', v)}>
-                          <SelectTrigger className="bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger>
-                          <SelectContent><SelectItem value="Habilidade">Habilidade</SelectItem><SelectItem value="Poder">Poder</SelectItem><SelectItem value="Ritual">Ritual</SelectItem></SelectContent>
-                      </Select>
-                      <Input placeholder="Custo Corr." value={data.data.corruptionCost || ""} onChange={e => updateData('corruptionCost', e.target.value)} className="bg-background"/>
-                      
-                      {/* SELECT CORRIGIDO: Usa attr.key */}
-                      <Select value={data.data.associatedAttribute || ""} onValueChange={v => updateData('associatedAttribute', v)}>
-                         <SelectTrigger className="bg-background"><SelectValue placeholder="Atributo Base" /></SelectTrigger>
-                         <SelectContent>
-                            <SelectItem value="Nenhum">Nenhum</SelectItem>
-                            {RPG_ATTRIBUTES.map(attr => <SelectItem key={attr.key} value={attr.key}>{attr.label}</SelectItem>)}
-                         </SelectContent>
-                      </Select>
-
-                      <Input placeholder="Tradição" value={data.data.tradition || ""} onChange={e => updateData('tradition', e.target.value)} className="bg-background"/>
-                  </div>
-                  <div className="space-y-2 border-t pt-2">
-                      <Label className="text-xs uppercase text-muted-foreground">Efeitos por Nível</Label>
-                      <Textarea placeholder="Novato..." className="h-14 bg-background" value={data.data.novice || ""} onChange={e => updateData('novice', e.target.value)} />
-                      <Textarea placeholder="Adepto..." className="h-14 bg-background" value={data.data.adept || ""} onChange={e => updateData('adept', e.target.value)} />
-                      <Textarea placeholder="Mestre..." className="h-14 bg-background" value={data.data.master || ""} onChange={e => updateData('master', e.target.value)} />
-                  </div>
-              </div>
-          );
-          
           case 'consumable': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Duração" value={data.data.duration || ""} onChange={e => updateData('duration', e.target.value)} className="bg-background"/><Input placeholder="Preço" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
           case 'food': return (<div className="grid grid-cols-2 gap-3"><Select value={data.data.subcategory || ""} onValueChange={v => updateData('subcategory', v)}><SelectTrigger className="col-span-2 md:col-span-1 bg-background"><SelectValue placeholder="Tipo" /></SelectTrigger><SelectContent>{FOOD_SUBCATEGORIES.map(sub => (<SelectItem key={sub} value={sub}>{sub}</SelectItem>))}</SelectContent></Select><Input placeholder="Preço" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
           case 'artifact': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Efeito Mágico" className="col-span-2 bg-background" value={data.data.effect || ""} onChange={e => updateData('effect', e.target.value)} /><Input placeholder="Corrupção" value={data.data.corruption || ""} onChange={e => updateData('corruption', e.target.value)} className="bg-background"/><Input placeholder="Preço" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background"/></div>);
+          case 'ammunition': return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Dano Extra (ex: +1d4)" value={data.data.damage || ""} onChange={e => updateData('damage', e.target.value)} className="bg-background"/><Input placeholder="Bônus de Ataque (ex: +1)" value={data.data.attack_modifier || ""} onChange={e => updateData('attack_modifier', e.target.value)} className="bg-background"/><Input placeholder="Preço (Pack)" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} className="bg-background col-span-2"/></div>);
+          
           default: return (<div className="grid grid-cols-2 gap-3"><Input placeholder="Preço" value={data.data.price || ""} onChange={e => updateData('price', e.target.value)} className="col-span-2 bg-background"/></div>);
         }
     };

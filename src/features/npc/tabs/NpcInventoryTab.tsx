@@ -3,7 +3,8 @@ import { useNpcSheet } from "../NpcSheetContext";
 import { useFieldArray } from "react-hook-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Backpack, Plus, Database, PenTool, Package, Weight } from "lucide-react";
+// --- CORREÇÃO AQUI: Adicionado 'Trash2' ---
+import { Backpack, Plus, Database, PenTool, Package, Weight, Trash2 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-import { NpcProjectileList } from "../components/NpcProjectileList"; // <--- IMPORT NOVO
-import { SharedInventoryList } from "@/components/SharedInventoryList"; // Mantemos este se quiseres usar o partilhado, ou usamos o código inline abaixo se preferires custom
+import { NpcProjectileList } from "../components/NpcProjectileList"; 
+import { SharedInventoryList } from "@/components/SharedInventoryList"; 
 
 // Configuração de Categorias para NPCs
 const ALLOWED_CATEGORIES = [

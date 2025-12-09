@@ -56,20 +56,37 @@ export const MasterShopsTab = ({ tableId }: { tableId: string }) => {
     }
   };
 
+  // --- VERSÃO DEBUG DA FUNÇÃO DE CRIAÇÃO ---
   const handleCreateShop = async () => {
-    if (!newShopName.trim()) return;
-    const { error } = await supabase.from("shops").insert({ 
+    console.log("DEBUG: Botão 'Criar' clicado.");
+    console.log("DEBUG: Nome da loja:", newShopName);
+    console.log("DEBUG: ID da Mesa (tableId):", tableId);
+
+    if (!newShopName.trim()) {
+        console.warn("DEBUG: Nome da loja está vazio. Abortando.");
+        return;
+    }
+
+    console.log("DEBUG: Enviando pedido ao Supabase...");
+
+    const { data, error } = await supabase.from("shops").insert({ 
         table_id: tableId, 
         name: newShopName,
         is_open: false 
-    });
-    if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
-    else {
+    }).select(); // .select() é importante para ver o retorno no log
+
+    if (error) {
+        console.error("DEBUG: ERRO CRÍTICO DO SUPABASE:", error);
+        console.error("DEBUG: Detalhes do erro:", error.message, error.details, error.hint);
+        toast({ title: "Erro Fatal", description: error.message, variant: "destructive" });
+    } else {
+      console.log("DEBUG: SUCESSO! Dados criados:", data);
       toast({ title: "Loja Criada!" });
       setNewShopName("");
       queryClient.invalidateQueries({ queryKey: ['shops', tableId] });
     }
   };
+  // -----------------------------------------
 
   const handleDeleteShop = async (id: string) => {
     if(!confirm("Apagar esta loja e todos os itens dela?")) return;

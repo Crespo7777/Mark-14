@@ -20,7 +20,7 @@ export const signedNumeric = z.union([z.string(), z.number()]).transform((val) =
 
 // --- ATRIBUTOS ---
 const attributeItemSchema = z.object({
-  value: signedNumeric.default(0),
+  value: signedNumeric.default(0), // Mantido como 0 (original)
   note: z.string().default(""), 
 });
 
@@ -37,12 +37,14 @@ const npcAttributesSchema = z.object({
 
 // --- COMBATE ---
 const npcCombatSchema = z.object({
-  toughness_current: numeric.default(0),
-  toughness_max: numeric.default(0),
-  temporary: numeric.default(0), // Vida temporária
+  // --- MUDANÇA APENAS AQUI: Vida começa em 10 ---
+  toughness_current: numeric.default(10),
+  toughness_max: numeric.default(10),
+  // ----------------------------------------------
+  temporary: numeric.default(0), 
   defense: signedNumeric.default(0),
   armor_rd: numeric.default(0),
-  pain_threshold: numeric.default(0),
+  pain_threshold: numeric.default(0), // Mantido como 0 (original)
   pain_threshold_bonus: signedNumeric.default(0),
 });
 
@@ -51,11 +53,11 @@ export const npcArmorSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default("Nova Armadura"),
   protection: z.string().default("1d4"),
-  obstructive: numeric.default(0), // Adicionado
+  obstructive: numeric.default(0), 
   quality: z.string().default(""),
-  quality_desc: z.string().default(""), // Adicionado
-  weight: numeric.default(0), // Adicionado
-  equipped: z.boolean().default(true), // Adicionado
+  quality_desc: z.string().default(""), 
+  weight: numeric.default(0), 
+  equipped: z.boolean().default(true), 
 });
 
 // --- ARMA (Igual PC) ---
@@ -65,8 +67,8 @@ export const npcWeaponSchema = z.object({
   damage: z.string().default("1d8"),
   attackAttribute: z.string().default("vigorous"),
   quality: z.string().default(""),
-  quality_desc: z.string().default(""), // Adicionado
-  weight: numeric.default(0), // Adicionado
+  quality_desc: z.string().default(""), 
+  weight: numeric.default(0), 
   projectileId: z.string().optional(),
 });
 

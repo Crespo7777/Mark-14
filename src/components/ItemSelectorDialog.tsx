@@ -26,26 +26,47 @@ interface ItemSelectorDialogProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-// --- CORREÇÃO: Usa a nova tabela 'items' ---
+// --- FUNÇÃO DE BUSCA BLINDADA (SEM WEIGHT E SEM ICON_URL) ---
 const fetchItemsForSelector = async (tableId: string, categories: string[]) => {
+  // 1. Formatar categorias para Title Case (ex: 'weapon' -> 'Weapon')
+  const formattedCategories = categories.map(c => 
+      c.charAt(0).toUpperCase() + c.slice(1).toLowerCase()
+  );
+
   let query = supabase
-    .from("items") // <--- MUDANÇA CRÍTICA: Tabela 'items' em vez de 'item_templates'
-    .select("id, name, description, type, weight, data, icon_url") // <--- Inclui icon_url
+    .from("items")
+    // --- CORREÇÃO FINAL: Selecionamos APENAS as colunas que existem de certeza ---
+    .select("id, name, description, type, data") 
     .eq("table_id", tableId)
     .order("name");
     
   if (categories.length > 0) {
-     query = query.in("type", categories); // <--- Usa 'type' em vez de 'category'
+      query = query.in("type", formattedCategories);
   }
 
   const { data, error } = await query;
-  if (error) throw error;
   
-  // Mapeia para o formato esperado pelo frontend
-  return data.map((item: any) => ({
-      ...item,
-      category: item.type
-  })) as ItemTemplate[];
+  if (error) {
+    console.error("Erro ao buscar itens no seletor:", error);
+    throw error;
+  }
+  
+  // 2. Mapeamento seguro dos dados
+  return data.map((item: any) => {
+      // Extração segura de dados que podem não estar em colunas próprias
+      const itemData = item.data || {};
+      const itemWeight = itemData.weight || 0;
+      // Tenta encontrar a URL da imagem dentro do JSON 'data', em várias propriedades possíveis
+      const imageUrl = itemData.icon_url || itemData.image_url || itemData.img || null;
+
+      return {
+        ...item,
+        category: item.type ? item.type.toLowerCase() : "general",
+        image_url: imageUrl, // Usa a imagem encontrada no JSON
+        weight: itemWeight,  // Usa o peso encontrado no JSON
+        data: itemData
+      };
+  }) as ItemTemplate[];
 };
 
 export const ItemSelectorDialog = ({ tableId, categories, category, children, onSelect, title, open: controlledOpen, onOpenChange }: ItemSelectorDialogProps) => {
@@ -57,6 +78,7 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  
   const [activeTab, setActiveTab] = useState(targetCategories[0] || "all");
 
   useEffect(() => {
@@ -66,15 +88,24 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
     return () => clearTimeout(timer);
   }, [search]);
 
+  useEffect(() => {
+    if (targetCategories.length > 0) {
+        setActiveTab(targetCategories[0]);
+    }
+  }, [JSON.stringify(targetCategories)]);
+
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['items_selector', tableId, targetCategories.join(',')], 
     queryFn: () => fetchItemsForSelector(tableId, targetCategories),
-    enabled: isOpen,
+    enabled: isOpen, 
   });
 
   const filteredItems = items.filter(i => {
       const matchesSearch = i.name.toLowerCase().includes(debouncedSearch.toLowerCase());
-      const matchesTab = targetCategories.length > 1 ? i.category === activeTab : true;
+      const matchesTab = targetCategories.length > 1 
+        ? (i.category || "").toLowerCase() === activeTab.toLowerCase() 
+        : true;
+        
       return matchesSearch && matchesTab;
   });
 
@@ -84,7 +115,8 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
   };
 
   const getIcon = (cat: string) => {
-    switch(cat) {
+    const normalizedCat = (cat || "").toLowerCase();
+    switch(normalizedCat) {
         case 'quality': return <Star className="w-4 h-4"/>;
         case 'weapon': return <Sword className="w-4 h-4"/>;
         case 'armor': return <Shield className="w-4 h-4"/>;
@@ -112,7 +144,8 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
   };
 
   const getLabel = (cat: string) => {
-      switch(cat) {
+      const normalizedCat = (cat || "").toLowerCase();
+      switch(normalizedCat) {
           case 'quality': return "Qualidades";
           case 'weapon': return "Armas";
           case 'armor': return "Armaduras";
@@ -155,7 +188,7 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                 <TabsList className="flex flex-wrap h-auto bg-muted/50 p-1 justify-start w-full">
                     {targetCategories.map(cat => (
-                        <TabsTrigger key={cat} value={cat} className="text-xs px-3 py-1.5 flex-1">
+                        <TabsTrigger key={cat} value={cat} className="text-xs px-3 py-1.5 flex-1 capitalize">
                             {getLabel(cat)}
                         </TabsTrigger>
                     ))}
@@ -199,12 +232,11 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
                         className="flex items-center gap-3 p-3 border rounded-md hover:bg-accent cursor-pointer transition-colors bg-card"
                         onClick={() => handleSelect(item)}
                     >
-                        {/* MOSTRAR ÍCONE */}
                         <div className="w-10 h-10 rounded bg-muted flex items-center justify-center shrink-0 overflow-hidden border border-border/50">
-                            {item.image_url || item.icon_url ? ( 
-                                <img src={item.image_url || item.icon_url || ""} className="w-full h-full object-cover" />
+                            {item.image_url ? ( 
+                                <img src={item.image_url} className="w-full h-full object-cover" alt={item.name} />
                             ) : (
-                                <Package className="w-5 h-5 text-muted-foreground/30" />
+                                getIcon(item.category) 
                             )}
                         </div>
 
@@ -212,19 +244,27 @@ export const ItemSelectorDialog = ({ tableId, categories, category, children, on
                             <div className="flex justify-between items-center">
                                 <span className="font-bold flex items-center gap-2">
                                     {item.name}
-                                    {item.data.price && <span className="text-[10px] font-normal text-muted-foreground border px-1 rounded bg-muted/50">{item.data.price}</span>}
+                                    {item.data?.price && <span className="text-[10px] font-normal text-muted-foreground border px-1 rounded bg-muted/50">{item.data.price}</span>}
                                 </span>
-                                {item.category !== 'ability' && item.category !== 'trait' && <Badge variant="secondary" className="text-xs font-normal">{item.weight} peso</Badge>}
+                                {item.category !== 'ability' && item.category !== 'trait' && (
+                                    <Badge variant="secondary" className="text-xs font-normal">
+                                        {item.weight} peso
+                                    </Badge>
+                                )}
                             </div>
                             {item.description && (
-                                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{item.description.replace(/<[^>]*>?/gm, '')}</p>
+                                <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                                    {item.description.replace(/<[^>]*>?/gm, '')}
+                                </p>
                             )}
                         </div>
                     </div>
                 ))}
                 
                 {!isLoading && filteredItems.length === 0 && (
-                    <p className="text-center text-xs text-muted-foreground py-8">Nenhum item encontrado.</p>
+                    <p className="text-center text-xs text-muted-foreground py-8">
+                        Nenhum item encontrado nesta categoria.
+                    </p>
                 )}
             </div>
         </ScrollArea>
