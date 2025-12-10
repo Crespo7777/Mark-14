@@ -1,3 +1,5 @@
+// src/components/AbilityRollDialog.tsx
+
 import { useState, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -65,7 +67,6 @@ export const AbilityRollDialog = ({
     if (!isNaN(fixed) && String(fixed) === corruptionCost.trim()) {
         return { type: 'fixed', value: fixed };
     }
-    // parseDiceRoll agora retorna DiceRoll, que tem .total. Seguro.
     const dice: DiceRoll | null = parseDiceRoll(corruptionCost);
     if (dice) return { type: 'dice', value: corruptionCost };
     return { type: 'none', value: 0 };
@@ -76,10 +77,21 @@ export const AbilityRollDialog = ({
   const isAtThreshold = projectedCorruption !== null && projectedCorruption === corruptionThreshold;
 
   const handleRoll = async (isHidden: boolean) => {
+    // 1. Validação de Atributo (se não for "sem teste")
+    if (!isNoRoll && attributeValue <= 0) {
+        toast({ 
+            title: "Ação Inválida", 
+            description: `Atributo ${attributeName} inválido (${attributeValue}).`, 
+            variant: "destructive" 
+        });
+        return;
+    }
+
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
+    // 2. Aplicação de Corrupção
     let appliedCost = 0;
     let costMessage = "";
 
@@ -97,7 +109,7 @@ export const AbilityRollDialog = ({
       if (onApplyCorruption) {
           onApplyCorruption(appliedCost);
           if (currentTempCorruption + appliedCost > corruptionThreshold) {
-             toast({ title: "LIMIAR EXCEDIDO!", description: "Verifique marcas de estigma.", variant: "destructive" });
+              toast({ title: "LIMIAR EXCEDIDO!", description: "Verifique marcas de estigma.", variant: "destructive" });
           }
       } else if (form && programmaticSave) {
           const newTotal = currentTempCorruption + appliedCost;
@@ -109,6 +121,7 @@ export const AbilityRollDialog = ({
       }
     }
 
+    // 3. Preparação da Rolagem
     const modValue = parseInt(modifier) || 0;
     let chatMessage = "";
     let discordRollData: any = null;
@@ -119,35 +132,58 @@ export const AbilityRollDialog = ({
        
        discordRollData = { rollType: "manual", command: `usou ${abilityName}`, result: { rolls: [], modifier: 0, total: 0 } };
        
-       if (!isHidden || isMaster) {
-           toast({ 
-               title: `${abilityName} usado`, 
-               description: appliedCost > 0 ? `+${appliedCost} Corrupção aplicada.` : "Sem custo.", 
-               action: <div className="flex items-center gap-2 text-primary font-bold"><Hand className="w-4 h-4"/> Usado</div> 
-           });
-       }
+       // Feedback Local
+       toast({ 
+           title: `${abilityName} usado`, 
+           description: appliedCost > 0 ? `+${appliedCost} Corrupção aplicada.` : "Sem custo.", 
+           action: <div className="flex items-center gap-2 text-primary font-bold"><Hand className="w-4 h-4"/> Usado</div> 
+       });
     } else {
-       // rollAttributeTest usa a lógica antiga e retorna AttributeRollResult (compatível).
+       // Teste de Atributo Real
        const result: AttributeRollResult = rollAttributeTest({ attributeValue, modifier: modValue, withAdvantage: false });
        chatMessage = formatAbilityTest(characterName, abilityName, attributeName, result, appliedCost) + (costMessage ? `\n🎲 Corrupção: ${costMessage}` : "");
        discordRollData = { rollType: "ability", abilityName, attributeName, corruptionCost: appliedCost, result };
        
+       // Feedback Local
        if (!isHidden || isMaster) {
-           toast({ title: `Teste de ${abilityName}`, description: `Resultado: ${result.totalRoll} (Alvo: ${result.target})` });
+           toast({ 
+               title: result.isSuccess ? "Sucesso!" : "Falha!",
+               description: `Rolagem: ${result.totalRoll} (Alvo: ${result.target})`,
+               variant: result.isSuccess ? "default" : "destructive"
+           });
        }
     }
 
     const targetTableId = tableId || contextTableId;
 
+    // 4. Envio para o Chat (Suporta Rolagem Secreta)
     if (isHidden && isMaster) {
-      // APENAS CHAT SECRETO - SEM DISCORD
+      // SECRETO
       await supabase.from("chat_messages").insert([
-          { table_id: targetTableId, user_id: user.id, message: `${characterName} usou ${abilityName} em segredo.`, message_type: "info" },
-          { table_id: targetTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
+          { 
+              table_id: targetTableId, 
+              user_id: user.id, 
+              message: `${characterName} usou ${abilityName} em segredo.`, 
+              message_type: "info" 
+          },
+          { 
+              table_id: targetTableId, 
+              user_id: user.id, 
+              message: `[SECRETO] ${chatMessage}`, 
+              message_type: "roll", 
+              recipient_id: masterId 
+          }
       ]);
     } else {
-      // PÚBLICO - COM DISCORD
-      await supabase.from("chat_messages").insert({ table_id: targetTableId, user_id: user.id, message: chatMessage, message_type: "roll" });
+      // PÚBLICO
+      await supabase.from("chat_messages").insert({ 
+          table_id: targetTableId, 
+          user_id: user.id, 
+          message: chatMessage, 
+          message_type: "roll" 
+      });
+      
+      // Discord Webhook
       supabase.functions.invoke('discord-roll-handler', { 
           body: { tableId: targetTableId, rollData: discordRollData, userName: characterName, chatMessage: isNoRoll ? chatMessage : undefined } 
       }).catch(console.error);
@@ -170,15 +206,37 @@ export const AbilityRollDialog = ({
     >
       {parsedCost.type !== 'none' && (
         <div className="space-y-3">
-          {isOverThreshold && <Alert variant="destructive" className="border-red-600 bg-red-900/20 text-red-200"><AlertOctagon className="h-4 w-4" /><AlertTitle>PERIGO EXTREMO!</AlertTitle><AlertDescription>Limiar excedido.</AlertDescription></Alert>}
-          {isAtThreshold && <Alert variant="destructive" className="border-orange-600 bg-orange-900/20 text-orange-200"><AlertTriangle className="h-4 w-4" /><AlertTitle>Cuidado</AlertTitle><AlertDescription>Limiar atingido.</AlertDescription></Alert>}
-          {!isOverThreshold && !isAtThreshold && <div className="text-sm text-muted-foreground flex justify-between items-center px-2 border rounded py-2 bg-muted/30"><span>Custo: <span className="text-purple-400 font-bold">{corruptionCost}</span></span>{parsedCost.type === 'fixed' && <span>Novo: {projectedCorruption} / {corruptionThreshold}</span>}{parsedCost.type === 'dice' && <span>Atual: {currentTempCorruption} / {corruptionThreshold}</span>}</div>}
+          {isOverThreshold && (
+              <Alert variant="destructive" className="border-red-600 bg-red-900/20 text-red-200">
+                  <AlertOctagon className="h-4 w-4" /><AlertTitle>PERIGO EXTREMO!</AlertTitle><AlertDescription>Limiar excedido.</AlertDescription>
+              </Alert>
+          )}
+          {isAtThreshold && (
+              <Alert variant="destructive" className="border-orange-600 bg-orange-900/20 text-orange-200">
+                  <AlertTriangle className="h-4 w-4" /><AlertTitle>Cuidado</AlertTitle><AlertDescription>Limiar atingido.</AlertDescription>
+              </Alert>
+          )}
+          {!isOverThreshold && !isAtThreshold && (
+              <div className="text-sm text-muted-foreground flex justify-between items-center px-2 border rounded py-2 bg-muted/30">
+                  <span>Custo: <span className="text-purple-400 font-bold">{corruptionCost}</span></span>
+                  {parsedCost.type === 'fixed' && <span>Novo: {projectedCorruption} / {corruptionThreshold}</span>}
+                  {parsedCost.type === 'dice' && <span>Atual: {currentTempCorruption} / {corruptionThreshold}</span>}
+              </div>
+          )}
         </div>
       )}
+      
       {!isNoRoll && (
-          <div className="space-y-2">
+          <div className="space-y-2 mt-2">
             <Label htmlFor="modifier-ability">Modificador (no alvo)</Label>
-            <Input id="modifier-ability" type="number" value={modifier} onChange={(e) => setModifier(e.target.value)} placeholder="+0" />
+            <Input 
+                id="modifier-ability" 
+                type="number" 
+                value={modifier} 
+                onChange={(e) => setModifier(e.target.value)} 
+                placeholder="+0" 
+                className="bg-background/50"
+            />
           </div>
       )}
     </BaseRollDialog>
