@@ -1,36 +1,56 @@
-import { Group, Circle, Text } from "react-konva";
+import { Group, Circle, Text, Rect } from "react-konva"; 
 import useImage from "use-image";
 import { MapToken as MapTokenType } from "@/types/map-types";
-import { useEffect, useState } from "react";
+import { useTableContext } from "@/features/table/TableContext";
+import { useMemo } from "react";
 
 interface MapTokenProps {
   token: MapTokenType;
   gridSize: number;
   isDraggable: boolean;
   onDragEnd: (id: string, x: number, y: number) => void;
+  onSelect: (id: string) => void; 
+  onContextMenu: (e: any, token: MapTokenType) => void;
+  isSelected: boolean;
+  isMaster: boolean;
 }
 
-export const MapToken = ({ token, gridSize, isDraggable, onDragEnd }: MapTokenProps) => {
-  // Carregar imagem se existir (hook do use-image)
-  const [image] = useImage(token.imageUrl || "", "anonymous");
+export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, onContextMenu, isSelected, isMaster }: MapTokenProps) => {
+  const { characters } = useTableContext();
   
-  // Cálculo do raio (metade do tamanho da célula * escala do token)
+  // CORREÇÃO: image_url (snake_case)
+  const [image] = useImage(token.image_url || "", "anonymous");
+  
+  // CORREÇÃO: is_hidden (snake_case)
+  if (token.is_hidden && !isMaster) {
+      return null;
+  }
+
+  // CORREÇÃO: character_id (snake_case)
+  const linkedCharacter = useMemo(() => 
+    characters.find(c => c.id === token.character_id), 
+  [characters, token.character_id]);
+
+  const hpCurrent = Number(linkedCharacter?.data?.toughness?.current) || 0;
+  const hpMax = Number(linkedCharacter?.data?.toughness?.max) || 10; 
+  const hpPercentage = Math.max(0, Math.min(1, hpCurrent / hpMax));
+  
+  const barColor = hpPercentage > 0.5 ? "#22c55e" : hpPercentage > 0.2 ? "#eab308" : "#ef4444";
   const radius = (gridSize * token.size) / 2;
 
-  // Handler para quando largamos o token (Snap to Grid)
+  // CORREÇÃO: status_effects (snake_case)
+  const isDead = (token.status_effects || []).includes("dead");
+  const isBloodied = (token.status_effects || []).includes("bloodied");
+
   const handleDragEnd = (e: any) => {
     const x = e.target.x();
     const y = e.target.y();
-    
-    // Matemática de "Snap": Arredondar para o quadrado mais próximo
     const snapX = Math.round(x / gridSize) * gridSize;
     const snapY = Math.round(y / gridSize) * gridSize;
-
-    // Atualiza a posição visual imediatamente para "encaixar"
+    
     e.target.x(snapX);
     e.target.y(snapY);
-
-    // Avisa o pai que mudou
+    
     onDragEnd(token.id, snapX, snapY);
   };
 
@@ -40,59 +60,106 @@ export const MapToken = ({ token, gridSize, isDraggable, onDragEnd }: MapTokenPr
       y={token.y}
       draggable={isDraggable}
       onDragEnd={handleDragEnd}
-      // Muda o cursor ao passar o rato
-      onMouseEnter={(e) => {
-        const container = e.target.getStage()?.container();
-        if (container) container.style.cursor = "grab";
+      onClick={(e) => {
+        e.cancelBubble = true;
+        onSelect(token.id);
       }}
-      onMouseLeave={(e) => {
-        const container = e.target.getStage()?.container();
-        if (container) container.style.cursor = "default";
+      onContextMenu={(e) => {
+          e.evt.preventDefault(); 
+          if (isMaster) { 
+             onContextMenu(e, token);
+          }
       }}
+      opacity={token.is_hidden ? 0.5 : 1}
     >
-      {/* 1. Base/Fundo (Se não houver imagem) */}
+      {isSelected && (
+        <Circle
+          radius={radius + 4}
+          stroke="#ff9900"
+          strokeWidth={3}
+          offsetX={-gridSize / 2} 
+          offsetY={-gridSize / 2}
+          opacity={0.8}
+          shadowColor="#ff9900"
+          shadowBlur={10}
+        />
+      )}
+
       <Circle
-        radius={radius - 2} // -2 para dar espaço à borda
+        radius={radius - 2}
         fill={image ? "white" : token.color}
-        stroke={token.color}
+        stroke={token.color || "#000"}
         strokeWidth={2}
-        offsetX={-gridSize / 2} // Centrar no quadrado
+        offsetX={-gridSize / 2}
         offsetY={-gridSize / 2}
         shadowColor="black"
-        shadowBlur={5}
-        shadowOpacity={0.3}
+        shadowBlur={isBloodied ? 15 : 8} 
+        shadowColor={isBloodied ? "red" : "black"}
+        shadowOpacity={0.6}
       />
 
-      {/* 2. Imagem do Personagem (Preenchimento) */}
       {image && (
         <Circle
-          radius={radius - 4}
+          radius={radius - 2}
           fillPatternImage={image}
           fillPatternScale={{
             x: (radius * 2) / image.width,
             y: (radius * 2) / image.height
           }}
-          // Ajuste fino para centrar a textura
           fillPatternOffset={{ x: image.width / 2, y: image.height / 2 }} 
           offsetX={-gridSize / 2}
           offsetY={-gridSize / 2}
+          opacity={isDead ? 0.5 : 1} 
         />
       )}
 
-      {/* 3. Rótulo (Nome) - Flutuando em cima */}
+      {isDead && (
+         <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2}>
+            <Text 
+                text="💀" 
+                fontSize={gridSize * 0.8} 
+                x={-gridSize/2 + 5} 
+                y={-gridSize/2 + 5} 
+            />
+         </Group>
+      )}
+
+      {linkedCharacter && !isDead && (
+        <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2}>
+            <Rect 
+                x={-radius} 
+                y={-radius - 10} 
+                width={radius * 2} 
+                height={6} 
+                fill="#1f2937" 
+                cornerRadius={2}
+                stroke="black"
+                strokeWidth={0.5}
+            />
+            <Rect 
+                x={-radius} 
+                y={-radius - 10} 
+                width={(radius * 2) * hpPercentage} 
+                height={6} 
+                fill={barColor} 
+                cornerRadius={2}
+            />
+        </Group>
+      )}
+
       <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2}>
-         {/* Fundo escuro para ler o texto */}
          <Text
             text={token.label}
-            y={radius + 5}
+            y={radius + 8}
             align="center"
-            width={gridSize * 2}
-            offsetX={gridSize / 2} // Tentar centrar texto
+            width={gridSize * 3} 
+            offsetX={gridSize} 
             fontSize={12}
             fill="white"
             stroke="black"
             strokeWidth={0.5}
-            listening={false} // Texto não interfere no clique
+            fontStyle="bold"
+            listening={false}
          />
       </Group>
     </Group>

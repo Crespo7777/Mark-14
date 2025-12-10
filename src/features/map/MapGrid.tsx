@@ -1,4 +1,4 @@
-import { Layer, Line } from "react-konva";
+import { Group, Line } from "react-konva"; // <--- Mudamos de Layer para Group
 import { useMemo } from "react";
 
 interface MapGridProps {
@@ -9,7 +9,6 @@ interface MapGridProps {
 }
 
 export const MapGrid = ({ width, height, gridSize, strokeColor = "#ffffff" }: MapGridProps) => {
-  // Otimização: Calcular as linhas apenas quando as dimensões mudam
   const lines = useMemo(() => {
     const lineComponents = [];
     
@@ -21,7 +20,7 @@ export const MapGrid = ({ width, height, gridSize, strokeColor = "#ffffff" }: Ma
           points={[x, 0, x, height]}
           stroke={strokeColor}
           strokeWidth={1}
-          opacity={0.1} // Bem subtil
+          opacity={0.3} // Aumentei ligeiramente para visibilidade padrão
         />
       );
     }
@@ -34,7 +33,7 @@ export const MapGrid = ({ width, height, gridSize, strokeColor = "#ffffff" }: Ma
           points={[0, y, width, y]}
           stroke={strokeColor}
           strokeWidth={1}
-          opacity={0.1}
+          opacity={0.3}
         />
       );
     }
@@ -42,5 +41,7 @@ export const MapGrid = ({ width, height, gridSize, strokeColor = "#ffffff" }: Ma
     return lineComponents;
   }, [width, height, gridSize, strokeColor]);
 
-  return <Layer>{lines}</Layer>;
+  // CORREÇÃO CRÍTICA: Retornar Group, não Layer.
+  // Uma Layer não pode estar dentro de outra Layer.
+  return <Group>{lines}</Group>;
 };

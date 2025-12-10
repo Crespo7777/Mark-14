@@ -1,11 +1,12 @@
 import { createContext, useContext, ReactNode, SetStateAction, Dispatch } from "react";
+import { MapToken, FogShape } from "@/types/map-types"; 
+import { Character } from "@/types/app-types";
 
-// --- TIPO ATUALIZADO: Membro da Mesa ---
 export interface TableMember {
-  id: string; // user_id (ou master_id)
+  id: string; 
   display_name: string;
   isMaster: boolean;
-  isHelper: boolean; // <--- NOVO CAMPO: Define se é Ajudante
+  isHelper: boolean; 
 }
 
 interface TableContextType {
@@ -13,12 +14,20 @@ interface TableContextType {
   masterId: string;
   userId: string;
   isMaster: boolean;
-  isHelper: boolean; // <--- NOVO CAMPO: Permissão do usuário atual
+  isHelper: boolean;
   members: TableMember[]; 
   setMembers: Dispatch<SetStateAction<TableMember[]>>;
+
+  mapTokens: MapToken[]; 
+  setMapTokens: Dispatch<SetStateAction<MapToken[]>>; 
+  
+  characters: Character[];
+
+  // --- NEVOEIRO DE GUERRA (FOG OF WAR) ---
+  fogShapes: FogShape[]; 
+  setFogShapes: Dispatch<SetStateAction<FogShape[]>>;
 }
 
-// *** CORREÇÃO: Adicionei 'export' aqui ***
 export const TableContext = createContext<TableContextType | null>(null);
 
 interface TableProviderProps {
