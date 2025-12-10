@@ -15,8 +15,7 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Componente ProtectedRoute agora recebe a sessão como prop
-// Isso torna-o "burro" e reativo: se a sessão mudar lá em cima, ele redireciona.
+// ProtectedRoute simplificado (recebe sessão como prop e reage a ela)
 const ProtectedRoute = ({ session, children }: { session: Session | null, children: React.ReactNode }) => {
   if (!session) {
     return <Navigate to="/auth" replace />;
@@ -29,24 +28,23 @@ const App = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Busca sessão inicial
+    // 1. Busca sessão inicial ao carregar
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
 
-    // 2. Escuta mudanças de autenticação globais
+    // 2. Listener Global de Auth
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Supabase Auth Event:", event);
-
+      console.log("Auth event:", event);
+      
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-        // Token inválido ou logout -> Limpa sessão e cache
+        // Se o utilizador saiu ou o token expirou, limpamos tudo
         setSession(null);
-        queryClient.clear();
+        queryClient.clear(); // Limpa cache do React Query
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        // Login ou renovação bem-sucedida
         setSession(session);
       }
       
@@ -57,8 +55,8 @@ const App = () => {
   }, []);
 
   if (loading) {
-    // Spinner simples enquanto verifica o token
-    return <div className="h-screen w-screen flex items-center justify-center bg-zinc-950 text-white">Carregando...</div>;
+    // Spinner de carregamento inicial
+    return <div className="h-screen w-screen flex items-center justify-center bg-background text-foreground">Carregando...</div>; 
   }
 
   return (
