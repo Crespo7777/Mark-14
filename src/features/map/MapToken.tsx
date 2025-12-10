@@ -2,7 +2,8 @@ import { Group, Circle, Text, Rect } from "react-konva";
 import useImage from "use-image";
 import { MapToken as MapTokenType } from "@/types/map-types";
 import { useTableContext } from "@/features/table/TableContext";
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
+import Konva from "konva";
 
 interface MapTokenProps {
   token: MapTokenType;
@@ -16,20 +17,42 @@ interface MapTokenProps {
 }
 
 export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, onContextMenu, isSelected, isMaster }: MapTokenProps) => {
-  const { characters } = useTableContext();
-  
-  // CORREÇÃO: image_url (snake_case)
+  const { characters, combatants } = useTableContext(); // Ler combatentes do contexto
   const [image] = useImage(token.image_url || "", "anonymous");
   
-  // CORREÇÃO: is_hidden (snake_case)
+  // Referência para animação do turno
+  const turnRingRef = useRef<Konva.Circle>(null);
+
   if (token.is_hidden && !isMaster) {
       return null;
   }
 
-  // CORREÇÃO: character_id (snake_case)
   const linkedCharacter = useMemo(() => 
     characters.find(c => c.id === token.character_id), 
   [characters, token.character_id]);
+
+  // --- VERIFICAR COMBATE ---
+  const combatantEntry = useMemo(() => 
+    combatants.find(c => c.token_id === token.id),
+  [combatants, token.id]);
+
+  const isActiveTurn = combatantEntry?.is_turn || false;
+  const isInCombat = !!combatantEntry;
+
+  // Animação de Pulso para o Turno Ativo
+  useEffect(() => {
+    if (isActiveTurn && turnRingRef.current) {
+        const anim = new Konva.Animation((frame) => {
+            if (!frame) return;
+            // Oscila a opacidade e o strokeWidth
+            const scale = 1 + Math.sin(frame.time / 200) * 0.1;
+            turnRingRef.current?.scale({ x: scale, y: scale });
+            turnRingRef.current?.opacity(0.8 + Math.sin(frame.time / 200) * 0.2);
+        }, turnRingRef.current.getLayer());
+        anim.start();
+        return () => anim.stop();
+    }
+  }, [isActiveTurn]);
 
   const hpCurrent = Number(linkedCharacter?.data?.toughness?.current) || 0;
   const hpMax = Number(linkedCharacter?.data?.toughness?.max) || 10; 
@@ -38,7 +61,6 @@ export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, on
   const barColor = hpPercentage > 0.5 ? "#22c55e" : hpPercentage > 0.2 ? "#eab308" : "#ef4444";
   const radius = (gridSize * token.size) / 2;
 
-  // CORREÇÃO: status_effects (snake_case)
   const isDead = (token.status_effects || []).includes("dead");
   const isBloodied = (token.status_effects || []).includes("bloodied");
 
@@ -72,6 +94,22 @@ export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, on
       }}
       opacity={token.is_hidden ? 0.5 : 1}
     >
+      {/* 1. Anel de Turno Ativo (Aura Dourada Pulsante) */}
+      {isActiveTurn && (
+        <Circle
+            ref={turnRingRef}
+            radius={radius + 8}
+            stroke="#fbbf24" // Amber/Gold
+            strokeWidth={4}
+            offsetX={-gridSize / 2} 
+            offsetY={-gridSize / 2}
+            shadowColor="#fbbf24"
+            shadowBlur={20}
+            listening={false}
+        />
+      )}
+
+      {/* 2. Anel de Seleção (Laranja - Por cima do turno) */}
       {isSelected && (
         <Circle
           radius={radius + 4}
@@ -85,6 +123,20 @@ export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, on
         />
       )}
 
+      {/* 3. Marcador "Em Combate" (Borda Sutil se não for o turno) */}
+      {isInCombat && !isActiveTurn && !isSelected && (
+         <Circle
+            radius={radius + 2}
+            stroke="#ffffff"
+            strokeWidth={1}
+            dash={[4, 4]} // Tracejado
+            opacity={0.5}
+            offsetX={-gridSize / 2} 
+            offsetY={-gridSize / 2}
+         />
+      )}
+
+      {/* 4. Base do Token */}
       <Circle
         radius={radius - 2}
         fill={image ? "white" : token.color}
@@ -98,6 +150,7 @@ export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, on
         shadowOpacity={0.6}
       />
 
+      {/* 5. Imagem */}
       {image && (
         <Circle
           radius={radius - 2}
@@ -113,40 +166,30 @@ export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, on
         />
       )}
 
+      {/* 6. Ícones de Estado */}
       {isDead && (
          <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2}>
-            <Text 
-                text="💀" 
-                fontSize={gridSize * 0.8} 
-                x={-gridSize/2 + 5} 
-                y={-gridSize/2 + 5} 
-            />
+            <Text text="💀" fontSize={gridSize * 0.8} x={-gridSize/2 + 5} y={-gridSize/2 + 5} />
          </Group>
       )}
 
+      {/* 7. Barra de Vida */}
       {linkedCharacter && !isDead && (
         <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2}>
             <Rect 
-                x={-radius} 
-                y={-radius - 10} 
-                width={radius * 2} 
-                height={6} 
-                fill="#1f2937" 
-                cornerRadius={2}
-                stroke="black"
-                strokeWidth={0.5}
+                x={-radius} y={-radius - 10} 
+                width={radius * 2} height={6} 
+                fill="#1f2937" cornerRadius={2} stroke="black" strokeWidth={0.5}
             />
             <Rect 
-                x={-radius} 
-                y={-radius - 10} 
-                width={(radius * 2) * hpPercentage} 
-                height={6} 
-                fill={barColor} 
-                cornerRadius={2}
+                x={-radius} y={-radius - 10} 
+                width={(radius * 2) * hpPercentage} height={6} 
+                fill={barColor} cornerRadius={2}
             />
         </Group>
       )}
 
+      {/* 8. Nome */}
       <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2}>
          <Text
             text={token.label}
@@ -155,11 +198,8 @@ export const MapToken = ({ token, gridSize, isDraggable, onDragEnd, onSelect, on
             width={gridSize * 3} 
             offsetX={gridSize} 
             fontSize={12}
-            fill="white"
-            stroke="black"
-            strokeWidth={0.5}
-            fontStyle="bold"
-            listening={false}
+            fill="white" stroke="black" strokeWidth={0.5}
+            fontStyle="bold" listening={false}
          />
       </Group>
     </Group>

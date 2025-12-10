@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Stage, Layer, Rect, Image as KonvaImage, Line, Text, Group } from "react-konva";
 import useImage from "use-image";
 import { KonvaEventObject } from "konva/lib/Node";
@@ -7,6 +7,7 @@ import { MapToken } from "./MapToken";
 import { TokenHUD } from "./TokenHUD"; 
 import { MapContextMenu } from "./MapContextMenu";
 import { FogLayer } from "./FogLayer"; 
+import { PingLayer, PingData } from "./PingLayer"; 
 import { useTableContext } from "@/features/table/TableContext"; 
 import { supabase } from "@/integrations/supabase/client"; 
 import { useQueryClient } from "@tanstack/react-query";
@@ -36,7 +37,7 @@ interface MovePlan {
 }
 
 export const MapBoard = ({ width = window.innerWidth, height = window.innerHeight, isMaster = false, tableData }: MapBoardProps) => {
-  const { tableId, mapTokens, setMapTokens, fogShapes, setFogShapes } = useTableContext();
+  const { tableId, mapTokens, setMapTokens, fogShapes, setFogShapes, userId } = useTableContext();
   
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
   const [stageScale, setStageScale] = useState(1);
@@ -54,6 +55,9 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
 
   const [movePlan, setMovePlan] = useState<MovePlan | null>(null);
 
+  // --- ESTADOS DE PING ---
+  const [pings, setPings] = useState<PingData[]>([]);
+
   const gridSize = tableData.map_grid_size || 50; 
   const gridOpacity = tableData.map_grid_opacity ?? 0.2;
   const backgroundUrl = tableData.map_background_url;
@@ -61,6 +65,51 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
 
   const queryClient = useQueryClient();
   const stageRef = useRef<any>(null);
+
+  // --- CONFIGURAÇÃO DO REALTIME (BROADCAST) ---
+  useEffect(() => {
+    const channel = supabase.channel(`room:${tableId}`);
+
+    channel
+      .on('broadcast', { event: 'cursor-ping' }, (payload) => {
+        addPing(payload.payload);
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [tableId]);
+
+  const addPing = (newPing: PingData) => {
+    setPings(prev => [...prev, newPing]);
+  };
+
+  const removePing = useCallback((id: string) => {
+    setPings(prev => prev.filter(p => p.id !== id));
+  }, []);
+
+  // Função para enviar o Ping
+  const sendPing = async (x: number, y: number) => {
+    const color = isMaster ? "#FFD700" : "#ffffff"; 
+    const newPing: PingData = {
+        id: crypto.randomUUID(),
+        x,
+        y,
+        color,
+        user: userId
+    };
+
+    // 1. Mostra localmente
+    addPing(newPing);
+
+    // 2. Envia para os outros
+    await supabase.channel(`room:${tableId}`).send({
+        type: 'broadcast',
+        event: 'cursor-ping',
+        payload: newPing
+    });
+  };
 
   useEffect(() => {
       if (!isFogEnabled && activeTool === "reveal") {
@@ -183,19 +232,15 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
     else queryClient.invalidateQueries({ queryKey: ["map_tokens", tableId] });
   };
 
-  // --- INICIAR MODO DE PLANEAMENTO (Via HUD) ---
   const handleStartMove = (token: MapTokenType) => {
-      // <--- CORREÇÃO VISUAL 2: Centralizar o ponto de partida
-      // O token.x e token.y são o canto superior esquerdo do quadrado.
-      // Adicionamos metade do tamanho da grelha para achar o centro exato.
       const centerX = token.x + gridSize / 2;
       const centerY = token.y + gridSize / 2;
 
       setMovePlan({
           token: token,
-          startX: centerX, // Usa o centro
-          startY: centerY, // Usa o centro
-          currentX: token.x, // O fantasma continua a usar o canto para o snap funcionar
+          startX: centerX, 
+          startY: centerY, 
+          currentX: token.x, 
           currentY: token.y
       });
       closeAllMenus();
@@ -204,18 +249,40 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
   const handleMouseDown = (e: KonvaEventObject<MouseEvent>) => {
       const stage = e.target.getStage();
       
+      // --- LÓGICA DE PING (BOTÃO DO MEIO) ---
+      // button 1 = middle mouse button (scroll wheel)
+      if (e.evt.button === 1) {
+          e.evt.preventDefault(); // Previne scroll automático do browser
+          const pos = stage?.getRelativePointerPosition();
+          if (pos) sendPing(pos.x, pos.y);
+          return;
+      }
+
+      // --- LÓGICA DE PING (FERRAMENTA ATIVA) ---
+      if (activeTool === "ping" && e.evt.button === 0) {
+          const pos = stage?.getRelativePointerPosition();
+          if (pos) {
+              sendPing(pos.x, pos.y);
+              // Opcional: Se quiser que volte para select após um ping, descomente abaixo
+              // setActiveTool("select");
+          }
+          return;
+      }
+
+      // --- CONFIRMAR MOVIMENTO PLANEADO ---
       if (movePlan && e.evt.button === 0) {
           executeTokenMove(movePlan.token.id, movePlan.currentX, movePlan.currentY);
           setMovePlan(null);
           return;
       }
 
+      // Limpar seleção ao clicar no fundo
       if (e.target === stage) {
           setSelectedTokenId(null);
           closeAllMenus();
       }
 
-      if (activeTool === "measure") {
+      if (activeTool === "measure" && e.evt.button === 0) {
           const pos = stage?.getRelativePointerPosition();
           if (pos) {
               setRulerStart({ x: pos.x, y: pos.y });
@@ -224,7 +291,7 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
           return;
       }
 
-      if (activeTool === "reveal" && isMaster) {
+      if (activeTool === "reveal" && isMaster && e.evt.button === 0) {
           setIsDrawing(true);
           const pos = stage?.getRelativePointerPosition();
           if (pos) setCurrentLine([pos.x, pos.y]);
@@ -276,16 +343,13 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
       }
   };
 
-  // --- FUNÇÃO AUXILIAR: Calcular Distância (CORRIGIDA PARA METROS) ---
   const calcDistance = (x1: number, y1: number, x2: number, y2: number) => {
       const dx = x2 - x1;
       const dy = y2 - y1;
       const pixels = Math.sqrt(dx * dx + dy * dy);
       const squares = pixels / gridSize;
-      // <--- CORREÇÃO VISUAL 1: Converter quadrados para metros
-      // Assumindo padrão D&D: 1 quadrado = 1.5 metros (5 pés)
       const meters = squares * 1.5; 
-      return Math.round(meters * 10) / 10; // Arredonda para 1 casa decimal (ex: 4.5m)
+      return Math.round(meters * 10) / 10;
   };
 
   return (
@@ -305,6 +369,7 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
       <Stage
         width={width}
         height={height}
+        // Só arrasta o palco na ferramenta SELECT
         draggable={activeTool === "select" && !movePlan}
         onWheel={handleWheel}
         scaleX={stageScale}
@@ -312,7 +377,11 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
         x={stagePos.x}
         y={stagePos.y}
         ref={stageRef}
-        className={(activeTool === "measure" || activeTool === "reveal" || movePlan) ? "cursor-crosshair bg-black" : "cursor-move bg-black"}
+        className={
+            (activeTool === "measure" || activeTool === "reveal" || activeTool === "ping" || movePlan) 
+            ? "cursor-crosshair bg-black" 
+            : "cursor-move bg-black"
+        }
         
         onDragEnd={(e) => {
             if (e.target === e.target.getStage()) {
@@ -334,9 +403,6 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
 
         <Layer>
           {mapTokens.map(token => {
-            const isBeingMoved = movePlan?.token.id === token.id;
-            // Opcional: Pode reduzir a opacidade do token original se quiser
-            // opacity={isBeingMoved ? 0.5 : 1}
             return (
                 <MapToken 
                 key={token.id}
@@ -367,17 +433,16 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
             )}
         </Layer>
 
-        {/* --- CAMADA DA INTERFACE (Régua e Fantasmas) --- */}
+        {/* CAMADA DE PINGS */}
+        <PingLayer pings={pings} onComplete={removePing} />
+
         <Layer>
-            {/* 1. Ferramenta Régua (Livre) */}
             {rulerStart && rulerEnd && activeTool === "measure" && (
                 <RulerLine start={rulerStart} end={rulerEnd} distance={calcDistance(rulerStart.x, rulerStart.y, rulerEnd.x, rulerEnd.y)} />
             )}
 
-            {/* 2. Planeamento de Movimento */}
             {movePlan && (
                 <>
-                    {/* Régua do Token: Usa o centro como início e o centro do destino como fim */}
                     <RulerLine 
                         start={{ x: movePlan.startX, y: movePlan.startY }} 
                         end={{ x: movePlan.currentX + gridSize/2, y: movePlan.currentY + gridSize/2 }} 
@@ -385,7 +450,6 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
                         color="#ffffff"
                     />
                     
-                    {/* Fantasma do Token */}
                     <MapToken 
                         token={{ ...movePlan.token, x: movePlan.currentX, y: movePlan.currentY }}
                         gridSize={gridSize}
@@ -393,9 +457,8 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
                         isMaster={isMaster}
                         onDragEnd={() => {}}
                         onSelect={() => {}}
-                        onContextMenu={() => {}}
-                        isSelected={true}
-                        // Opcional: Adicionar prop de opacidade ao MapToken para o fantasma ficar translúcido
+                        onContextMenu={() => {}} 
+                        isSelected={true} 
                     />
                 </>
             )}
@@ -425,13 +488,12 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
         <span>Zoom: {Math.round(stageScale * 100)}%</span>
         <span>Tokens: {mapTokens.length}</span>
         {isFogEnabled && <span className="text-blue-400 font-bold">FOG ON</span>}
-        {movePlan && <span className="text-green-400 font-bold">A PLANEAR MOVIMENTO (Clique para confirmar)</span>}
+        {activeTool === "ping" && <span className="text-red-400 font-bold">MODO PING</span>}
       </div>
     </div>
   );
 };
 
-// Componente Auxiliar (CORRIGIDO PARA 'm')
 const RulerLine = ({ start, end, distance, color = "#3b82f6" }: { start: {x: number, y: number}, end: {x: number, y: number}, distance: number, color?: string }) => (
     <Group>
         <Line
@@ -449,7 +511,6 @@ const RulerLine = ({ start, end, distance, color = "#3b82f6" }: { start: {x: num
                 cornerRadius={4}
                 offsetX={30} offsetY={30}
             />
-            {/* <--- CORREÇÃO VISUAL 1: Texto 'm' */}
             <Text
                 text={`${distance}m`} 
                 fontSize={14}

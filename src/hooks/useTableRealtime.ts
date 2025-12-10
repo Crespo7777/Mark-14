@@ -23,7 +23,6 @@ export const useTableRealtime = (tableId: string) => {
 					const table = payload.table;
 
 					// Mapeamento inteligente: Tabela -> Chave de Cache a invalidar
-					// Isto garante que se a tabela X mudar, a lista X recarrega sozinha.
 					
 					// 1. PERSONAGENS
 					if (table === "characters") {
@@ -43,23 +42,29 @@ export const useTableRealtime = (tableId: string) => {
 
 					// 3. DIÁRIO
 					if (table === "journal_entries") {
-						// O diário usa a chave 'journal' para entradas
 						queryClient.invalidateQueries({ queryKey: ["journal", tableId] });
 					}
 					if (table === "journal_folders") {
 						queryClient.invalidateQueries({ queryKey: ["journal_folders", tableId] });
 					}
 
-                    // 4. TOKENS DO MAPA (Implementação da Estrutura Foundry)
-                    // Qualquer mudança nesta tabela força a recarga da lista de tokens.
+                    // 4. MAPA (Tokens e Nevoeiro)
                     if (table === "map_tokens") {
                         queryClient.invalidateQueries({ queryKey: ["map_tokens", tableId] });
                     }
+                    if (table === "map_fog") {
+                        queryClient.invalidateQueries({ queryKey: ["map_fog", tableId] });
+                    }
 
-					// 5. TABELA E MEMBROS (Para kicks e atualizações de nome da mesa)
+                    // 5. COMBATE (CORREÇÃO CRÍTICA)
+                    // Agora ouvimos mudanças na iniciativa e lista de combatentes
+                    if (table === "combatants") {
+                        queryClient.invalidateQueries({ queryKey: ["combatants", tableId] });
+                    }
+
+					// 6. TABELA E MEMBROS
 					if (table === "tables" || table === "table_members") {
-						// Aqui podemos invalidar contextos globais se necessário, 
-						// mas geralmente o TableContext lida com isso ou forçamos reload da página em casos extremos.
+						// queryClient.invalidateQueries({ queryKey: ["table-view", tableId] });
 					}
 				}
 			)

@@ -1,6 +1,6 @@
 import { createContext, useContext, ReactNode, SetStateAction, Dispatch } from "react";
 import { MapToken, FogShape } from "@/types/map-types"; 
-import { Character } from "@/types/app-types";
+import { Character, Combatant } from "@/types/app-types"; // <--- Importar Combatant
 
 export interface TableMember {
   id: string; 
@@ -23,9 +23,11 @@ interface TableContextType {
   
   characters: Character[];
 
-  // --- NEVOEIRO DE GUERRA (FOG OF WAR) ---
   fogShapes: FogShape[]; 
   setFogShapes: Dispatch<SetStateAction<FogShape[]>>;
+
+  // --- NOVO: COMBATENTES GLOBAIS ---
+  combatants: Combatant[];
 }
 
 export const TableContext = createContext<TableContextType | null>(null);

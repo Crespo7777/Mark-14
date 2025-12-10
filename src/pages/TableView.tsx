@@ -7,36 +7,35 @@ import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
 import { Button } from "@/components/ui/button";
 import { Loader2, ArrowLeft, AlertCircle, RefreshCcw, Map as MapIcon, LayoutDashboard } from "lucide-react";
-import { Table, Character } from "@/types/app-types"; 
+import { Table, Character, Combatant } from "@/types/app-types"; 
 import { MapBoard } from "@/features/map/MapBoard";
 import { MapSidebar } from "@/features/map/MapSidebar";
-// REMOVIDO: import { MapControls } ... (O MapBoard já cuida disso)
 import { MapToken, FogShape } from "@/types/map-types";
 
 // --- FUNÇÕES DE BUSCA ---
 const fetchMapTokens = async (tableId: string): Promise<MapToken[]> => {
-    const { data, error } = await supabase
-        .from("map_tokens").select("*").eq("table_id", tableId);
+    const { data, error } = await supabase.from("map_tokens").select("*").eq("table_id", tableId);
     if (error) throw error;
     return data as MapToken[]; 
 };
 
 const fetchCharacters = async (tableId: string) => {
-    const { data, error } = await supabase
-        .from("characters").select("*").eq("table_id", tableId);
+    const { data, error } = await supabase.from("characters").select("*").eq("table_id", tableId);
     if (error) throw error;
     return data as Character[];
 };
 
 const fetchFogShapes = async (tableId: string): Promise<FogShape[]> => {
-    const { data, error } = await supabase
-        .from("map_fog").select("*").eq("table_id", tableId);
+    const { data, error } = await supabase.from("map_fog").select("*").eq("table_id", tableId);
     if (error) throw error;
-    // Converter JSON para array de números
-    return (data || []).map((d: any) => ({
-        ...d,
-        points: d.points as number[] 
-    })) as FogShape[];
+    return (data || []).map((d: any) => ({ ...d, points: d.points as number[] })) as FogShape[];
+};
+
+// --- NOVO: Buscar Combatentes ---
+const fetchCombatants = async (tableId: string) => {
+    const { data, error } = await supabase.from("combatants").select("*").eq("table_id", tableId);
+    if (error) throw error;
+    return data as Combatant[];
 };
 
 const TableView = () => {
@@ -109,32 +108,29 @@ const TableView = () => {
         retry: 1
     });
 
-    // 2. Query Tokens
-    const { data: mapTokensData, isLoading: isLoadingMapTokens } = useQuery({
-        queryKey: ['map_tokens', id],
-        queryFn: () => fetchMapTokens(id!),
-        enabled: !!id
+    // 2. Queries Secundárias
+    const { data: mapTokensData, isLoading: isLoadingTokens } = useQuery({
+        queryKey: ['map_tokens', id], queryFn: () => fetchMapTokens(id!), enabled: !!id
     });
 
-    // 3. Query Personagens
-    const { data: characters = [], isLoading: isLoadingCharacters } = useQuery({
-        queryKey: ["characters", id],
-        queryFn: () => fetchCharacters(id!),
-        enabled: !!id
+    const { data: characters = [], isLoading: isLoadingChars } = useQuery({
+        queryKey: ["characters", id], queryFn: () => fetchCharacters(id!), enabled: !!id
     });
 
-    // 4. Query Nevoeiro
     const { data: fogData, isLoading: isLoadingFog } = useQuery({
-        queryKey: ["map_fog", id],
-        queryFn: () => fetchFogShapes(id!),
-        enabled: !!id
+        queryKey: ["map_fog", id], queryFn: () => fetchFogShapes(id!), enabled: !!id
+    });
+
+    // --- NOVA QUERY: Combatentes ---
+    const { data: combatants = [], isLoading: isLoadingCombat } = useQuery({
+        queryKey: ["combatants", id], queryFn: () => fetchCombatants(id!), enabled: !!id
     });
 
     // Sincronização
     useEffect(() => { if (mapTokensData) setMapTokens(mapTokensData); }, [mapTokensData]);
     useEffect(() => { if (fogData) setFogShapes(fogData); }, [fogData]);
 
-    if (isLoadingContext || isLoadingMapTokens || isLoadingCharacters || isLoadingFog) {
+    if (isLoadingContext || isLoadingTokens || isLoadingChars || isLoadingFog || isLoadingCombat) {
         return (
             <div className="h-screen w-screen flex flex-col items-center justify-center bg-background gap-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -165,7 +161,8 @@ const TableView = () => {
         setMapTokens: setMapTokens,
         characters: characters,
         fogShapes: fogShapes,
-        setFogShapes: setFogShapes
+        setFogShapes: setFogShapes,
+        combatants: combatants // <--- Dados de Combate disponíveis no Mapa
     };
 
     return (
@@ -174,9 +171,7 @@ const TableView = () => {
                 
                 {viewMode === "map" && (
                     <div className="absolute inset-0 z-0">
-                        {/* O MapBoard agora contém os MapControls internamente */}
                         <MapBoard isMaster={contextData.isMaster} tableData={contextData.table} />
-                        
                         <div className="absolute top-4 right-4 z-10 pointer-events-auto">
                              <MapSidebar />
                         </div>

@@ -9,10 +9,10 @@ export interface Table {
   
   // --- Configurações do Mapa VTT ---
   map_background_url?: string | null;
-  map_grid_size?: number; // Padrão 50
-  map_grid_color?: string; // Padrão '#ffffff'
-  map_grid_opacity?: number; // Padrão 0.2
-  map_fog_enabled?: boolean; // Padrão false (Controla se o Fog of War está ativo)
+  map_grid_size?: number; 
+  map_grid_color?: string; 
+  map_grid_opacity?: number; 
+  map_fog_enabled?: boolean; 
 }
 
 export interface TableMember {
@@ -25,12 +25,12 @@ export interface TableMember {
 export interface Character {
   id: string;
   table_id: string;
-  player_id: string | null; // Pode ser null se for um NPC ou sem jogador
+  player_id: string | null; 
   name: string;
   avatar_url: string | null;
   shared_with_players: boolean;
   level: number;
-  data: any; // JSONB com atributos, perícias, vida (toughness), etc.
+  data: any; 
   created_at: string;
   updated_at: string;
 }
@@ -41,21 +41,21 @@ export interface Npc {
   name: string;
   avatar_url: string | null;
   description: string | null;
-  data: any; // JSONB com stats do NPC
+  data: any; 
   created_at: string;
 }
 
 export interface ItemTemplate {
   id: string;
-  table_id: string | null; // Null = Global/Compêndio
+  table_id: string | null; 
   name: string;
-  type: string; // 'weapon', 'armor', 'item', etc.
+  type: string; 
   description: string | null;
-  data: any; // JSONB com dano, peso, preço, etc.
+  data: any; 
   image_url?: string | null;
   weight?: number;
-  category?: string; // Helper para UI
-  is_global?: boolean; // Helper visual
+  category?: string; 
+  is_global?: boolean; 
 }
 
 export interface ChatMessage {
@@ -70,4 +70,15 @@ export interface ChatMessage {
     display_name: string;
     avatar_url?: string;
   };
+}
+
+// --- NOVO: Combatente ---
+export interface Combatant {
+  id: string;
+  table_id: string;
+  token_id: string;
+  character_id?: string;
+  name: string;
+  initiative: number;
+  is_turn: boolean;
 }
