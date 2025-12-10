@@ -55,7 +55,7 @@ const Dashboard = () => {
 
       const user = session.user;
       
-      // CORREÇÃO: Capturar o username dos metadados gravados no registo
+      // Capturar o username dos metadados gravados no registo
       const metadataUsername = user.user_metadata?.username;
 
       const [profileResponse, tablesResponse, membersResponse] = await Promise.all([
@@ -66,7 +66,7 @@ const Dashboard = () => {
 
       let profile = profileResponse.data;
       
-      // CORREÇÃO: Se não existir perfil, cria usando o metadataUsername como prioridade
+      // Se não existir perfil, cria usando o metadataUsername como prioridade
       if (!profile) {
         const { data: newProfile } = await supabase.from("profiles").insert({
           id: user.id, 
@@ -90,15 +90,21 @@ const Dashboard = () => {
     staleTime: 1000 * 60 * 2, 
   });
 
-  // LOGOUT SEGURO
+  // LOGOUT SEGURO E ROBUSTO
   const handleSignOut = async () => {
+    // 1. Limpeza Local Imediata (Para a UI responder rápido e evitar loops)
+    queryClient.clear();
+    localStorage.removeItem('sb-gbxpzxwmymggsburpnjm-auth-token'); // Limpa token do Supabase
+    
+    // 2. Tentar Logout no Servidor (sem bloquear se falhar)
     try {
-        await supabase.auth.signOut();
-    } catch (error) {
-        console.error("Erro silencioso ao sair:", error);
+        const { error } = await supabase.auth.signOut();
+        if (error) throw error;
+    } catch (error: any) {
+        // Se a sessão já não existir (403), ignoramos o erro
+        console.warn("Aviso ao sair (Sessão provavelmente já expirada):", error.message);
     } finally {
-        queryClient.clear();
-        localStorage.removeItem('sb-gbxpzxwmymggsburpnjm-auth-token'); 
+        // 3. Redirecionamento Final Garantido
         navigate("/auth");
     }
   };
@@ -140,16 +146,15 @@ const Dashboard = () => {
   if (isError || !dashboardData) {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-            <p className="text-destructive">Conexão perdida.</p>
+            <p className="text-destructive">Conexão perdida ou sessão expirada.</p>
             <Button onClick={() => refetch()} variant="outline"><RefreshCw className="mr-2 h-4 w-4"/> Reconectar</Button>
-            <Button onClick={handleSignOut} variant="link">Sair</Button>
+            <Button onClick={handleSignOut} variant="link">Sair para o Login</Button>
         </div>
     )
   }
 
   const { user, profile, tables } = dashboardData;
 
-  // CORREÇÃO: Define o nome de exibição. Prioriza: Metadados > Perfil (DB) > Email
   const displayName = user.user_metadata?.username || profile?.display_name || user.email?.split('@')[0] || "Viajante";
 
   const filteredTables = tables.filter(t => 
@@ -178,7 +183,7 @@ const Dashboard = () => {
            
            <div className="flex items-center gap-4">
               <span className="text-sm font-medium text-muted-foreground hidden sm:inline-block">
-                 Olá, {displayName}
+                  Olá, {displayName}
               </span>
               <Button variant="ghost" size="sm" onClick={handleSignOut} className="hover:bg-destructive/10 hover:text-destructive transition-colors">
                 <LogOut className="w-4 h-4 mr-2" /> Sair
@@ -193,7 +198,6 @@ const Dashboard = () => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="space-y-1">
                <h2 className="text-3xl font-bold tracking-tight">Lobby</h2>
-               {/* Texto Temático Atualizado */}
                <p className="text-muted-foreground">Gerencie suas crônicas e mergulhe na escuridão.</p>
             </div>
             
@@ -305,7 +309,17 @@ const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole
     return (
       <Card className="group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col h-full bg-card">
         <div className="relative h-40 overflow-hidden bg-muted/50">
-            {table.image_url ? (
+            {table.map_background_url ? (
+                <>
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
+                   <img 
+                      src={table.map_background_url} // Usa o background do mapa como capa se existir
+                      alt={table.name}
+                      loading="lazy"
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                   />
+                </>
+            ) : table.image_url ? ( // Fallback para a imagem antiga se existir
                 <>
                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
                    <img 
@@ -324,7 +338,8 @@ const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole
             <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
                 {table.is_owner && <Badge className="bg-yellow-500/90 hover:bg-yellow-500 text-black font-bold shadow-sm backdrop-blur-md"><Crown className="w-3 h-3 mr-1"/> Mestre</Badge>}
                 {table.is_member && !table.is_owner && <Badge className="bg-green-600/90 hover:bg-green-600 text-white shadow-sm backdrop-blur-md"><Users className="w-3 h-3 mr-1"/> Jogador</Badge>}
-                {table.password && !table.is_member && !table.is_owner && <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-md"><Lock className="w-3 h-3 mr-1"/> Privada</Badge>}
+                {/* Se a mesa for privada e o usuário não for membro (modo explorar), mostra cadeado */}
+                {!table.is_member && !table.is_owner && <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-md"><Lock className="w-3 h-3 mr-1"/> Privada</Badge>}
             </div>
         </div>
         
