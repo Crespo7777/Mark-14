@@ -3,9 +3,7 @@ import { useNpcSheet } from "../NpcSheetContext";
 import { useFormContext } from "react-hook-form"; 
 import { useToast } from "@/hooks/use-toast";
 import { attributesList } from "@/features/character/character.constants";
-import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog"; // Se tiveres um diálogo específico para NPC
-
-// Componentes Modulares
+import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
 import { NpcAbilitiesSection } from "./abilities/NpcAbilitiesSection";
 import { NpcTraitsSection } from "./abilities/NpcTraitsSection";
 
@@ -38,7 +36,7 @@ export const NpcAbilitiesTraitsTab = () => {
           setValue("corruption.temporary", currentTemp + amount, { shouldDirty: true });
           toast({
               title: "Corrupção Aplicada",
-              description: `+${amount} de corrupção temporária adicionada.`,
+              description: `+${amount} de corrupção temporária adicionada ao NPC.`,
               variant: "destructive"
           });
       }
@@ -58,10 +56,13 @@ export const NpcAbilitiesTraitsTab = () => {
         <NpcAbilityRollDialog
           open={!!selectedAbilityRoll}
           onOpenChange={(open) => !open && setSelectedAbilityRoll(null)}
-          characterName={npc.name}
-          tableId={npc.table_id} 
-          {...selectedAbilityRoll}
-          onApplyCorruption={handleApplyCorruption} 
+          npc={npc}
+          // --- CORREÇÃO AQUI: Passar o nome do atributo ---
+          attributeName={selectedAbilityRoll.attributeName} 
+          abilityName={selectedAbilityRoll.abilityName}
+          abilityValue={selectedAbilityRoll.attributeValue}
+          corruptionCost={selectedAbilityRoll.corruptionCost}
+          onApplyCorruption={handleApplyCorruption}
         />
       )}
     </div>
