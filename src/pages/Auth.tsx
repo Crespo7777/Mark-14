@@ -1,5 +1,7 @@
+// src/pages/Auth.tsx
+
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom"; // <--- Import useLocation
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +13,7 @@ import { Eye, EyeOff, Loader2, Mail, ArrowLeft, KeyRound, User, Lock } from "luc
 
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation(); // <--- Hook para ler o estado da rota
   const [isLoading, setIsLoading] = useState(false);
   
   const [showPassword, setShowPassword] = useState(false);
@@ -24,21 +27,32 @@ const Auth = () => {
   const [isResetting, setIsResetting] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
 
+  // Função inteligente de redirecionamento
+  const handleRedirect = () => {
+    // Verifica se existe uma página de origem salva no estado (ex: /table/123)
+    // Se existir, devolve o utilizador para lá. Se não, vai para a home.
+    // O .pathname é importante porque o objeto 'from' pode ser complexo
+    const destination = location.state?.from?.pathname || location.state?.from || "/";
+    navigate(destination, { replace: true });
+  };
+
   useEffect(() => {
+    // Verifica sessão inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate("/");
+        handleRedirect();
       }
     });
 
+    // Escuta mudanças de auth (login bem sucedido)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        navigate("/");
+        handleRedirect();
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, location]); // Adicionado location às dependências
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,6 +72,7 @@ const Auth = () => {
         }
       } else {
         toast.success("Acesso concedido.");
+        // O useEffect tratará do redirecionamento
       }
     } catch (error: any) {
       toast.error("Erro de conexão.");
@@ -87,7 +102,7 @@ const Auth = () => {
         password,
         options: {
           data: {
-            username: username, // Isto salva o nome nos metadados do utilizador
+            username: username,
           },
         },
       });
@@ -196,7 +211,6 @@ const Auth = () => {
         ) : (
           <>
             <CardHeader className="space-y-2 text-center">
-              {/* --- LOGO AUMENTADO --- */}
               <div className="w-32 h-32 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-4 border border-primary/20 shadow-[0_0_40px_rgba(0,0,0,0.5)]">
                  <img src="/tenebre-logo.png" alt="Logo" className="w-20 h-20 object-contain drop-shadow-xl" />
               </div>

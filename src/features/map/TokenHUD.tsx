@@ -1,178 +1,218 @@
+// src/features/map/TokenHUD.tsx
+
 import { useState } from "react";
-import { MapToken } from "@/types/map-types";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Skull, ShieldAlert, Swords, Footprints, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTableContext } from "@/features/table/TableContext";
+import { MapToken } from "@/types/map-types";
 
 interface TokenHUDProps {
-  token: MapToken;
+  tokenId: string; // Agora recebemos apenas o ID
   position: { x: number; y: number };
   onClose: () => void;
   onStartMove: () => void;
 }
 
-export const TokenHUD = ({ token, position, onClose, onStartMove }: TokenHUDProps) => {
+export const TokenHUD = ({ tokenId, position, onClose, onStartMove }: TokenHUDProps) => {
   const { tableId } = useTableContext();
   const queryClient = useQueryClient();
   const [loadingCombat, setLoadingCombat] = useState(false);
 
+  // 1. Ler o token "Vivo" da Cache (Sincronizado via Realtime)
+  const tokens = queryClient.getQueryData<MapToken[]>(["map_tokens", tableId]) || [];
+  const token = tokens.find((t) => t.id === tokenId);
+
+  // Se o token não existir (foi apagado), fecha o menu
+  if (!token) {
+    onClose();
+    return null;
+  }
+
   // Helper para verificar status
   const hasStatus = (status: string) => (token.status_effects || []).includes(status);
 
-  // Função genérica para atualizar o token
-  const updateToken = async (updates: Partial<MapToken>) => {
+  // --- FUNÇÃO DE ATUALIZAÇÃO OTIMISTA ---
+  const optimisticUpdate = async (updates: Partial<MapToken>) => {
+    // 1. Atualizar Cache Imediatamente (UI Instantânea)
+    queryClient.setQueryData<MapToken[]>(["map_tokens", tableId], (old) => {
+      if (!old) return [];
+      return old.map((t) => (t.id === tokenId ? { ...t, ...updates } : t));
+    });
+
+    // 2. Enviar para o Servidor em Background
     const { error } = await supabase
       .from("map_tokens")
       .update(updates)
-      .eq("id", token.id)
+      .eq("id", tokenId)
       .eq("table_id", tableId);
 
     if (error) {
       console.error("Erro ao atualizar token:", error);
-    } else {
-      // Força atualização imediata da lista de tokens
+      // Opcional: Reverter cache em caso de erro (Rollback)
       queryClient.invalidateQueries({ queryKey: ["map_tokens", tableId] });
     }
   };
 
-  const toggleHidden = () => updateToken({ is_hidden: !token.is_hidden });
-  
-  // Função para gerir Status Visuais Genéricos (Dead, Bloodied)
+  const toggleHidden = () => optimisticUpdate({ is_hidden: !token.is_hidden });
+
   const toggleStatusEffect = (status: string) => {
     const currentEffects = new Set(token.status_effects || []);
-    
     if (currentEffects.has(status)) {
-        currentEffects.delete(status);
+      currentEffects.delete(status);
     } else {
-        currentEffects.add(status);
+      currentEffects.add(status);
     }
-    
-    updateToken({ status_effects: Array.from(currentEffects) });
+    optimisticUpdate({ status_effects: Array.from(currentEffects) });
   };
 
-  // --- LÓGICA DE COMBATE ---
+  // --- LÓGICA DE COMBATE (Híbrida: Otimista + Verificação) ---
   const toggleCombatState = async () => {
+    // Otimista Visual: Já mostra o ícone de carregamento ou troca o estado visualmente
     setLoadingCombat(true);
+    
+    const isInCombat = hasStatus("combat");
+    const newEffects = new Set(token.status_effects || []);
+    
+    // Atualização Visual Imediata (Tira/Põe o ícone)
+    if (isInCombat) newEffects.delete("combat");
+    else newEffects.add("combat");
+    
+    // Aplica visualmente já
+    queryClient.setQueryData<MapToken[]>(["map_tokens", tableId], (old) => {
+        if (!old) return [];
+        return old.map((t) => (t.id === tokenId ? { ...t, status_effects: Array.from(newEffects) } : t));
+    });
+
     try {
-        // 1. Verificar se já está em combate na tabela real
+      if (isInCombat) {
+        // Remover do Combate
+        await supabase.from("combatants").delete().eq("token_id", tokenId);
+      } else {
+        // Adicionar ao Combate
+        // Verifica se já existe para evitar duplicatas (Segurança)
         const { data: existing } = await supabase
-            .from("combatants")
-            .select("id")
-            .eq("token_id", token.id)
-            .maybeSingle();
+          .from("combatants")
+          .select("id")
+          .eq("token_id", tokenId)
+          .maybeSingle();
 
-        // Preparar o novo array de efeitos visuais
-        const currentEffects = new Set(token.status_effects || []);
-
-        if (existing) {
-            // --- REMOVER ---
-            await supabase.from("combatants").delete().eq("id", existing.id);
-            currentEffects.delete("combat"); // Remove ícone visual
-        } else {
-            // --- ADICIONAR ---
-            await supabase.from("combatants").insert({
-                table_id: tableId,
-                token_id: token.id,
-                character_id: token.character_id,
-                name: token.label,
-                initiative: 0
-            });
-            currentEffects.add("combat"); // Adiciona ícone visual
+        if (!existing) {
+          await supabase.from("combatants").insert({
+            table_id: tableId,
+            token_id: tokenId,
+            character_id: token.character_id,
+            name: token.label,
+            initiative: 0, // Iniciativa padrão
+          });
         }
+      }
 
-        // 2. Atualizar o Token com o novo status visual
-        await updateToken({ status_effects: Array.from(currentEffects) });
+      // Persistir o status visual no token
+      await supabase
+        .from("map_tokens")
+        .update({ status_effects: Array.from(newEffects) })
+        .eq("id", tokenId);
 
-        // 3. Atualizar o Combat Tracker também
-        queryClient.invalidateQueries({ queryKey: ["combatants", tableId] });
+      // Atualizar lista de combatentes
+      queryClient.invalidateQueries({ queryKey: ["combatants", tableId] });
 
     } catch (error) {
-        console.error("Erro ao alternar combate:", error);
+      console.error("Erro no combate:", error);
+      // Reverter visual em caso de erro
+      queryClient.invalidateQueries({ queryKey: ["map_tokens", tableId] });
     } finally {
-        setLoadingCombat(false);
+      setLoadingCombat(false);
     }
   };
 
   return (
-    <div 
-      className="absolute z-50 flex flex-col gap-1 p-1 bg-black/90 border border-white/20 rounded-md shadow-2xl backdrop-blur-sm animate-in fade-in zoom-in-95 duration-100"
-      style={{ 
-        left: position.x, 
+    <div
+      className="absolute z-50 flex flex-col gap-1 p-1 bg-black/90 border border-white/20 rounded-md shadow-2xl backdrop-blur-sm animate-in fade-in zoom-in-95 duration-100 origin-bottom"
+      style={{
+        left: position.x,
         top: position.y,
-        transform: "translate(-50%, -100%) translateY(-10px)" 
+        transform: "translate(-50%, -100%) translateY(-10px)",
       }}
-      onMouseDown={(e) => e.stopPropagation()} 
+      onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()} // Previne menu nativo sobre o HUD
     >
       <div className="flex items-center gap-1">
-        
-        {/* Ferramenta: Mover */}
-        <Button 
-            variant="ghost" 
-            size="icon" 
-            className="w-8 h-8 rounded-sm hover:bg-blue-500/20 hover:text-blue-400"
-            onClick={() => {
-                onStartMove();
-                onClose();
-            }}
-            title="Mover com Medição"
+        {/* Mover */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="w-8 h-8 rounded-sm hover:bg-blue-500/20 hover:text-blue-400 transition-colors"
+          onClick={() => {
+            onStartMove();
+            onClose();
+          }}
+          title="Mover"
         >
-            <Footprints className="w-4 h-4" />
+          <Footprints className="w-4 h-4" />
         </Button>
 
-        <div className="w-px h-6 bg-white/20 mx-1" />
+        <div className="w-px h-5 bg-white/10 mx-0.5" />
 
         {/* Visibilidade */}
-        <Button 
-            variant={token.is_hidden ? "destructive" : "ghost"} 
-            size="icon" 
-            className="w-8 h-8 rounded-sm hover:bg-white/20" 
-            onClick={toggleHidden}
-            title={token.is_hidden ? "Revelar para Jogadores" : "Ocultar dos Jogadores"}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`w-8 h-8 rounded-sm transition-colors ${
+            token.is_hidden ? "bg-red-900/30 text-red-400 hover:bg-red-900/50" : "hover:bg-white/20"
+          }`}
+          onClick={toggleHidden}
+          title="Visibilidade"
         >
-            {token.is_hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          {token.is_hidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
         </Button>
 
-        <div className="w-px h-6 bg-white/20 mx-1" />
+        <div className="w-px h-5 bg-white/10 mx-0.5" />
 
-        {/* Status: Morto */}
-        <Button 
-            variant={hasStatus("dead") ? "secondary" : "ghost"} 
-            size="icon" 
-            className={`w-8 h-8 rounded-sm hover:bg-white/20 ${hasStatus("dead") ? "bg-red-900/50 hover:bg-red-800" : ""}`}
-            onClick={() => toggleStatusEffect("dead")}
-            title="Marcar como Morto"
+        {/* Morto */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`w-8 h-8 rounded-sm transition-colors ${
+            hasStatus("dead") ? "bg-red-500/20 text-red-500 hover:bg-red-500/30" : "hover:bg-white/20"
+          }`}
+          onClick={() => toggleStatusEffect("dead")}
+          title="Morto"
         >
-            <Skull className={`w-4 h-4 ${hasStatus("dead") ? "text-red-500" : ""}`} />
+          <Skull className="w-4 h-4" />
         </Button>
 
-        {/* Status: Ferido */}
-        <Button 
-            variant={hasStatus("bloodied") ? "secondary" : "ghost"} 
-            size="icon" 
-            className="w-8 h-8 rounded-sm hover:bg-white/20"
-            onClick={() => toggleStatusEffect("bloodied")}
-            title="Ensanguentado"
+        {/* Ferido */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`w-8 h-8 rounded-sm transition-colors ${
+            hasStatus("bloodied") ? "bg-orange-500/20 text-orange-500 hover:bg-orange-500/30" : "hover:bg-white/20"
+          }`}
+          onClick={() => toggleStatusEffect("bloodied")}
+          title="Ensanguentado"
         >
-            <ShieldAlert className={`w-4 h-4 ${hasStatus("bloodied") ? "text-orange-500" : ""}`} />
+          <ShieldAlert className="w-4 h-4" />
         </Button>
 
-        {/* Status: COMBATE (INTEGRADO) */}
-        <Button 
-            variant={hasStatus("combat") ? "secondary" : "ghost"} 
-            size="icon" 
-            className={`w-8 h-8 rounded-sm hover:bg-white/20 ${hasStatus("combat") ? "bg-yellow-500/20 text-yellow-500" : ""}`}
-            onClick={toggleCombatState}
-            disabled={loadingCombat}
-            title={hasStatus("combat") ? "Remover do Combate" : "Adicionar ao Combate"}
+        {/* Combate */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={`w-8 h-8 rounded-sm transition-colors ${
+            hasStatus("combat") ? "bg-yellow-500/20 text-yellow-500 hover:bg-yellow-500/30" : "hover:bg-white/20"
+          }`}
+          onClick={toggleCombatState}
+          disabled={loadingCombat}
+          title="Combate"
         >
-            {loadingCombat ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
+          {loadingCombat ? <Loader2 className="w-4 h-4 animate-spin" /> : <Swords className="w-4 h-4" />}
         </Button>
       </div>
-      
-      <div className="text-[10px] text-center text-muted-foreground font-mono mt-1 px-1 border-t border-white/10 pt-1 truncate max-w-[150px]">
+
+      <div className="text-[10px] text-center text-muted-foreground font-mono mt-1 px-1 border-t border-white/10 pt-1 truncate max-w-[160px]">
         {token.label}
       </div>
     </div>

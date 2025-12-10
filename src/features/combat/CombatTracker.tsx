@@ -1,3 +1,5 @@
+// src/features/combat/CombatTracker.tsx
+
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,22 +8,19 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
-    Swords, 
     Trash2, 
     ChevronRight, 
     ChevronLeft,
     RotateCcw, 
     Dices, 
-    Skull,
     Shield,
-    EyeOff
+    Swords
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
+import { dispatchFocusEvent } from "@/features/map/hooks/useMapFocus";
+import { useToast } from "@/hooks/use-toast";
 
-// Tipagem exata para o Join do Supabase
 interface CombatantData {
     id: string;
     token_id: string;
@@ -29,51 +28,57 @@ interface CombatantData {
     initiative: number;
     is_turn: boolean;
     character_id: string | null;
-    token?: { image_url: string | null; is_hidden: boolean };
+    token?: { 
+        image_url: string | null; 
+        is_hidden: boolean;
+        x: number;
+        y: number;
+    }; 
     character?: { data: any }; 
 }
 
 export const CombatTracker = () => {
     const { tableId, isMaster } = useTableContext();
     const queryClient = useQueryClient();
-    
-    // Estado local para o contador de Rounds (Turnos)
-    // Nota: O ideal seria guardar isto no DB 'tables' também, mas por enquanto local serve.
+    const { toast } = useToast();
     const [round, setRound] = useState(1);
 
-    // 1. BUSCAR COMBATENTES (Ordenados por Iniciativa Descendente)
-    const { data: combatants = [], isLoading } = useQuery({
+    const { data: combatants = [] } = useQuery({
         queryKey: ["combatants", tableId],
         queryFn: async () => {
             const { data, error } = await supabase
                 .from("combatants")
                 .select(`
                     *,
-                    token:map_tokens(image_url, is_hidden),
+                    token:map_tokens(image_url, is_hidden, x, y), 
                     character:characters(data)
                 `)
                 .eq("table_id", tableId)
-                .order("initiative", { ascending: false }); // Maior primeiro
+                .order("initiative", { ascending: false });
 
             if (error) throw error;
             return data as unknown as CombatantData[];
         }
     });
 
-    // --- AÇÕES DO MESTRE ---
+    // --- AÇÕES ---
 
-    // Rolar Iniciativa (Baseada em Atributo 'Quick')
+    const handleFocusToken = (x?: number, y?: number) => {
+        if (x === undefined || y === undefined) return;
+        dispatchFocusEvent(x, y);
+    };
+
     const handleRollInitiative = async () => {
+        toast({ title: "Rolando Iniciativas...", duration: 800 });
+
         const updates = combatants.map(c => {
             let initValue = 0;
             if (c.character?.data?.attributes) {
                 const attrs = c.character.data.attributes;
-                // Procura 'quick', 'vigorous', ou usa 0
-                const quick = attrs.quick?.value || attrs.quick || attrs.vigorous?.value || 0;
-                // Adiciona d20 para desempate se quiseres, aqui usamos valor fixo + random decimal para desempate
-                initValue = Number(quick) + (Math.random() * 0.9);
+                const quick = attrs.quick?.value || attrs.quick || 0;
+                initValue = Number(quick) + (Math.floor(Math.random() * 20) + 1) + (Math.random() * 0.9);
             } else {
-                initValue = c.initiative || (Math.floor(Math.random() * 20) + 1);
+                initValue = (Math.floor(Math.random() * 20) + 1);
             }
             return { id: c.id, initiative: Math.round(initValue) };
         });
@@ -86,20 +91,24 @@ export const CombatTracker = () => {
 
     const handleUpdateInitiative = async (id: string, value: string) => {
         const num = parseInt(value) || 0;
+        
+        // Atualização Otimista
+        queryClient.setQueryData(["combatants", tableId], (old: CombatantData[] | undefined) => {
+            if (!old) return [];
+            const updated = old.map(c => c.id === id ? { ...c, initiative: num } : c);
+            return updated.sort((a, b) => b.initiative - a.initiative);
+        });
+
         await supabase.from("combatants").update({ initiative: num }).eq("id", id);
-        queryClient.invalidateQueries({ queryKey: ["combatants", tableId] });
     };
 
     const handleNextTurn = async (direction: 'next' | 'prev') => {
         if (combatants.length === 0) return;
-
         const currentIndex = combatants.findIndex(c => c.is_turn);
         let nextIndex = 0;
 
         if (currentIndex !== -1) {
-            // Desativa o atual
             await supabase.from("combatants").update({ is_turn: false }).eq("id", combatants[currentIndex].id);
-            
             if (direction === 'next') {
                 nextIndex = currentIndex + 1;
                 if (nextIndex >= combatants.length) {
@@ -114,148 +123,132 @@ export const CombatTracker = () => {
                 }
             }
         }
+        const nextCombatant = combatants[nextIndex];
+        
+        // Otimista: Atualiza a cache local instantaneamente
+        queryClient.setQueryData(["combatants", tableId], (old: CombatantData[] | undefined) => {
+            if (!old) return [];
+            return old.map((c, idx) => ({ ...c, is_turn: idx === nextIndex }));
+        });
 
-        // Ativa o próximo
-        await supabase.from("combatants").update({ is_turn: true }).eq("id", combatants[nextIndex].id);
-        queryClient.invalidateQueries({ queryKey: ["combatants", tableId] });
-    };
-
-    const handleResetCombat = async () => {
-        // Limpa todos os combatentes
-        const { error } = await supabase.from("combatants").delete().eq("table_id", tableId);
-        if(!error) {
-            setRound(1);
-            queryClient.invalidateQueries({ queryKey: ["combatants", tableId] });
-            // Força atualização dos tokens no mapa para remover o ícone de combate
-            queryClient.invalidateQueries({ queryKey: ["map_tokens", tableId] });
-        }
-    };
-
-    const handleRemoveCombatant = async (id: string) => {
-        await supabase.from("combatants").delete().eq("id", id);
-        queryClient.invalidateQueries({ queryKey: ["combatants", tableId] });
-        queryClient.invalidateQueries({ queryKey: ["map_tokens", tableId] });
+        await supabase.from("combatants").update({ is_turn: true }).eq("id", nextCombatant.id);
+        
+        if (nextCombatant.token) handleFocusToken(nextCombatant.token.x, nextCombatant.token.y);
     };
 
     return (
-        <div className="flex flex-col h-full bg-card">
+        <div className="flex flex-col h-full bg-card select-none text-xs">
             
-            {/* 1. CABEÇALHO DE CONTROLO DE TURNOS */}
-            <div className="p-2 border-b border-border bg-muted/20 flex flex-col gap-2">
-                <div className="flex items-center justify-between px-2">
+            {/* --- HEADER --- */}
+            <div className="p-2 border-b border-border bg-muted/40 flex flex-col gap-1.5">
+                <div className="flex items-center justify-between">
                     {isMaster ? (
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleNextTurn('prev')}>
-                            <ChevronLeft className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleNextTurn('prev')}>
+                            <ChevronLeft className="w-3 h-3" />
                         </Button>
-                    ) : <div className="w-6" />}
+                    ) : <div className="w-5" />}
                     
-                    <div className="text-center">
-                        <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Encontro</h3>
-                        <div className="text-lg font-black leading-none">Turno {round}</div>
+                    <div className="flex items-center gap-2">
+                        <Swords className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="font-bold text-muted-foreground uppercase tracking-wider text-[10px]">Round</span>
+                        <span className="font-black text-primary text-base">{round}</span>
                     </div>
 
                     {isMaster ? (
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleNextTurn('next')}>
-                            <ChevronRight className="w-4 h-4" />
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => handleNextTurn('next')}>
+                            <ChevronRight className="w-3 h-3" />
                         </Button>
-                    ) : <div className="w-6" />}
+                    ) : <div className="w-5" />}
                 </div>
 
                 {isMaster && (
-                    <div className="flex justify-between gap-1 mt-1">
-                        <Button 
-                            variant="outline" size="sm" 
-                            className="flex-1 text-xs h-7 gap-1 border-dashed"
-                            onClick={handleRollInitiative}
-                        >
-                            <Dices className="w-3 h-3" /> Rolar Todos
+                    <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" className="flex-1 h-6 text-[10px] border-dashed" onClick={handleRollInitiative}>
+                            <Dices className="w-3 h-3 mr-1" /> Rolar
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setRound(1)} title="Reset">
+                            <RotateCcw className="w-3 h-3" />
                         </Button>
                         <Button 
-                            variant="ghost" size="icon" 
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => setRound(1)}
-                            title="Resetar Turnos"
+                            variant="ghost" size="icon" className="h-6 w-6 hover:text-destructive" 
+                            onClick={async () => {
+                                queryClient.setQueryData(["combatants", tableId], []);
+                                await supabase.from("combatants").delete().eq("table_id", tableId);
+                                setRound(1);
+                            }} 
                         >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button 
-                            variant="ghost" size="icon" 
-                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={handleResetCombat}
-                            title="Encerrar Combate"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-3 h-3" />
                         </Button>
                     </div>
                 )}
             </div>
 
-            {/* 2. LISTA DE COMBATENTES */}
-            <ScrollArea className="flex-1">
-                <div className="divide-y divide-border/50">
+            {/* --- LISTA SUPER LIMPA --- */}
+            <ScrollArea className="flex-1 bg-background/50">
+                <div className="flex flex-col p-1 gap-1">
                     {combatants.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-3 opacity-50">
-                            <Shield className="w-12 h-12 stroke-1" />
-                            <p className="text-xs font-medium">O campo de batalha está vazio.</p>
-                            {isMaster && <p className="text-[10px]">Use o Token HUD (Clique Direito) para adicionar.</p>}
+                        <div className="py-8 text-center text-muted-foreground opacity-50">
+                            <Shield className="w-8 h-8 mx-auto mb-1 stroke-1" />
+                            <p className="text-[10px]">Vazio</p>
                         </div>
                     ) : (
                         combatants.map((c) => (
                             <div 
                                 key={c.id} 
                                 className={cn(
-                                    "group flex items-center gap-3 p-2 transition-colors hover:bg-muted/50",
-                                    // Highlight se for o turno dele
-                                    c.is_turn && "bg-primary/5 border-l-4 border-primary pl-1"
+                                    "flex items-center gap-2 p-1.5 rounded border transition-all duration-150",
+                                    // AQUI ESTÁ A MUDANÇA:
+                                    // Removemos "bg-primary/10". Agora é só borda.
+                                    c.is_turn 
+                                        ? "bg-card border-primary border-l-2 shadow-sm" 
+                                        : "bg-card border-border/40",
+                                    
+                                    c.token?.is_hidden && !isMaster && "hidden", // Esconde ocultos dos jogadores
+                                    c.token?.is_hidden && isMaster && "opacity-50 border-dashed" // Mestre vê transparente
                                 )}
                             >
-                                {/* Imagem do Token */}
-                                <Avatar className={cn("h-10 w-10 border shadow-sm", c.is_turn ? "border-primary ring-2 ring-primary/20" : "border-border")}>
-                                    <AvatarImage src={c.token?.image_url || ""} className="object-cover" />
-                                    <AvatarFallback className="text-xs bg-secondary">{c.name.substring(0, 2).toUpperCase()}</AvatarFallback>
-                                </Avatar>
-
-                                {/* Info do Combatente */}
-                                <div className="flex-1 min-w-0 flex flex-col">
-                                    <div className="flex items-center gap-2">
-                                        <span className={cn("text-sm font-bold truncate", c.is_turn ? "text-primary" : "text-foreground")}>
-                                            {c.name}
-                                        </span>
-                                        {/* Ícones de Estado */}
-                                        {c.token?.is_hidden && (
-                                            <EyeOff className="w-3 h-3 text-muted-foreground" />
-                                        )}
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                       {/* Aqui podemos colocar HP ou AC no futuro */}
-                                       <span>Iniciativa:</span>
-                                    </div>
+                                {/* 1. AVATAR */}
+                                <div className="relative">
+                                    <Avatar className={cn("h-8 w-8 border shadow-sm", c.is_turn ? "border-primary" : "border-border")}>
+                                        <AvatarImage src={c.token?.image_url || ""} className="object-cover" />
+                                        <AvatarFallback className="text-[9px] bg-secondary font-bold">
+                                            {c.name.substring(0, 2).toUpperCase()}
+                                        </AvatarFallback>
+                                    </Avatar>
                                 </div>
 
-                                {/* Input de Iniciativa */}
-                                <div className="flex items-center gap-2">
+                                {/* 2. NOME (Clicável apenas para focar, sem botões extras) */}
+                                <div 
+                                    className="flex-1 min-w-0 flex flex-col justify-center cursor-pointer group"
+                                    onClick={() => isMaster && handleFocusToken(c.token?.x, c.token?.y)}
+                                >
+                                    <span className={cn(
+                                        "font-bold truncate transition-colors group-hover:text-primary", 
+                                        c.is_turn ? "text-primary" : "text-foreground"
+                                    )}>
+                                        {c.name}
+                                    </span>
+                                </div>
+
+                                {/* 3. INICIATIVA */}
+                                <div className="flex items-center justify-center min-w-[2rem]">
                                     {isMaster ? (
                                         <Input 
-                                            className="h-8 w-12 px-1 text-center text-sm font-mono bg-background border-input focus:ring-1" 
+                                            className={cn(
+                                                "h-6 w-8 p-0 text-center font-mono font-bold text-xs border bg-transparent hover:bg-background focus:bg-background transition-colors",
+                                                c.is_turn ? "border-primary text-primary" : "border-transparent text-muted-foreground"
+                                            )}
                                             value={c.initiative}
                                             onChange={(e) => handleUpdateInitiative(c.id, e.target.value)}
-                                            onFocus={(e) => e.target.select()} // Seleciona tudo ao clicar
+                                            onFocus={(e) => e.target.select()}
                                         />
                                     ) : (
-                                        <div className="w-12 text-center font-mono text-lg font-bold">{c.initiative}</div>
-                                    )}
-
-                                    {/* Botão de Remover (Hover Only) */}
-                                    {isMaster && (
-                                        <Button 
-                                            variant="ghost" 
-                                            size="icon" 
-                                            className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                            onClick={() => handleRemoveCombatant(c.id)}
-                                            title="Remover do Combate"
-                                        >
-                                            <Skull className="w-4 h-4" />
-                                        </Button>
+                                        <div className={cn(
+                                            "flex items-center justify-center h-6 w-8 rounded border font-mono font-bold text-xs bg-background/30",
+                                            c.is_turn ? "border-primary text-primary" : "border-border text-muted-foreground"
+                                        )}>
+                                            {c.initiative}
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -264,11 +257,14 @@ export const CombatTracker = () => {
                 </div>
             </ScrollArea>
             
-            {/* Footer / Ações de Turno (Visível sempre) */}
+            {/* RODAPÉ */}
             {isMaster && combatants.length > 0 && (
-                <div className="p-2 border-t border-border bg-background">
-                    <Button className="w-full font-bold gap-2" onClick={() => handleNextTurn('next')}>
-                        Próximo Turno <ChevronRight className="w-4 h-4" />
+                <div className="p-2 border-t border-border bg-background shadow-lg z-20">
+                    <Button 
+                        className="w-full font-bold h-7 text-xs" 
+                        onClick={() => handleNextTurn('next')}
+                    >
+                        Próximo <ChevronRight className="w-3 h-3 ml-1" />
                     </Button>
                 </div>
             )}

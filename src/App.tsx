@@ -2,10 +2,10 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom"; // <--- Adicionado useLocation
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect } from "react";
-import { Session } from "@supabase/supabase-js"; // Importar tipo Session
+import { useState, useEffect, useRef } from "react";
+import { Session } from "@supabase/supabase-js";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
@@ -15,39 +15,60 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// ProtectedRoute simplificado (recebe sessão como prop e reage a ela)
+// ProtectedRoute Inteligente: Salva de onde vieste
 const ProtectedRoute = ({ session, children }: { session: Session | null, children: React.ReactNode }) => {
+  const location = useLocation();
+  
   if (!session) {
-    return <Navigate to="/auth" replace />;
+    // Redireciona para login, mas guarda a página atual no "state"
+    return <Navigate to="/auth" state={{ from: location }} replace />;
   }
   return <>{children}</>;
+};
+
+// AuthRoute Inteligente: Devolve-te para onde estavas
+const AuthRoute = ({ session }: { session: Session | null }) => {
+  const location = useLocation();
+  
+  if (session) {
+    // Se já existe sessão, verifica se viemos de algum lugar específico
+    // Se não, vai para o dashboard por defeito
+    const from = location.state?.from?.pathname || "/dashboard";
+    return <Navigate to={from} replace />;
+  }
+  
+  return <Auth />;
 };
 
 const App = () => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const sessionRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // 1. Busca sessão inicial ao carregar
+    // 1. Busca sessão inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+      if (session) {
+        sessionRef.current = session.access_token;
+        setSession(session);
+      }
       setLoading(false);
     });
 
-    // 2. Listener Global de Auth
+    // 2. Listener de Auth
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth event:", event);
-      
       if (event === 'SIGNED_OUT' || event === 'USER_DELETED') {
-        // Se o utilizador saiu ou o token expirou, limpamos tudo
+        sessionRef.current = null;
         setSession(null);
-        queryClient.clear(); // Limpa cache do React Query
+        queryClient.clear();
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setSession(session);
+        if (session?.access_token !== sessionRef.current) {
+            sessionRef.current = session?.access_token || null;
+            setSession(session);
+        }
       }
-      
       setLoading(false);
     });
 
@@ -55,7 +76,6 @@ const App = () => {
   }, []);
 
   if (loading) {
-    // Spinner de carregamento inicial
     return <div className="h-screen w-screen flex items-center justify-center bg-background text-foreground">Carregando...</div>; 
   }
 
@@ -68,8 +88,9 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Index />} />
             
-            {/* Se já estiver logado, redireciona /auth para /dashboard */}
-            <Route path="/auth" element={!session ? <Auth /> : <Navigate to="/dashboard" replace />} />
+            {/* Rota de Auth agora usa o componente inteligente */}
+            <Route path="/auth" element={<AuthRoute session={session} />} />
+            
             <Route path="/reset-password" element={<ResetPassword />} />
             
             <Route

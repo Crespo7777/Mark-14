@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings, MousePointer2, Ruler, Flashlight, Target } from "lucide-react";
+import { Settings, MousePointer2, Ruler, Flashlight, Target, Swords } from "lucide-react";
 import { MapSettingsDialog } from "./MapSettingsDialog";
 import { useTableContext } from "@/features/table/TableContext";
 import { Table } from "@/types/app-types";
@@ -9,9 +9,18 @@ interface MapControlsProps {
     tableData: Table;
     activeTool?: string; 
     onToolChange?: (tool: string) => void;
+    // Novos props para controlar o Tracker
+    isCombatOpen: boolean;
+    onToggleCombat: () => void;
 }
 
-export const MapControls = ({ tableData, activeTool = "select", onToolChange = () => {} }: MapControlsProps) => {
+export const MapControls = ({ 
+    tableData, 
+    activeTool = "select", 
+    onToolChange = () => {},
+    isCombatOpen,
+    onToggleCombat
+}: MapControlsProps) => {
   const { isMaster } = useTableContext();
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -34,7 +43,7 @@ export const MapControls = ({ tableData, activeTool = "select", onToolChange = (
                     <MousePointer2 className="w-5 h-5" />
                 </Button>
 
-                {/* 2. PING (NOVO) */}
+                {/* 2. PING */}
                 <Button 
                     variant={activeTool === "ping" ? "secondary" : "ghost"} 
                     size="icon" 
@@ -56,7 +65,21 @@ export const MapControls = ({ tableData, activeTool = "select", onToolChange = (
                     <Ruler className="w-5 h-5" />
                 </Button>
 
-                {/* 4. LANTERNA (Só aparece se Mestre E Fog Ativo) */}
+                {/* 4. COMBATE (NOVO) */}
+                <Button 
+                    variant={isCombatOpen ? "secondary" : "ghost"} 
+                    size="icon" 
+                    className={`h-9 w-9 ${isCombatOpen ? "text-orange-400 bg-orange-400/10" : "hover:text-orange-400"}`}
+                    onClick={onToggleCombat}
+                    title="Rastreador de Combate / Iniciativa"
+                >
+                    <Swords className="w-5 h-5" />
+                </Button>
+
+                {/* Separador */}
+                <div className="h-px bg-white/10 mx-1 my-0.5" />
+
+                {/* 5. LANTERNA (Só aparece se Mestre E Fog Ativo) */}
                 {isMaster && isFogEnabled && (
                     <Button 
                         variant={activeTool === "reveal" ? "secondary" : "ghost"} 
@@ -70,18 +93,15 @@ export const MapControls = ({ tableData, activeTool = "select", onToolChange = (
                 )}
 
                 {isMaster && (
-                    <>
-                        <div className="h-px bg-white/20 mx-1" />
-                        <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-9 w-9 hover:text-primary" 
-                            onClick={() => setSettingsOpen(true)}
-                            title="Configurar Cena"
-                        >
-                            <Settings className="w-5 h-5" />
-                        </Button>
-                    </>
+                    <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-9 w-9 hover:text-primary" 
+                        onClick={() => setSettingsOpen(true)}
+                        title="Configurar Cena"
+                    >
+                        <Settings className="w-5 h-5" />
+                    </Button>
                 )}
             </div>
         </div>
