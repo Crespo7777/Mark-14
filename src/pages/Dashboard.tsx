@@ -41,7 +41,11 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Estados para modais de confirmação
   const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
+  const [tableToLeave, setTableToLeave] = useState<Table | null>(null); // <--- NOVO ESTADO: Mesa para sair
+  
   const [tableToEdit, setTableToEdit] = useState<Table | null>(null);
   const [selectedTableToJoin, setSelectedTableToJoin] = useState<Table | null>(null);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
@@ -54,8 +58,6 @@ const Dashboard = () => {
       if (!session) throw new Error("Não autenticado");
 
       const user = session.user;
-      
-      // Capturar o username dos metadados gravados no registo
       const metadataUsername = user.user_metadata?.username;
 
       const [profileResponse, tablesResponse, membersResponse] = await Promise.all([
@@ -66,7 +68,6 @@ const Dashboard = () => {
 
       let profile = profileResponse.data;
       
-      // Se não existir perfil, cria usando o metadataUsername como prioridade
       if (!profile) {
         const { data: newProfile } = await supabase.from("profiles").insert({
           id: user.id, 
@@ -90,25 +91,22 @@ const Dashboard = () => {
     staleTime: 1000 * 60 * 2, 
   });
 
-  // LOGOUT SEGURO E ROBUSTO
+  // LOGOUT SEGURO
   const handleSignOut = async () => {
-    // 1. Limpeza Local Imediata (Para a UI responder rápido e evitar loops)
     queryClient.clear();
-    localStorage.removeItem('sb-gbxpzxwmymggsburpnjm-auth-token'); // Limpa token do Supabase
+    localStorage.removeItem('sb-gbxpzxwmymggsburpnjm-auth-token'); 
     
-    // 2. Tentar Logout no Servidor (sem bloquear se falhar)
     try {
         const { error } = await supabase.auth.signOut();
         if (error) throw error;
     } catch (error: any) {
-        // Se a sessão já não existir (403), ignoramos o erro
-        console.warn("Aviso ao sair (Sessão provavelmente já expirada):", error.message);
+        console.warn("Aviso ao sair:", error.message);
     } finally {
-        // 3. Redirecionamento Final Garantido
         navigate("/auth");
     }
   };
 
+  // EXCLUIR MESA (Donos)
   const handleDeleteTable = async () => {
     if (!tableToDelete) return;
     const { error } = await supabase.from("tables").delete().eq("id", tableToDelete.id);
@@ -120,6 +118,28 @@ const Dashboard = () => {
       queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] });
     }
     setTableToDelete(null);
+  };
+
+  // SAIR DA MESA (Jogadores) - <--- NOVA FUNÇÃO
+  const handleLeaveTable = async () => {
+    if (!tableToLeave) return;
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+        .from("table_members")
+        .delete()
+        .eq("table_id", tableToLeave.id)
+        .eq("user_id", user.id);
+
+    if (error) {
+      toast({ title: "Erro ao sair", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Saiu da mesa", description: `Você deixou a mesa "${tableToLeave.name}".` });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] });
+    }
+    setTableToLeave(null);
   };
 
   const handleJoinClick = (table: TableWithRole) => {
@@ -146,15 +166,14 @@ const Dashboard = () => {
   if (isError || !dashboardData) {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-            <p className="text-destructive">Conexão perdida ou sessão expirada.</p>
+            <p className="text-destructive">Conexão perdida.</p>
             <Button onClick={() => refetch()} variant="outline"><RefreshCw className="mr-2 h-4 w-4"/> Reconectar</Button>
-            <Button onClick={handleSignOut} variant="link">Sair para o Login</Button>
+            <Button onClick={handleSignOut} variant="link">Sair</Button>
         </div>
     )
   }
 
   const { user, profile, tables } = dashboardData;
-
   const displayName = user.user_metadata?.username || profile?.display_name || user.email?.split('@')[0] || "Viajante";
 
   const filteredTables = tables.filter(t => 
@@ -166,16 +185,12 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {/* HEADER FIXO - IDENTIDADE VISUAL ATUALIZADA */}
       <header className="sticky top-0 z-50 w-full border-b bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
            <div className="flex items-center gap-3">
-               {/* Logo Tenebre */}
                <div className="w-9 h-9 bg-primary/10 rounded-lg flex items-center justify-center border border-primary/20 shadow-[0_0_10px_rgba(var(--primary),0.2)]">
                   <img src="/tenebre-logo.png" alt="Logo" className="w-5 h-5 object-contain opacity-90" />
                </div>
-               
-               {/* Nome Tenebre VTT */}
                <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-primary via-primary/80 to-primary/50 bg-clip-text text-transparent font-mono">
                    Tenebre VTT
                </h1>
@@ -194,7 +209,6 @@ const Dashboard = () => {
 
       <main className="container max-w-7xl mx-auto px-4 py-8 space-y-8">
         
-        {/* Barra de Controlo */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="space-y-1">
                <h2 className="text-3xl font-bold tracking-tight">Lobby</h2>
@@ -220,7 +234,6 @@ const Dashboard = () => {
             </div>
         </div>
 
-        {/* Abas */}
         <Tabs defaultValue="my-tables" className="w-full">
             <TabsList className="mb-6 bg-secondary/50 p-1 border border-border/50">
                <TabsTrigger value="my-tables" className="px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">Minhas Mesas ({myTables.length})</TabsTrigger>
@@ -248,6 +261,7 @@ const Dashboard = () => {
                                 onAction={() => handleJoinClick(table)}
                                 onEdit={() => setTableToEdit(table)}
                                 onDelete={() => setTableToDelete(table)}
+                                onLeave={() => setTableToLeave(table)} // <--- CONECTADO: Botão Sair
                             />
                         ))}
                     </div>
@@ -276,6 +290,7 @@ const Dashboard = () => {
         onTableUpdated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] })}
       />
 
+      {/* DIÁLOGO DE EXCLUSÃO (MESTRE) */}
       <AlertDialog
         open={!!tableToDelete}
         onOpenChange={(open) => !open && setTableToDelete(null)}
@@ -294,6 +309,28 @@ const Dashboard = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* NOVO: DIÁLOGO DE SAIR DA MESA (JOGADOR) */}
+      <AlertDialog
+        open={!!tableToLeave}
+        onOpenChange={(open) => !open && setTableToLeave(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sair da Mesa?</AlertDialogTitle>
+            <AlertDialogDescription>
+                Tem certeza que deseja sair de <strong>{tableToLeave?.name}</strong>? 
+                Você perderá acesso até que entre novamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleLeaveTable}>
+              Sair da Mesa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <JoinTableDialog 
          table={selectedTableToJoin}
          open={isJoinDialogOpen}
@@ -304,8 +341,16 @@ const Dashboard = () => {
   );
 };
 
-// Card Visual
-const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole, onAction: () => void, onEdit?: () => void, onDelete?: () => void }) => {
+// Card Visual Atualizado
+interface TableCardProps {
+    table: TableWithRole;
+    onAction: () => void;
+    onEdit?: () => void;
+    onDelete?: () => void;
+    onLeave?: () => void; // <--- NOVA PROP
+}
+
+const TableCard = ({ table, onAction, onEdit, onDelete, onLeave }: TableCardProps) => {
     return (
       <Card className="group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col h-full bg-card">
         <div className="relative h-40 overflow-hidden bg-muted/50">
@@ -313,13 +358,13 @@ const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole
                 <>
                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
                    <img 
-                      src={table.map_background_url} // Usa o background do mapa como capa se existir
+                      src={table.map_background_url} 
                       alt={table.name}
                       loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                    />
                 </>
-            ) : table.image_url ? ( // Fallback para a imagem antiga se existir
+            ) : table.image_url ? ( 
                 <>
                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
                    <img 
@@ -338,7 +383,6 @@ const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole
             <div className="absolute top-2 right-2 z-20 flex flex-col gap-1 items-end">
                 {table.is_owner && <Badge className="bg-yellow-500/90 hover:bg-yellow-500 text-black font-bold shadow-sm backdrop-blur-md"><Crown className="w-3 h-3 mr-1"/> Mestre</Badge>}
                 {table.is_member && !table.is_owner && <Badge className="bg-green-600/90 hover:bg-green-600 text-white shadow-sm backdrop-blur-md"><Users className="w-3 h-3 mr-1"/> Jogador</Badge>}
-                {/* Se a mesa for privada e o usuário não for membro (modo explorar), mostra cadeado */}
                 {!table.is_member && !table.is_owner && <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-md"><Lock className="w-3 h-3 mr-1"/> Privada</Badge>}
             </div>
         </div>
@@ -367,11 +411,25 @@ const TableCard = ({ table, onAction, onEdit, onDelete }: { table: TableWithRole
             {table.is_owner ? <><Play className="w-4 h-4 mr-2" /> Jogar</> : table.is_member ? <><DoorOpen className="w-4 h-4 mr-2" /> Entrar</> : <><Users className="w-4 h-4 mr-2" /> Participar</>}
           </Button>
 
+          {/* AÇÕES DE DONO: CONFIGURAR / EXCLUIR */}
           {table.is_owner && (
              <>
                 {onEdit && <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Configurar"><Settings className="w-4 h-4" /></Button>}
                 {onDelete && <Button variant="destructive" size="icon" onClick={(e) => { e.stopPropagation(); onDelete(); }} title="Excluir"><Trash2 className="w-4 h-4" /></Button>}
              </>
+          )}
+
+          {/* NOVA AÇÃO DE MEMBRO: SAIR DA MESA */}
+          {!table.is_owner && table.is_member && onLeave && (
+             <Button 
+                variant="outline" 
+                size="icon" 
+                className="hover:bg-destructive/10 hover:text-destructive border-dashed"
+                onClick={(e) => { e.stopPropagation(); onLeave(); }} 
+                title="Sair da Mesa"
+             >
+                <LogOut className="w-4 h-4" />
+             </Button>
           )}
         </CardFooter>
       </Card>
