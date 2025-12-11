@@ -1,15 +1,17 @@
+// src/features/map/MapControls.tsx
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Settings, MousePointer2, Ruler, Flashlight, Target, Swords } from "lucide-react";
+import { Settings, MousePointer2, Ruler, Target, Swords, Brush, Square, Circle as CircleIcon } from "lucide-react";
 import { MapSettingsDialog } from "./MapSettingsDialog";
 import { useTableContext } from "@/features/table/TableContext";
 import { Table } from "@/types/app-types";
+import { cn } from "@/lib/utils";
 
 interface MapControlsProps {
     tableData: Table;
     activeTool?: string; 
     onToolChange?: (tool: string) => void;
-    // Novos props para controlar o Tracker
     isCombatOpen: boolean;
     onToggleCombat: () => void;
 }
@@ -23,83 +25,83 @@ export const MapControls = ({
 }: MapControlsProps) => {
   const { isMaster } = useTableContext();
   const [settingsOpen, setSettingsOpen] = useState(false);
-
-  // Verificamos se o nevoeiro está ativo nas configurações da tabela
   const isFogEnabled = tableData.map_fog_enabled || false;
+
+  // Toggle tool: Se clicar na ativa, desativa e volta a Select
+  const toggleTool = (tool: string) => {
+      if (activeTool === tool) {
+          onToolChange("select");
+      } else {
+          onToolChange(tool);
+      }
+  };
 
   return (
     <>
         <div className="absolute top-4 left-4 z-20 flex flex-col gap-2 pointer-events-auto">
             <div className="bg-black/80 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-xl flex flex-col gap-1">
                 
-                {/* 1. SELEÇÃO */}
-                <Button 
-                    variant={activeTool === "select" ? "secondary" : "ghost"} 
-                    size="icon" 
-                    className="h-9 w-9" 
-                    onClick={() => onToolChange("select")}
-                    title="Selecionar e Mover"
-                >
-                    <MousePointer2 className="w-5 h-5" />
-                </Button>
-
-                {/* 2. PING */}
-                <Button 
-                    variant={activeTool === "ping" ? "secondary" : "ghost"} 
-                    size="icon" 
-                    className={`h-9 w-9 ${activeTool === "ping" ? "text-red-400" : ""}`}
-                    onClick={() => onToolChange(activeTool === "ping" ? "select" : "ping")}
-                    title="Ping (Chamar Atenção)"
-                >
-                    <Target className="w-5 h-5" />
-                </Button>
-
-                {/* 3. RÉGUA */}
-                <Button 
-                    variant={activeTool === "measure" ? "secondary" : "ghost"} 
-                    size="icon" 
-                    className={`h-9 w-9 ${activeTool === "measure" ? "text-blue-400" : ""}`}
-                    onClick={() => onToolChange(activeTool === "measure" ? "select" : "measure")}
-                    title="Régua de Medição"
-                >
-                    <Ruler className="w-5 h-5" />
-                </Button>
-
-                {/* 4. COMBATE (NOVO) */}
+                <ControlButton 
+                    icon={<MousePointer2 className="w-5 h-5" />} 
+                    isActive={activeTool === "select"} 
+                    onClick={() => toggleTool("select")} 
+                    tooltip="Selecionar" 
+                />
+                <ControlButton 
+                    icon={<Target className="w-5 h-5" />} 
+                    isActive={activeTool === "ping"} 
+                    onClick={() => toggleTool("ping")} 
+                    tooltip="Ping" 
+                    colorClass="text-red-400" 
+                />
+                <ControlButton 
+                    icon={<Ruler className="w-5 h-5" />} 
+                    isActive={activeTool === "measure"} 
+                    onClick={() => toggleTool("measure")} 
+                    tooltip="Régua" 
+                    colorClass="text-blue-400" 
+                />
+                
                 <Button 
                     variant={isCombatOpen ? "secondary" : "ghost"} 
                     size="icon" 
                     className={`h-9 w-9 ${isCombatOpen ? "text-orange-400 bg-orange-400/10" : "hover:text-orange-400"}`}
                     onClick={onToggleCombat}
-                    title="Rastreador de Combate / Iniciativa"
+                    title="Combate"
                 >
                     <Swords className="w-5 h-5" />
                 </Button>
 
-                {/* Separador */}
                 <div className="h-px bg-white/10 mx-1 my-0.5" />
 
-                {/* 5. LANTERNA (Só aparece se Mestre E Fog Ativo) */}
                 {isMaster && isFogEnabled && (
-                    <Button 
-                        variant={activeTool === "reveal" ? "secondary" : "ghost"} 
-                        size="icon" 
-                        className={`h-9 w-9 ${activeTool === "reveal" ? "text-yellow-400" : ""}`}
-                        onClick={() => onToolChange(activeTool === "reveal" ? "select" : "reveal")}
-                        title="Lanterna: Revelar Nevoeiro"
-                    >
-                        <Flashlight className="w-5 h-5" />
-                    </Button>
+                    <>
+                        <ControlButton 
+                            icon={<Brush className="w-5 h-5" />} 
+                            isActive={activeTool === "reveal"} 
+                            onClick={() => toggleTool("reveal")} 
+                            tooltip="Lanterna (Pincel)" 
+                            colorClass="text-yellow-400"
+                        />
+                        <ControlButton 
+                            icon={<Square className="w-5 h-5" />} 
+                            isActive={activeTool === "reveal-rect"} 
+                            onClick={() => toggleTool("reveal-rect")} 
+                            tooltip="Revelar Retângulo" 
+                            colorClass="text-yellow-400"
+                        />
+                        <ControlButton 
+                            icon={<CircleIcon className="w-5 h-5" />} 
+                            isActive={activeTool === "reveal-circle"} 
+                            onClick={() => toggleTool("reveal-circle")} 
+                            tooltip="Revelar Círculo" 
+                            colorClass="text-yellow-400"
+                        />
+                    </>
                 )}
 
                 {isMaster && (
-                    <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-9 w-9 hover:text-primary" 
-                        onClick={() => setSettingsOpen(true)}
-                        title="Configurar Cena"
-                    >
+                    <Button variant="ghost" size="icon" className="h-9 w-9 hover:text-primary" onClick={() => setSettingsOpen(true)} title="Configurar Cena">
                         <Settings className="w-5 h-5" />
                     </Button>
                 )}
@@ -121,3 +123,15 @@ export const MapControls = ({
     </>
   );
 };
+
+const ControlButton = ({ icon, isActive, onClick, tooltip, colorClass = "" }: any) => (
+    <Button 
+        variant={isActive ? "secondary" : "ghost"} 
+        size="icon" 
+        className={cn("h-9 w-9", isActive && colorClass)} 
+        onClick={onClick} 
+        title={tooltip}
+    >
+        {icon}
+    </Button>
+);

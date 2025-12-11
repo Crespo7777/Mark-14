@@ -1,3 +1,6 @@
+// src/features/map/FogLayer.tsx
+
+import React from "react";
 import { Layer, Rect, Line, Group } from "react-konva";
 import { FogShape } from "@/types/map-types";
 
@@ -9,14 +12,16 @@ interface FogLayerProps {
   opacity?: number;   // Opacidade da escuridão (padrão 1 = preto total)
 }
 
-export const FogLayer = ({ width, height, shapes, visible, opacity = 1 }: FogLayerProps) => {
-  // Se o nevoeiro estiver desligado, não renderiza nada (mapa totalmente visível)
+// 1. React.memo: Previne re-render quando o pai muda por causa do desenho da régua/pincel
+export const FogLayer = React.memo(({ width, height, shapes, visible, opacity = 1 }: FogLayerProps) => {
+  // Se o nevoeiro estiver desligado, não renderiza nada
   if (!visible) return null;
 
   return (
-    <Layer>
+    // 2. listening={false}: Remove o cálculo de eventos de rato (Hit Graph). 
+    // Isto dá um boost GIGANTE de performance pois o canvas não precisa verificar colisões aqui.
+    <Layer listening={false}>
       {/* 1. A Escuridão Total (Fundo Preto) */}
-      {/* Esta camada cobre todo o mapa com preto */}
       <Rect
         x={0}
         y={0}
@@ -24,7 +29,9 @@ export const FogLayer = ({ width, height, shapes, visible, opacity = 1 }: FogLay
         height={height}
         fill="black"
         opacity={opacity}
-        listening={false} // Permite clicar através do nevoeiro (para mover tokens)
+        // 3. perfectDrawEnabled={false}: Desliga cálculos de pixel-perfect (desnecessário para nevoeiro)
+        perfectDrawEnabled={false}
+        shadowForStrokeEnabled={false}
       />
 
       {/* 2. Os "Buracos" (Áreas Reveladas) */}
@@ -40,9 +47,13 @@ export const FogLayer = ({ width, height, shapes, visible, opacity = 1 }: FogLay
             tension={0.2}    // Suaviza ligeiramente as linhas desenhadas à mão
             closed={true}    // Garante que a forma é um polígono fechado
             listening={false}
+            perfectDrawEnabled={false}
+            shadowForStrokeEnabled={false}
           />
         ))}
       </Group>
     </Layer>
   );
-};
+});
+
+FogLayer.displayName = "FogLayer";

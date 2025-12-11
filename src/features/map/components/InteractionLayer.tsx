@@ -1,57 +1,87 @@
 // src/features/map/components/InteractionLayer.tsx
+
+import React from "react";
 import { Layer, Line } from "react-konva";
-import { RulerLine } from "./RulerLine"; // O componente que criámos antes
+import { RulerLine } from "./RulerLine"; 
 import { MapToken } from "../MapToken";
 import { MapToken as MapTokenType } from "@/types/map-types";
 
 interface InteractionState {
   isDrawing: boolean;
-  currentLine: number[];
+  currentPoints: number[];
+  measurePath?: { x: number; y: number }[];
   rulerStart: { x: number; y: number } | null;
   rulerEnd: { x: number; y: number } | null;
-  movePlan: {
-    token: MapTokenType;
-    startX: number;
-    startY: number;
-    currentX: number;
-    currentY: number;
-  } | null;
+  movePlan: any;
 }
 
 interface InteractionLayerProps {
   state: InteractionState;
   gridSize: number;
   isMaster: boolean;
+  activeTool: string; // <--- NOVO PROP
 }
 
-export const InteractionLayer = ({ state, gridSize, isMaster }: InteractionLayerProps) => {
-  const { isDrawing, currentLine, rulerStart, rulerEnd, movePlan } = state;
+// Helper para distância
+const getDistance = (p1: {x:number, y:number}, p2: {x:number, y:number}, gridSize: number) => {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const pixels = Math.sqrt(dx*dx + dy*dy);
+    return Math.round((pixels / gridSize) * 1.5 * 10) / 10;
+};
 
-  // Se não houver nada a acontecer, nem renderiza a layer (Performance)
-  if (!isDrawing && !rulerStart && !movePlan) return null;
+export const InteractionLayer = React.memo(({ state, gridSize, isMaster, activeTool }: InteractionLayerProps) => {
+  const { isDrawing, currentPoints, measurePath, movePlan } = state;
+
+  if (!isDrawing && (!measurePath || measurePath.length === 0) && !movePlan) return null;
+
+  // Só fecha a forma se for Retângulo ou Círculo
+  const shouldCloseShape = activeTool === "reveal-rect" || activeTool === "reveal-circle";
 
   return (
     <Layer>
-      {/* 1. Linha de Desenho (Nevoeiro) */}
+      {/* 1. Desenho Temporário (Amarelo) */}
       {isDrawing && (
         <Line
-          points={currentLine}
+          points={currentPoints}
           stroke="#ffcc00"
           strokeWidth={2}
           dash={[10, 5]}
+          closed={shouldCloseShape} 
+          fill={shouldCloseShape ? "rgba(255, 204, 0, 0.1)" : undefined} // Só preenche se fechado
+          listening={false}
         />
       )}
 
-      {/* 2. Régua de Medição */}
-      {rulerStart && rulerEnd && (
-        <RulerLine
-          start={rulerStart}
-          end={rulerEnd}
-          gridSize={gridSize}
-        />
+      {/* 2. Régua (Path) */}
+      {measurePath && measurePath.length > 1 && (
+         <>
+            {measurePath.slice(0, -1).map((p, i) => {
+                const pNext = measurePath[i + 1];
+                const segmentDist = getDistance(p, pNext, gridSize);
+                let totalDist = 0;
+                for(let j = 0; j <= i; j++) {
+                    totalDist += getDistance(measurePath[j], measurePath[j+1], gridSize);
+                }
+                const label = measurePath.length > 2 ? `${segmentDist}m [${Math.round(totalDist*10)/10}]` : `${segmentDist}m`;
+
+                return (
+                    <RulerLine 
+                        key={i}
+                        start={p}
+                        end={pNext}
+                        gridSize={gridSize}
+                        text={label}
+                    />
+                );
+            })}
+             {measurePath.map((p, i) => (
+                <Line key={`dot-${i}`} points={[p.x, p.y]} stroke="white" strokeWidth={4} lineCap="round" shadowColor="black" shadowBlur={2} />
+            ))}
+         </>
       )}
 
-      {/* 3. Planeamento de Movimento (Ghost Token + Régua Branca) */}
+      {/* 3. Ghost Token */}
       {movePlan && (
         <>
           <RulerLine
@@ -72,15 +102,15 @@ export const InteractionLayer = ({ state, gridSize, isMaster }: InteractionLayer
             gridSize={gridSize}
             isDraggable={false}
             isMaster={isMaster}
-            // Callbacks vazios pois é apenas visual
             onDragEnd={() => {}}
             onSelect={() => {}}
             onContextMenu={() => {}}
             isSelected={true}
-            opacity={0.6} // Ligeiramente transparente
           />
         </>
       )}
     </Layer>
   );
-};
+});
+
+InteractionLayer.displayName = "InteractionLayer";

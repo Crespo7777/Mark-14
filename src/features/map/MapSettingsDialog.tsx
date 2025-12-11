@@ -1,7 +1,7 @@
 // src/features/map/MapSettingsDialog.tsx
 
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"; // <--- Importar DialogDescription
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"; 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -34,9 +34,10 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
   const [uploading, setUploading] = useState(false);
 
   const resetFogOfWar = async () => {
+      // Otimista: Limpa UI já
+      setFogShapes([]); 
       const { error } = await supabase.from("map_fog").delete().eq("table_id", tableId);
       if (!error) {
-          setFogShapes([]); 
           queryClient.invalidateQueries({ queryKey: ["map_fog", tableId] });
       }
   };
@@ -50,7 +51,7 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
       const fileExt = file.name.split('.').pop();
       const fileName = `${tableId}-${Date.now()}.${fileExt}`;
 
-      // BUCKET: map-images
+      // BUCKET: map-images (ISOLADO)
       const { error: uploadError } = await supabase.storage
         .from('map-images') 
         .upload(fileName, file, { upsert: true });
@@ -63,6 +64,7 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
 
       await updateTableSettings({ map_background_url: publicUrl });
       
+      // Reseta nevoeiro ao trocar mapa (para evitar formas fora do sitio)
       await resetFogOfWar();
       
       toast({ title: "Mapa carregado com sucesso!" });
@@ -71,7 +73,7 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
       console.error(error);
       toast({ 
           title: "Erro no upload", 
-          description: "Verifique as políticas RLS do bucket 'map-images'.", 
+          description: "Verifique se o bucket 'map-images' existe no Supabase.", 
           variant: "destructive" 
       });
     } finally {
@@ -89,6 +91,7 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
   };
 
   const handleSave = async () => {
+    // Se o user ligou/desligou o nevoeiro, resetamos para estado limpo
     if (fogEnabled !== currentSettings.fogEnabled) {
         await resetFogOfWar();
         toast({ title: fogEnabled ? "Nevoeiro Ativado" : "Nevoeiro Desativado" });
@@ -107,10 +110,7 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Configuração da Cena</DialogTitle>
-          {/* CORREÇÃO DO AVISO: Adicionada DialogDescription */}
-          <DialogDescription>
-            Ajuste o mapa de batalha, grelha e nevoeiro de guerra.
-          </DialogDescription>
+          <DialogDescription>Ajuste o mapa, grelha e visibilidade.</DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6 py-4">
