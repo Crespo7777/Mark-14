@@ -1,5 +1,7 @@
+// src/features/map/MapSettingsDialog.tsx
+
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"; // <--- Importar DialogDescription
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -22,7 +24,7 @@ interface MapSettingsDialogProps {
 }
 
 export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSettingsDialogProps) => {
-  const { tableId, setFogShapes } = useTableContext(); // Importamos setFogShapes para limpar visualmente rápido
+  const { tableId, setFogShapes } = useTableContext();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
@@ -31,16 +33,9 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
   const [fogEnabled, setFogEnabled] = useState(currentSettings.fogEnabled || false); 
   const [uploading, setUploading] = useState(false);
 
-  // Função auxiliar para RESETAR o Fog (Apagar tudo do DB)
   const resetFogOfWar = async () => {
-      // 1. Limpa no Banco
-      const { error } = await supabase
-          .from("map_fog")
-          .delete()
-          .eq("table_id", tableId);
-      
+      const { error } = await supabase.from("map_fog").delete().eq("table_id", tableId);
       if (!error) {
-          // 2. Limpa no Estado Local (Feedback Imediato) e invalida cache
           setFogShapes([]); 
           queryClient.invalidateQueries({ queryKey: ["map_fog", tableId] });
       }
@@ -53,39 +48,39 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `maps/${tableId}-${crypto.randomUUID()}.${fileExt}`;
+      const fileName = `${tableId}-${Date.now()}.${fileExt}`;
 
+      // BUCKET: map-images
       const { error: uploadError } = await supabase.storage
-        .from('campaign-images')
-        .upload(fileName, file);
+        .from('map-images') 
+        .upload(fileName, file, { upsert: true });
 
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
-        .from('campaign-images')
+        .from('map-images')
         .getPublicUrl(fileName);
 
       await updateTableSettings({ map_background_url: publicUrl });
       
-      // --- RESET AUTOMÁTICO AO TROCAR DE MAPA ---
       await resetFogOfWar();
       
-      toast({ title: "Mapa carregado e nevoeiro resetado!" });
+      toast({ title: "Mapa carregado com sucesso!" });
 
     } catch (error: any) {
       console.error(error);
-      toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
+      toast({ 
+          title: "Erro no upload", 
+          description: "Verifique as políticas RLS do bucket 'map-images'.", 
+          variant: "destructive" 
+      });
     } finally {
       setUploading(false);
     }
   };
 
   const updateTableSettings = async (updates: any) => {
-    const { error } = await supabase
-      .from('tables')
-      .update(updates)
-      .eq('id', tableId);
-
+    const { error } = await supabase.from('tables').update(updates).eq('id', tableId);
     if (error) {
       toast({ title: "Erro ao salvar", variant: "destructive" });
     } else {
@@ -94,11 +89,9 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
   };
 
   const handleSave = async () => {
-    // Verificar se o Fog foi alternado (Ligado <-> Desligado)
-    // O usuário pediu: "Sempre que usar o botão para ativar ou desativar... o fog deve resetar"
     if (fogEnabled !== currentSettings.fogEnabled) {
         await resetFogOfWar();
-        toast({ title: fogEnabled ? "Nevoeiro Ativado (Resetado)" : "Nevoeiro Desativado (Resetado)" });
+        toast({ title: fogEnabled ? "Nevoeiro Ativado" : "Nevoeiro Desativado" });
     }
 
     await updateTableSettings({
@@ -114,17 +107,19 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
       <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle>Configuração da Cena</DialogTitle>
+          {/* CORREÇÃO DO AVISO: Adicionada DialogDescription */}
+          <DialogDescription>
+            Ajuste o mapa de batalha, grelha e nevoeiro de guerra.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6 py-4">
-          
-          {/* Upload de Imagem */}
           <div className="space-y-2">
-            <Label>Imagem de Fundo</Label>
+            <Label>Imagem de Fundo do Tabuleiro</Label>
             <div className="flex items-center gap-4">
                 <div className="relative w-20 h-20 border-2 border-dashed rounded-md flex items-center justify-center bg-muted/50 overflow-hidden group">
                     {currentSettings.url ? (
-                        <img src={currentSettings.url} className="w-full h-full object-cover" />
+                        <img src={currentSettings.url} className="w-full h-full object-cover" alt="Mapa" />
                     ) : (
                         <ImageIcon className="w-8 h-8 text-muted-foreground" />
                     )}
@@ -134,67 +129,22 @@ export const MapSettingsDialog = ({ open, onOpenChange, currentSettings }: MapSe
                     </label>
                 </div>
                 <div className="text-xs text-muted-foreground flex-1">
-                    <p className="mb-1">{uploading ? <span className="flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin"/> Enviando...</span> : "Clique na imagem para alterar o mapa."}</p>
-                    <p className="text-[10px] text-red-400 font-bold">*Trocar a imagem reseta o nevoeiro.</p>
+                    <p className="mb-1">{uploading ? <span className="flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin"/> Enviando...</span> : "Clique para alterar o mapa."}</p>
+                    <p className="text-[10px] text-blue-400 font-bold">*Guardado em 'map-images'.</p>
                 </div>
             </div>
           </div>
-
+          
           <div className="h-px bg-border" />
-
-          {/* Toggle Nevoeiro de Guerra */}
+          
           <div className="flex items-center justify-between space-x-2">
-            <div className="flex flex-col space-y-1">
-                <Label htmlFor="fog-mode" className="flex items-center gap-2">
-                    <CloudFog className="w-4 h-4 text-muted-foreground" /> 
-                    Nevoeiro de Guerra
-                </Label>
-                <span className="text-[10px] text-muted-foreground">Ativar/Desativar reseta a exploração.</span>
-            </div>
-            <Switch 
-                id="fog-mode" 
-                checked={fogEnabled} 
-                onCheckedChange={setFogEnabled} 
-            />
+            <div className="flex flex-col space-y-1"><Label htmlFor="fog">Nevoeiro</Label></div>
+            <Switch id="fog" checked={fogEnabled} onCheckedChange={setFogEnabled} />
           </div>
-
-          <div className="h-px bg-border" />
-
-          {/* Tamanho da Grelha */}
-          <div className="space-y-2">
-            <div className="flex justify-between">
-                <Label>Tamanho da Grelha (px)</Label>
-                <span className="text-xs text-muted-foreground">{gridSize}px</span>
-            </div>
-            <Slider 
-                value={[gridSize]} 
-                onValueChange={([v]) => setGridSize(v)} 
-                min={20} 
-                max={200} 
-                step={5} 
-            />
-          </div>
-
-          {/* Opacidade da Grelha */}
-          <div className="space-y-2">
-            <div className="flex justify-between">
-                <Label>Opacidade das Linhas</Label>
-                <span className="text-xs text-muted-foreground">{Math.round(gridOpacity * 100)}%</span>
-            </div>
-            <Slider 
-                value={[gridOpacity]} 
-                onValueChange={([v]) => setGridOpacity(v)} 
-                min={0} 
-                max={1} 
-                step={0.05} 
-            />
-          </div>
-
+          <div className="space-y-2"><Label>Grelha ({gridSize}px)</Label><Slider value={[gridSize]} onValueChange={([v]) => setGridSize(v)} min={20} max={200} step={5} /></div>
+          <div className="space-y-2"><Label>Opacidade ({Math.round(gridOpacity * 100)}%)</Label><Slider value={[gridOpacity]} onValueChange={([v]) => setGridOpacity(v)} min={0} max={1} step={0.05} /></div>
         </div>
-
-        <DialogFooter>
-          <Button onClick={handleSave}>Salvar Alterações</Button>
-        </DialogFooter>
+        <DialogFooter><Button onClick={handleSave}>Salvar</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

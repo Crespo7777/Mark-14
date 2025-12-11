@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,9 +42,8 @@ const Dashboard = () => {
   
   const [searchTerm, setSearchTerm] = useState("");
   
-  // Estados para modais de confirmação
   const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
-  const [tableToLeave, setTableToLeave] = useState<Table | null>(null); // <--- NOVO ESTADO: Mesa para sair
+  const [tableToLeave, setTableToLeave] = useState<Table | null>(null);
   
   const [tableToEdit, setTableToEdit] = useState<Table | null>(null);
   const [selectedTableToJoin, setSelectedTableToJoin] = useState<Table | null>(null);
@@ -91,7 +90,6 @@ const Dashboard = () => {
     staleTime: 1000 * 60 * 2, 
   });
 
-  // LOGOUT SEGURO
   const handleSignOut = async () => {
     queryClient.clear();
     localStorage.removeItem('sb-gbxpzxwmymggsburpnjm-auth-token'); 
@@ -106,7 +104,6 @@ const Dashboard = () => {
     }
   };
 
-  // EXCLUIR MESA (Donos)
   const handleDeleteTable = async () => {
     if (!tableToDelete) return;
     const { error } = await supabase.from("tables").delete().eq("id", tableToDelete.id);
@@ -120,7 +117,6 @@ const Dashboard = () => {
     setTableToDelete(null);
   };
 
-  // SAIR DA MESA (Jogadores) - <--- NOVA FUNÇÃO
   const handleLeaveTable = async () => {
     if (!tableToLeave) return;
     
@@ -261,7 +257,7 @@ const Dashboard = () => {
                                 onAction={() => handleJoinClick(table)}
                                 onEdit={() => setTableToEdit(table)}
                                 onDelete={() => setTableToDelete(table)}
-                                onLeave={() => setTableToLeave(table)} // <--- CONECTADO: Botão Sair
+                                onLeave={() => setTableToLeave(table)} 
                             />
                         ))}
                     </div>
@@ -282,7 +278,6 @@ const Dashboard = () => {
         </Tabs>
       </main>
 
-      {/* --- DIÁLOGOS --- */}
       <EditTableDialog 
         table={tableToEdit}
         open={!!tableToEdit}
@@ -290,7 +285,6 @@ const Dashboard = () => {
         onTableUpdated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] })}
       />
 
-      {/* DIÁLOGO DE EXCLUSÃO (MESTRE) */}
       <AlertDialog
         open={!!tableToDelete}
         onOpenChange={(open) => !open && setTableToDelete(null)}
@@ -309,7 +303,6 @@ const Dashboard = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* NOVO: DIÁLOGO DE SAIR DA MESA (JOGADOR) */}
       <AlertDialog
         open={!!tableToLeave}
         onOpenChange={(open) => !open && setTableToLeave(null)}
@@ -341,30 +334,20 @@ const Dashboard = () => {
   );
 };
 
-// Card Visual Atualizado
 interface TableCardProps {
     table: TableWithRole;
     onAction: () => void;
     onEdit?: () => void;
     onDelete?: () => void;
-    onLeave?: () => void; // <--- NOVA PROP
+    onLeave?: () => void;
 }
 
 const TableCard = ({ table, onAction, onEdit, onDelete, onLeave }: TableCardProps) => {
     return (
       <Card className="group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col h-full bg-card">
         <div className="relative h-40 overflow-hidden bg-muted/50">
-            {table.map_background_url ? (
-                <>
-                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
-                   <img 
-                      src={table.map_background_url} 
-                      alt={table.name}
-                      loading="lazy"
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                   />
-                </>
-            ) : table.image_url ? ( 
+            {/* CORREÇÃO: Removemos a prioridade do map_background_url */}
+            {table.image_url ? ( 
                 <>
                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
                    <img 
@@ -411,7 +394,6 @@ const TableCard = ({ table, onAction, onEdit, onDelete, onLeave }: TableCardProp
             {table.is_owner ? <><Play className="w-4 h-4 mr-2" /> Jogar</> : table.is_member ? <><DoorOpen className="w-4 h-4 mr-2" /> Entrar</> : <><Users className="w-4 h-4 mr-2" /> Participar</>}
           </Button>
 
-          {/* AÇÕES DE DONO: CONFIGURAR / EXCLUIR */}
           {table.is_owner && (
              <>
                 {onEdit && <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onEdit(); }} title="Configurar"><Settings className="w-4 h-4" /></Button>}
@@ -419,7 +401,6 @@ const TableCard = ({ table, onAction, onEdit, onDelete, onLeave }: TableCardProp
              </>
           )}
 
-          {/* NOVA AÇÃO DE MEMBRO: SAIR DA MESA */}
           {!table.is_owner && table.is_member && onLeave && (
              <Button 
                 variant="outline" 

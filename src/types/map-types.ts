@@ -14,13 +14,20 @@ export interface MapToken {
   rotation: number;
   status_effects?: string[];
   is_hidden?: boolean;
+  // NOVO: Estatísticas independentes (Vida no Token)
+  stats?: {
+    hp: {
+      current: number;
+      max: number;
+      temp?: number;
+    }
+  };
 }
 
-// --- NOVO: Definição de uma área revelada ---
 export interface FogShape {
   id: string;
   table_id: string;
-  points: number[]; // [x1, y1, x2, y2, ...] - Coordenadas do polígono
+  points: number[];
   type: 'reveal' | 'hide';
 }
 
@@ -29,5 +36,5 @@ export interface MapData {
   tableId: string;
   gridSize: number;
   tokens: MapToken[];
-  fog_shapes: FogShape[]; // Áreas de nevoeiro reveladas
+  fog_shapes: FogShape[];
 }

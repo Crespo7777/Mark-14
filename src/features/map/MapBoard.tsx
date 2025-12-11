@@ -127,11 +127,23 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
       setBgMenuState(null);
   };
 
+  // --- FUNÇÃO DE MOVIMENTO CORRIGIDA ---
   const executeTokenMove = async (token: MapTokenType, x: number, y: number) => {
+    // 1. Atualiza o estado local (MapContext) para feedback imediato no canvas
     setMapTokens(prev => prev.map(t => t.id === token.id ? { ...t, x, y } : t));
+
+    // 2. Atualiza a Cache do React Query (CRÍTICO para o TokenHUD não usar dados velhos)
+    queryClient.setQueryData<MapTokenType[]>(["map_tokens", tableId], (old) => {
+        if (!old) return [];
+        return old.map(t => t.id === token.id ? { ...t, x, y } : t);
+    });
+
+    // 3. Atualiza o Banco de Dados
     const { error } = await supabase.from("map_tokens").update({ x, y }).eq("id", token.id).eq("table_id", tableId);
+    
     if (error) {
       console.error("Erro token:", error);
+      // Em caso de erro, revalida para voltar à posição do servidor
       queryClient.invalidateQueries({ queryKey: ["map_tokens", tableId] });
     }
   };
@@ -207,7 +219,6 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
           onToggleCombat={() => setIsCombatOpen(!isCombatOpen)}
       />
 
-      {/* --- JANELA FLUTUANTE --- */}
       {isCombatOpen && (
           <div 
             className="absolute z-40 w-72 flex flex-col pointer-events-auto bg-card border border-border/50 rounded-md shadow-2xl overflow-hidden"
@@ -265,9 +276,6 @@ export const MapBoard = ({ width = window.innerWidth, height = window.innerHeigh
         <PingLayer pings={pings} onComplete={removePing} />
       </Stage>
 
-      {/* CRÍTICO: Passamos tokenId em vez do objeto inteiro
-          Isso permite que o TokenHUD leia a versão mais atualizada da cache
-      */}
       {tokenHudState && isMaster && (
           <TokenHUD 
               tokenId={tokenHudState.token.id} 

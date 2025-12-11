@@ -18,7 +18,6 @@ interface MapTokenProps {
   isMaster: boolean;
 }
 
-// Usamos React.memo para evitar re-renders desnecessários quando outros tokens se movem
 export const MapToken = React.memo(({ 
   token, 
   gridSize, 
@@ -31,14 +30,12 @@ export const MapToken = React.memo(({
 }: MapTokenProps) => {
   const { characters, combatants } = useTableContext();
   const [image] = useImage(token.image_url || "", "anonymous");
-  
-  // Ref para o círculo de animação (evita re-renders de estado para animação)
   const turnRingRef = useRef<Konva.Circle>(null);
 
-  // 1. DADOS DERIVADOS (Memoizados para performance)
+  // 1. DADOS DE PERSONAGEM (Apenas se for Character)
   const linkedCharacter = useMemo(() => 
-    characters.find(c => c.id === token.character_id), 
-  [characters, token.character_id]);
+    token.type === 'character' ? characters.find(c => c.id === token.character_id) : null, 
+  [characters, token.character_id, token.type]);
 
   const combatantEntry = useMemo(() => 
     combatants.find(c => c.token_id === token.id),
@@ -47,62 +44,64 @@ export const MapToken = React.memo(({
   const isActiveTurn = combatantEntry?.is_turn || false;
   const isInCombat = !!combatantEntry;
 
-  // Se estiver oculto e não for mestre, nem renderiza (poupa GPU)
   if (token.is_hidden && !isMaster) {
       return null;
   }
 
-  // 2. ANIMAÇÃO DE TURNO (Direta no Canvas Node)
+  // 2. ANIMAÇÃO DE TURNO
   useEffect(() => {
     let anim: Konva.Animation | null = null;
-
     if (isActiveTurn && turnRingRef.current) {
         const node = turnRingRef.current;
         anim = new Konva.Animation((frame) => {
             if (!frame) return;
-            // Pulsação suave usando seno
             const scale = 1 + Math.sin(frame.time / 300) * 0.08;
             const opacity = 0.6 + Math.sin(frame.time / 300) * 0.4;
-            
             node.scale({ x: scale, y: scale });
             node.opacity(opacity);
         }, node.getLayer());
-        
         anim.start();
     }
-
-    return () => {
-        if (anim) anim.stop();
-    };
+    return () => { if (anim) anim.stop(); };
   }, [isActiveTurn]);
 
-  // 3. CÁLCULOS VISUAIS
-  const hpCurrent = Number(linkedCharacter?.data?.toughness?.current) || 0;
-  const hpMax = Number(linkedCharacter?.data?.toughness?.max) || 10; 
+  // 3. LÓGICA DE VIDA (HÍBRIDA E INDEPENDENTE)
+  let hpCurrent = 0;
+  let hpMax = 10;
+  let showBar = false;
+
+  // Prioridade 1: Vida Própria do Token (NPCs Independentes ou Monstros)
+  if (token.stats?.hp) {
+      hpCurrent = token.stats.hp.current;
+      hpMax = token.stats.hp.max;
+      showBar = true;
+  } 
+  // Prioridade 2: Ficha Vinculada (Personagens Jogadores)
+  else if (linkedCharacter?.data?.toughness) {
+      hpCurrent = Number(linkedCharacter.data.toughness.current) || 0;
+      hpMax = Number(linkedCharacter.data.toughness.max) || 10;
+      showBar = true;
+  }
+
   const hpPercentage = Math.max(0, Math.min(1, hpCurrent / hpMax));
-  
-  // Cores dinâmicas para a barra de vida (Verde -> Amarelo -> Vermelho)
   const barColor = hpPercentage > 0.5 ? "#22c55e" : hpPercentage > 0.2 ? "#eab308" : "#ef4444";
   const radius = (gridSize * (token.size || 1)) / 2;
 
   const isDead = (token.status_effects || []).includes("dead");
   const isBloodied = (token.status_effects || []).includes("bloodied");
 
-  // Handler de arrasto otimizado (Snap to Grid)
+  // 4. HANDLER DE ARRASTO CORRIGIDO (Evita o "Pulo")
   const handleDragEnd = (e: Konva.KonvaEventObject<DragEvent>) => {
     const x = e.target.x();
     const y = e.target.y();
     const snapX = Math.round(x / gridSize) * gridSize;
     const snapY = Math.round(y / gridSize) * gridSize;
     
-    // Atualiza visualmente imediatamente (sem esperar o servidor)
-    e.target.to({
-        x: snapX,
-        y: snapY,
-        duration: 0.1,
-        easing: Konva.Easings.EaseOut
-    });
+    // Atualiza a posição visualmente AGORA
+    e.target.x(snapX);
+    e.target.y(snapY);
     
+    // Notifica o pai para salvar, mas o visual já está no sítio certo
     onDragEnd(token.id, snapX, snapY);
   };
 
@@ -124,30 +123,26 @@ export const MapToken = React.memo(({
       }}
       opacity={token.is_hidden ? 0.5 : 1}
     >
-      {/* IMPORTANTE: `listening={false}` é a chave da performance.
-         Elementos visuais não devem capturar eventos do mouse, apenas o círculo base.
-      */}
-
-      {/* 1. Anel de Turno (Pulsante) */}
+      {/* 1. Anel de Turno */}
       {isActiveTurn && (
         <Circle
             ref={turnRingRef}
             radius={radius + 6}
-            stroke="#fbbf24" // Dourado
+            stroke="#fbbf24"
             strokeWidth={4}
             offsetX={-gridSize / 2} 
             offsetY={-gridSize / 2}
             shadowColor="#fbbf24"
             shadowBlur={15}
-            listening={false} // Performance: Não detecta cliques
+            listening={false}
         />
       )}
 
-      {/* 2. Anel de Seleção (Estático) */}
+      {/* 2. Seleção */}
       {isSelected && (
         <Circle
           radius={radius + 2}
-          stroke="#f97316" // Laranja
+          stroke="#f97316"
           strokeWidth={3}
           offsetX={-gridSize / 2} 
           offsetY={-gridSize / 2}
@@ -157,7 +152,7 @@ export const MapToken = React.memo(({
         />
       )}
 
-      {/* 3. Indicador de Combate (Tracejado) */}
+      {/* 3. Indicador de Combate */}
       {isInCombat && !isActiveTurn && !isSelected && (
          <Circle
             radius={radius + 2}
@@ -171,7 +166,7 @@ export const MapToken = React.memo(({
          />
       )}
 
-      {/* 4. BASE DO TOKEN (Hit Area) - Único que ouve cliques */}
+      {/* 4. BASE DO TOKEN */}
       <Circle
         radius={radius - 2}
         fill={image ? "white" : (token.color || "#444")}
@@ -179,13 +174,12 @@ export const MapToken = React.memo(({
         strokeWidth={isBloodied ? 3 : 1}
         offsetX={-gridSize / 2}
         offsetY={-gridSize / 2}
-        // Sombras são caras, usamos apenas se necessário
         shadowColor={isBloodied ? "red" : "black"}
         shadowBlur={isBloodied ? 10 : 0} 
         shadowOpacity={0.5}
       />
 
-      {/* 5. Imagem do Personagem */}
+      {/* 5. Imagem */}
       {image && (
         <Circle
           radius={radius - 2}
@@ -198,50 +192,26 @@ export const MapToken = React.memo(({
           offsetX={-gridSize / 2}
           offsetY={-gridSize / 2}
           opacity={isDead ? 0.5 : 1} 
-          listening={false} // O clique passa para o círculo base
+          listening={false}
         />
       )}
 
-      {/* 6. Ícone de Morte (Caveira) */}
+      {/* 6. Ícone de Morte */}
       {isDead && (
          <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2} listening={false}>
-            <Text 
-                text="💀" 
-                fontSize={gridSize * 0.8} 
-                x={-gridSize/2 + (gridSize * 0.1)} 
-                y={-gridSize/2 + (gridSize * 0.1)} 
-                opacity={0.8}
-            />
+            <Text text="💀" fontSize={gridSize * 0.8} x={-gridSize/2 + 5} y={-gridSize/2 + 5} opacity={0.8} />
          </Group>
       )}
 
-      {/* 7. Barra de Vida (Estilo Foundry: Pequena e no topo) */}
-      {linkedCharacter && !isDead && (
+      {/* 7. Barra de Vida (Agora funciona para NPCs Independentes) */}
+      {showBar && !isDead && (
         <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2} listening={false}>
-            {/* Fundo da barra (Preto) */}
-            <Rect 
-                x={-radius} 
-                y={-radius - 8} 
-                width={radius * 2} 
-                height={5} 
-                fill="#000000" 
-                cornerRadius={2} 
-                opacity={0.7}
-            />
-            {/* Barra colorida */}
-            <Rect 
-                x={-radius} 
-                y={-radius - 8} 
-                width={(radius * 2) * hpPercentage} 
-                height={5} 
-                fill={barColor} 
-                cornerRadius={2}
-            />
+            <Rect x={-radius} y={-radius - 8} width={radius * 2} height={5} fill="#000000" cornerRadius={2} opacity={0.7} />
+            <Rect x={-radius} y={-radius - 8} width={(radius * 2) * hpPercentage} height={5} fill={barColor} cornerRadius={2} />
         </Group>
       )}
 
-      {/* 8. Nome do Token */}
-      {/* Só mostra se selecionado ou hover (para limpar o mapa) ou se for Mestre */}
+      {/* 8. Nome */}
       {(isSelected || isMaster) && (
           <Group offsetX={-gridSize / 2} offsetY={-gridSize / 2} listening={false}>
              <Text
@@ -266,5 +236,4 @@ export const MapToken = React.memo(({
   );
 });
 
-// displayName é útil para debugging no React DevTools
 MapToken.displayName = "MapToken";

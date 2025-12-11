@@ -7,7 +7,10 @@ export interface Table {
   master_id: string;
   created_at: string;
   
-  // --- Configurações do Mapa VTT ---
+  // --- Capa da Aventura (Dashboard) ---
+  image_url?: string | null; 
+
+  // --- Configurações do Mapa VTT (Tabuleiro) ---
   map_background_url?: string | null;
   map_grid_size?: number; 
   map_grid_color?: string; 
@@ -72,7 +75,6 @@ export interface ChatMessage {
   };
 }
 
-// --- NOVO: Combatente ---
 export interface Combatant {
   id: string;
   table_id: string;
