@@ -1,23 +1,17 @@
-import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { TableProvider, TableMember } from "@/features/table/TableContext"; 
+import { TableProvider } from "@/features/table/TableContext"; 
 import { MasterView } from "@/components/MasterView";
 import { PlayerView } from "@/components/PlayerView";
 import { Button } from "@/components/ui/button";
-import { Loader2, ArrowLeft, AlertCircle, RefreshCcw, Map as MapIcon, LayoutDashboard } from "lucide-react";
+import { Loader2, AlertCircle, RefreshCcw } from "lucide-react";
 import { Table, Character, Combatant } from "@/types/app-types"; 
-import { MapBoard } from "@/features/map/MapBoard";
-import { MapSidebar } from "@/features/map/MapSidebar";
-import { MapToken, FogShape } from "@/types/map-types";
+
+// Importamos o novo Chat Flutuante (certifique-se que criou este componente)
+import { ChatOverlay } from "@/components/chat/ChatOverlay"; 
 
 // --- FUNÇÕES DE BUSCA ---
-const fetchMapTokens = async (tableId: string): Promise<MapToken[]> => {
-    const { data, error } = await supabase.from("map_tokens").select("*").eq("table_id", tableId);
-    if (error) throw error;
-    return data as MapToken[]; 
-};
 
 const fetchCharacters = async (tableId: string) => {
     const { data, error } = await supabase.from("characters").select("*").eq("table_id", tableId);
@@ -25,13 +19,6 @@ const fetchCharacters = async (tableId: string) => {
     return data as Character[];
 };
 
-const fetchFogShapes = async (tableId: string): Promise<FogShape[]> => {
-    const { data, error } = await supabase.from("map_fog").select("*").eq("table_id", tableId);
-    if (error) throw error;
-    return (data || []).map((d: any) => ({ ...d, points: d.points as number[] })) as FogShape[];
-};
-
-// --- NOVO: Buscar Combatentes ---
 const fetchCombatants = async (tableId: string) => {
     const { data, error } = await supabase.from("combatants").select("*").eq("table_id", tableId);
     if (error) throw error;
@@ -41,18 +28,12 @@ const fetchCombatants = async (tableId: string) => {
 const TableView = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const queryClient = useQueryClient(); 
 
-    const [viewMode, setViewMode] = useState<"ui" | "map">("ui");
-    const [mapTokens, setMapTokens] = useState<MapToken[]>([]);
-    const [fogShapes, setFogShapes] = useState<FogShape[]>([]); 
-
-    // 1. Query Principal
+    // --- Query Principal (Dados da Mesa e Membros) ---
     const { 
         data: contextData, 
         isLoading: isLoadingContext, 
         isError, 
-        error,
         refetch 
     } = useQuery({
         queryKey: ["table-view", id],
@@ -108,33 +89,20 @@ const TableView = () => {
         retry: 1
     });
 
-    // 2. Queries Secundárias
-    const { data: mapTokensData, isLoading: isLoadingTokens } = useQuery({
-        queryKey: ['map_tokens', id], queryFn: () => fetchMapTokens(id!), enabled: !!id
-    });
-
+    // --- Queries Secundárias ---
     const { data: characters = [], isLoading: isLoadingChars } = useQuery({
         queryKey: ["characters", id], queryFn: () => fetchCharacters(id!), enabled: !!id
     });
 
-    const { data: fogData, isLoading: isLoadingFog } = useQuery({
-        queryKey: ["map_fog", id], queryFn: () => fetchFogShapes(id!), enabled: !!id
-    });
-
-    // --- NOVA QUERY: Combatentes ---
     const { data: combatants = [], isLoading: isLoadingCombat } = useQuery({
         queryKey: ["combatants", id], queryFn: () => fetchCombatants(id!), enabled: !!id
     });
 
-    // Sincronização
-    useEffect(() => { if (mapTokensData) setMapTokens(mapTokensData); }, [mapTokensData]);
-    useEffect(() => { if (fogData) setFogShapes(fogData); }, [fogData]);
-
-    if (isLoadingContext || isLoadingTokens || isLoadingChars || isLoadingFog || isLoadingCombat) {
+    if (isLoadingContext || isLoadingChars || isLoadingCombat) {
         return (
             <div className="h-screen w-screen flex flex-col items-center justify-center bg-background gap-4">
                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <p className="text-muted-foreground animate-pulse">Carregando Mundo...</p>
+                <p className="text-muted-foreground animate-pulse">Carregando Mesa...</p>
             </div>
         );
     }
@@ -149,6 +117,7 @@ const TableView = () => {
         );
     }
 
+    // Contexto Limpo (Sem dados de mapa)
     const contextValue = {
         tableId: contextData.table.id,
         masterId: contextData.table.master_id,
@@ -157,57 +126,25 @@ const TableView = () => {
         isHelper: contextData.isHelper,
         members: contextData.members,
         setMembers: () => {}, 
-        mapTokens: mapTokens, 
-        setMapTokens: setMapTokens,
+        
+        // Mantemos estes vazios para compatibilidade se algum componente ainda os pedir
+        mapTokens: [], setMapTokens: () => {},
+        fogShapes: [], setFogShapes: () => {},
+        
         characters: characters,
-        fogShapes: fogShapes,
-        setFogShapes: setFogShapes,
-        combatants: combatants // <--- Dados de Combate disponíveis no Mapa
+        combatants: combatants
     };
 
     return (
         <TableProvider value={contextValue as any}>
-            <div className="h-screen w-screen overflow-hidden bg-background relative">
-                
-                {viewMode === "map" && (
-                    <div className="absolute inset-0 z-0">
-                        <MapBoard isMaster={contextData.isMaster} tableData={contextData.table} />
-                        <div className="absolute top-4 right-4 z-10 pointer-events-auto">
-                             <MapSidebar />
-                        </div>
-                    </div>
-                )}
-
-                {viewMode === "ui" && (
-                    <div className="h-full w-full relative z-10 bg-background/95 backdrop-blur-sm">
-                        {contextData.isMaster || contextData.isHelper ? <MasterView /> : <PlayerView />}
-                    </div>
-                )}
-
-                <div className="absolute bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-auto">
-                    <div className="flex bg-black/80 backdrop-blur-md p-1 rounded-lg border border-white/10 shadow-2xl">
-                        <Button 
-                            size="sm" 
-                            variant={viewMode === "ui" ? "secondary" : "ghost"} 
-                            className="gap-2 text-xs font-bold"
-                            onClick={() => setViewMode("ui")}
-                        >
-                            <LayoutDashboard className="w-4 h-4" />
-                            Interface
-                        </Button>
-                        <div className="w-px bg-white/20 mx-1 my-1" />
-                        <Button 
-                            size="sm" 
-                            variant={viewMode === "map" ? "secondary" : "ghost"} 
-                            className="gap-2 text-xs font-bold"
-                            onClick={() => setViewMode("map")}
-                        >
-                            <MapIcon className="w-4 h-4" />
-                            Mapa
-                        </Button>
-                    </div>
+            <div className="h-screen w-screen overflow-hidden bg-background relative flex">
+                {/* Área Principal (Fichas, Regras, etc) */}
+                <div className="flex-1 h-full overflow-hidden relative z-10 bg-background">
+                    {contextData.isMaster || contextData.isHelper ? <MasterView /> : <PlayerView />}
                 </div>
 
+                {/* Chat Global Flutuante (Onipresente) */}
+                <ChatOverlay />
             </div>
         </TableProvider>
     );

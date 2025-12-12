@@ -1,22 +1,33 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MapToken } from "@/types/map-types"; // Certifique-se que este tipo existe e corresponde à sua tabela
+import { MapToken } from "@/types/map-types";
+import { RealtimeChannel } from "@supabase/supabase-js";
 
 export const useTableRealtime = (tableId: string) => {
   const queryClient = useQueryClient();
+  // Usamos useRef para manter o controlo do canal entre renderizações
+  const channelRef = useRef<RealtimeChannel | null>(null);
 
   useEffect(() => {
     if (!tableId) return;
 
-    console.log(`🔌 Conectando ao canal realtime da mesa: ${tableId}`);
+    // Função de limpeza robusta
+    const cleanup = async () => {
+      if (channelRef.current) {
+        await supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+
+    cleanup(); // Limpa resíduos antes de iniciar
 
     const channel = supabase
       .channel(`table-updates:${tableId}`)
       .on(
         "postgres_changes",
         {
-          event: "*", // Escuta INSERT, UPDATE, DELETE
+          event: "*", // Escuta tudo: INSERT, UPDATE, DELETE
           schema: "public",
           filter: `table_id=eq.${tableId}`,
         },
@@ -26,23 +37,21 @@ export const useTableRealtime = (tableId: string) => {
           // ========================================================
           // 1. OTIMIZAÇÃO CRÍTICA PARA O MAPA (TOKENS)
           // ========================================================
+          // Mantemos a tua lógica original de atualização local para performance máxima
           if (table === "map_tokens") {
             queryClient.setQueryData(
               ["map_tokens", tableId],
               (oldTokens: MapToken[] | undefined) => {
                 const currentTokens = oldTokens || [];
 
-                // Caso 1: Novo token adicionado
                 if (eventType === "INSERT" && newRecord) {
                   return [...currentTokens, newRecord as MapToken];
                 }
 
-                // Caso 2: Token removido
                 if (eventType === "DELETE" && oldRecord) {
                   return currentTokens.filter((t) => t.id !== oldRecord.id);
                 }
 
-                // Caso 3: Token atualizado (movimento, status, etc.)
                 if (eventType === "UPDATE" && newRecord) {
                   return currentTokens.map((t) =>
                     t.id === newRecord.id ? { ...t, ...(newRecord as MapToken) } : t
@@ -52,53 +61,45 @@ export const useTableRealtime = (tableId: string) => {
                 return currentTokens;
               }
             );
-            // Retornamos aqui para NÃO invalidar a query e evitar refetch
-            return;
+            return; // Não fazemos invalidateQueries para tokens (evita piscar)
           }
 
           // ========================================================
-          // 2. OUTRAS TABELAS (Mantemos Invalidação por Segurança)
+          // 2. OUTRAS TABELAS (Invalidação Segura)
           // ========================================================
-          // Para dados menos frequentes (fichas, diário), o refetch é aceitável
-          // e garante consistência total.
-          
           const invalidationMap: Record<string, string[]> = {
-            // Personagens
             characters: ["characters", tableId],
             character_folders: ["character_folders", tableId],
-            
-            // NPCs
             npcs: ["npcs", tableId],
             npc_folders: ["npc_folders", tableId],
-            
-            // Diário
             journal_entries: ["journal", tableId],
             journal_folders: ["journal_folders", tableId],
-            
-            // Mapa (Nevoeiro ainda pode ser via refetch pois muda pouco)
             map_fog: ["map_fog", tableId],
-            
-            // Combate
             combatants: ["combatants", tableId],
+            // Adicionado para garantir redundância no chat
+            chat_messages: ["chat_messages", tableId], 
           };
 
           if (invalidationMap[table]) {
-            console.log(`🔄 Atualizando dados de: ${table}`);
+            // console.log(`🔄 Atualizando: ${table}`);
             queryClient.invalidateQueries({ queryKey: invalidationMap[table] });
           }
         }
       )
       .subscribe((status) => {
         if (status === "SUBSCRIBED") {
-          console.log("✅ Realtime conectado com sucesso!");
+          // Conectado com sucesso
         }
         if (status === "CHANNEL_ERROR") {
-          console.error("❌ Erro na conexão Realtime.");
+          console.warn("⚠️ Aviso Realtime: Reconectando...");
         }
       });
 
+    channelRef.current = channel;
+
+    // Limpeza ao desmontar o componente
     return () => {
-      supabase.removeChannel(channel);
+      cleanup();
     };
   }, [tableId, queryClient]);
 };
