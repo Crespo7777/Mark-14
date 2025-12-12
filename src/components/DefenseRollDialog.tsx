@@ -1,5 +1,3 @@
-// src/components/DefenseRollDialog.tsx
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -34,13 +32,8 @@ export const DefenseRollDialog = ({
   }, [open]);
 
   const handleRoll = async (isHidden: boolean) => {
-    // 1. Validação
     if (defenseValue <= 0) {
-        toast({ 
-            title: "Defesa Inválida", 
-            description: `Valor de defesa inválido (${defenseValue}).`, 
-            variant: "destructive" 
-        });
+        toast({ title: "Defesa Inválida", description: `Valor inválido (${defenseValue}).`, variant: "destructive" });
         return;
     }
 
@@ -48,11 +41,9 @@ export const DefenseRollDialog = ({
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    // 2. Rolagem
     const modValue = parseInt(modifier) || 0;
     const result = rollAttributeTest({ attributeValue: defenseValue, modifier: modValue, withAdvantage: false });
 
-    // 3. Feedback Local
     if (!isHidden || isMaster) {
       toast({ 
           title: result.isSuccess ? "Sucesso na Defesa!" : "Atingido!", 
@@ -61,37 +52,19 @@ export const DefenseRollDialog = ({
       });
     }
 
-    // 4. Formatação e Envio
     const chatMessage = formatDefenseRoll(characterName, result);
     const discordResult = { total: result.totalRoll, ...result };
     const discordRollData = { rollType: "defense", result: discordResult };
 
     if (isHidden && isMaster) {
-      // SECRETO
       await supabase.from("chat_messages").insert([
-        { 
-            table_id: contextTableId, 
-            user_id: user.id, 
-            message: `${characterName} fez um teste de Defesa em segredo.`, 
-            message_type: "info" 
-        },
-        { 
-            table_id: contextTableId, 
-            user_id: user.id, 
-            message: `[SECRETO] ${chatMessage}`, 
-            message_type: "roll", 
-            recipient_id: masterId 
-        }
+        { table_id: contextTableId, user_id: user.id, message: `${characterName} fez um teste de Defesa em segredo.`, message_type: "info" },
+        { table_id: contextTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
       ]);
     } else {
-      // PÚBLICO
       await supabase.from("chat_messages").insert({ 
-          table_id: contextTableId, 
-          user_id: user.id, 
-          message: chatMessage, 
-          message_type: "roll" 
+          table_id: contextTableId, user_id: user.id, message: chatMessage, message_type: "roll" 
       });
-      
       supabase.functions.invoke('discord-roll-handler', { 
           body: { tableId: contextTableId, rollData: discordRollData, userName: characterName } 
       }).catch(console.error);
@@ -112,7 +85,11 @@ export const DefenseRollDialog = ({
       buttonLabel="Rolar Defesa"
       actionColorClass="bg-blue-600 hover:bg-blue-700"
     >
-      <div className="space-y-2 mt-2">
+      <div 
+        className="space-y-2 mt-2"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
         <Label htmlFor="mod-def">Modificador (no alvo)</Label>
         <Input 
             id="mod-def" 
@@ -121,6 +98,7 @@ export const DefenseRollDialog = ({
             onChange={(e) => setModifier(e.target.value)} 
             placeholder="Ex: -2" 
             className="bg-background/50"
+            onFocus={(e) => e.stopPropagation()}
         />
       </div>
     </BaseRollDialog>

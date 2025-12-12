@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 import { useCharacterCalculations } from "../hooks/useCharacterCalculations";
-import { useEquipmentManager } from "../hooks/useEquipmentManager";
 import { getDefaultWeapon, getDefaultArmor } from "../character.schema";
 import { useTableContext } from "@/features/table/TableContext";
 import { parseDiceRoll, formatProtectionRoll } from "@/lib/dice-parser";
@@ -29,7 +28,7 @@ export const CombatEquipmentTab = () => {
   const { tableId } = useTableContext();
   const { toast } = useToast();
   
-  // 1. Hooks de Cálculo (Com suporte a Amoque/Façanha de Força)
+  // 1. Hooks de Cálculo
   const { 
     toughnessMax, 
     painThreshold, 
@@ -40,7 +39,7 @@ export const CombatEquipmentTab = () => {
     corruptionThreshold 
   } = useCharacterCalculations();
 
-  // 2. Lógica de Combate (Passando os buffs)
+  // 2. Lógica de Combate
   const combatLogic = useCombatLogic({ 
       form, 
       fields: { currentToughness: "toughness.current", maxToughness: "toughness.max" },
@@ -57,34 +56,10 @@ export const CombatEquipmentTab = () => {
   const onDamage = (val: number) => combatLogic.handleDamage(val);
   const onHeal = (val: number) => combatLogic.handleHeal(val, toughnessMax);
 
+  // Esta função é mantida para compatibilidade, mas o ArmorCard agora usa o Dialog interno
   const handleProtectionRoll = async (index: number) => {
-    const armor = form.getValues(`armors.${index}`);
-    let protectionString = armor.protection || "0";
-    
-    // Lógica de Amoque (Adepto/Mestre)
-    if (activeBerserk && (activeBerserk.level === 'Adepto' || activeBerserk.level === 'Mestre')) {
-         protectionString += "+1d4"; 
-         toast({ title: "Pele de Ferro", description: "Amoque ativo: +1d4 proteção." }); 
-    }
-    
-    const roll = parseDiceRoll(protectionString);
-    if (!roll) return;
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-        toast({ title: `Proteção: ${armor.name}`, description: `Resultado: ${roll.total}` });
-        await supabase.from("chat_messages").insert({ 
-            table_id: character.table_id, 
-            user_id: user.id, 
-            message: formatProtectionRoll(character.name, armor.name, roll), 
-            message_type: "roll" 
-        });
-        
-        const discordRollData = { rollType: "protection", armorName: armor.name, result: roll };
-        supabase.functions.invoke('discord-roll-handler', { 
-            body: { tableId: character.table_id, rollData: discordRollData, userName: character.name } 
-        }).catch(console.error);
-    }
+    // A lógica real agora vive dentro do ArmorCard -> ProtectionRollDialog
+    console.log("Rolagem iniciada pelo card index:", index);
   };
 
   return (
@@ -167,7 +142,7 @@ export const CombatEquipmentTab = () => {
                           onAttack={() => combatLogic.preparePcAttack(index)}
                           onDamage={() => combatLogic.prepareDamage(index)}
                           onRemove={() => removeWeapon(index)}
-                          control={form.control} // <--- CORREÇÃO: Passando o control explicitamente
+                          control={form.control} 
                       />
                   ))}
               </div>

@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // <--- NOVO
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Lock, Loader2, X } from "lucide-react";
+import { Upload, Lock, Loader2, X, BookOpen } from "lucide-react";
 
 interface CreateTableDialogProps {
   children: React.ReactNode;
@@ -22,6 +23,7 @@ export const CreateTableDialog = ({ children, onTableCreated }: CreateTableDialo
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [password, setPassword] = useState("");
+  const [systemType, setSystemType] = useState<string>("symbaroum"); // <--- NOVO STATE
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -81,17 +83,19 @@ export const CreateTableDialog = ({ children, onTableCreated }: CreateTableDialo
         description: description.trim() || null,
         master_id: user.id,
         password: password || null,
-        image_url: finalImageUrl 
+        image_url: finalImageUrl,
+        system_type: systemType // <--- ENVIANDO O SISTEMA ESCOLHIDO
       });
 
       if (error) throw error;
 
-      toast({ title: "Mesa criada!", description: "Sua aventura começou." });
+      toast({ title: "Mesa criada!", description: `Aventura de ${systemType === 'symbaroum' ? 'Symbaroum' : 'Pathfinder'} iniciada.` });
       
       setName("");
       setDescription("");
       setPassword("");
       clearImage();
+      setSystemType("symbaroum");
       setOpen(false);
       onTableCreated();
 
@@ -112,37 +116,19 @@ export const CreateTableDialog = ({ children, onTableCreated }: CreateTableDialo
         </DialogHeader>
         
         <div className="grid gap-4 py-4">
-          <div className="flex flex-col gap-2">
-            <Label>Capa da Aventura</Label>
-            
-            {!previewUrl ? (
-               <div 
-                 onClick={() => fileInputRef.current?.click()}
-                 className="border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-secondary/5 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-all h-32 group"
-               >
-                  <Upload className="w-8 h-8 text-muted-foreground mb-2 group-hover:text-primary transition-colors" />
-                  <span className="text-sm text-muted-foreground">Clique para enviar capa</span>
-               </div>
-            ) : (
-               <div className="relative rounded-lg overflow-hidden h-32 border group">
-                  <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                  <Button 
-                    variant="destructive" 
-                    size="icon" 
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); clearImage(); }}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-               </div>
-            )}
-            <input 
-               type="file" 
-               ref={fileInputRef}
-               onChange={handleFileSelect}
-               className="hidden" 
-               accept="image/*"
-            />
+          
+          {/* --- SELETOR DE SISTEMA (NOVO) --- */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2"><BookOpen className="w-4 h-4"/> Sistema de Regras</Label>
+            <Select value={systemType} onValueChange={setSystemType}>
+                <SelectTrigger>
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="symbaroum">Symbaroum (Core)</SelectItem>
+                    <SelectItem value="pathfinder">Pathfinder (Experimental)</SelectItem>
+                </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -155,29 +141,34 @@ export const CreateTableDialog = ({ children, onTableCreated }: CreateTableDialo
             />
           </div>
           
+          {/* ... Upload de Imagem e Descrição (Mantido igual) ... */}
+          <div className="flex flex-col gap-2">
+            <Label>Capa da Aventura</Label>
+            {!previewUrl ? (
+               <div onClick={() => fileInputRef.current?.click()} className="border-2 border-dashed border-muted-foreground/25 hover:border-primary/50 hover:bg-secondary/5 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer transition-all h-24 group">
+                  <Upload className="w-6 h-6 text-muted-foreground mb-2 group-hover:text-primary transition-colors" />
+                  <span className="text-xs text-muted-foreground">Clique para enviar capa</span>
+               </div>
+            ) : (
+               <div className="relative rounded-lg overflow-hidden h-32 border group">
+                  <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                  <Button variant="destructive" size="icon" className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); clearImage(); }}>
+                    <X className="w-4 h-4" />
+                  </Button>
+               </div>
+            )}
+            <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" accept="image/*" />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="table-description">Descrição</Label>
-            <Textarea
-              id="table-description"
-              placeholder="Uma breve descrição da campanha..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-            />
+            <Textarea id="table-description" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </div>
 
           <div className="grid gap-4 border rounded-lg p-3 bg-secondary/10">
             <div className="space-y-1">
-                <Label className="text-sm flex items-center gap-2">
-                    <Lock className="w-3 h-3" /> Senha de Acesso (Opcional)
-                </Label>
-                <Input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Deixe vazio para mesa aberta"
-                    className="bg-background h-8 text-sm"
-                />
+                <Label className="text-sm flex items-center gap-2"><Lock className="w-3 h-3" /> Senha (Opcional)</Label>
+                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="bg-background h-8 text-sm" />
             </div>
           </div>
 

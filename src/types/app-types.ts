@@ -6,6 +6,9 @@ export interface Table {
   description: string | null;
   master_id: string;
   created_at: string;
+
+  // --- NOVO CAMPO ---
+  system_type: 'symbaroum' | 'pathfinder';
   
   // --- Capa da Aventura (Dashboard) ---
   image_url?: string | null; 

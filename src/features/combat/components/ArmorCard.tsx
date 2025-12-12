@@ -1,5 +1,3 @@
-// src/features/combat/components/ArmorCard.tsx
-
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { Card } from "@/components/ui/card";
@@ -9,11 +7,11 @@ import { Shield, Settings2, Trash2, Dices } from "lucide-react";
 import { FormField, FormLabel } from "@/components/ui/form";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { QualitySelector } from "@/components/QualitySelector";
-import { ProtectionRollDialog } from "@/components/ProtectionRollDialog"; // <--- NOVO IMPORT
+import { ProtectionRollDialog } from "@/components/ProtectionRollDialog"; 
 
 interface ArmorCardProps {
   index: number;
-  onRoll: () => void; // Mantido para compatibilidade, mas o Dialog assume a lógica
+  onRoll: () => void; 
   onRemove: () => void;
   tableId: string;
 }
@@ -21,7 +19,7 @@ interface ArmorCardProps {
 export const ArmorCard = ({ index, onRoll, onRemove, tableId }: ArmorCardProps) => {
   const { control, watch } = useFormContext();
   const [isEditing, setIsEditing] = useState(false);
-  const [isRollDialogOpen, setIsRollDialogOpen] = useState(false); // Estado do Dialog
+  const [isRollDialogOpen, setIsRollDialogOpen] = useState(false); 
 
   // Capturamos o nome do personagem da raiz do formulário
   const characterName = watch("name");
@@ -58,12 +56,17 @@ export const ArmorCard = ({ index, onRoll, onRemove, tableId }: ArmorCardProps) 
             </div>
 
             <div className="flex items-center gap-1 shrink-0">
-                {/* BOTÃO DE ROLAGEM ATUALIZADO */}
+                {/* --- CORREÇÃO CRÍTICA AQUI --- */}
                 <Button 
+                    type="button" 
                     size="sm" 
                     variant="ghost" 
                     className="h-8 w-8 p-0 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full" 
-                    onClick={() => setIsRollDialogOpen(true)} // <--- Abre o Dialog
+                    onClick={(e) => {
+                        e.preventDefault(); // Impede comportamento padrão
+                        e.stopPropagation(); // Impede que o evento suba para o form
+                        setIsRollDialogOpen(true);
+                    }}
                     title="Rolar Proteção"
                 >
                     <Dices className="w-4 h-4" />
@@ -96,7 +99,6 @@ export const ArmorCard = ({ index, onRoll, onRemove, tableId }: ArmorCardProps) 
             </div>
         </Card>
 
-        {/* DIÁLOGO DE ROLAGEM */}
         <ProtectionRollDialog 
             open={isRollDialogOpen}
             onOpenChange={setIsRollDialogOpen}

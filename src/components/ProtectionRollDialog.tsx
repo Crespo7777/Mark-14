@@ -1,5 +1,3 @@
-// src/components/ProtectionRollDialog.tsx
-
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -13,7 +11,7 @@ interface ProtectionRollDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   armorName: string;
-  protectionValue: string; // Ex: "1d4", "2"
+  protectionValue: string; 
   characterName: string;
   tableId: string;
 }
@@ -40,10 +38,7 @@ export const ProtectionRollDialog = ({
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setLoading(false); return; }
 
-    // 1. Construir Fórmula
     const formula = `${protectionValue}+${modifier}`;
-    
-    // 2. Rolar
     const rollResult: DiceRoll | null = parseDiceRoll(formula);
     
     if (!rollResult) {
@@ -52,7 +47,6 @@ export const ProtectionRollDialog = ({
         return;
     }
 
-    // 3. Feedback Local
     if (!isHidden || isMaster) {
       toast({ 
           title: `Proteção: ${armorName}`, 
@@ -61,7 +55,6 @@ export const ProtectionRollDialog = ({
       });
     }
 
-    // 4. Envio para Chat/Discord
     const chatMessage = formatProtectionRoll(characterName, armorName, rollResult);
     const discordRollData = { 
         rollType: "protection", 
@@ -76,31 +69,14 @@ export const ProtectionRollDialog = ({
     const targetTableId = tableId || contextTableId;
 
     if (isHidden && isMaster) {
-      // SECRETO
       await supabase.from("chat_messages").insert([
-        { 
-            table_id: targetTableId, 
-            user_id: user.id, 
-            message: `${characterName} utiliza a sua armadura...`, 
-            message_type: "info" 
-        },
-        { 
-            table_id: targetTableId, 
-            user_id: user.id, 
-            message: `[SECRETO] ${chatMessage}`, 
-            message_type: "roll", 
-            recipient_id: masterId 
-        }
+        { table_id: targetTableId, user_id: user.id, message: `${characterName} utiliza a sua armadura...`, message_type: "info" },
+        { table_id: targetTableId, user_id: user.id, message: `[SECRETO] ${chatMessage}`, message_type: "roll", recipient_id: masterId }
       ]);
     } else {
-      // PÚBLICO
       await supabase.from("chat_messages").insert({ 
-          table_id: targetTableId, 
-          user_id: user.id, 
-          message: chatMessage, 
-          message_type: "roll" 
+          table_id: targetTableId, user_id: user.id, message: chatMessage, message_type: "roll" 
       });
-      
       supabase.functions.invoke('discord-roll-handler', { 
           body: { tableId: targetTableId, rollData: discordRollData, userName: characterName } 
       }).catch(console.error);
@@ -121,7 +97,12 @@ export const ProtectionRollDialog = ({
       buttonLabel="Rolar Proteção"
       actionColorClass="bg-slate-600 hover:bg-slate-700"
     >
-      <div className="space-y-2 mt-2">
+      <div 
+        className="space-y-2 mt-2" 
+        // Stop Propagation aqui impede que cliques dentro do modal fechem o pai ou disparem auto-save
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
         <Label htmlFor="mod-prot">Modificador (Extra)</Label>
         <Input 
             id="mod-prot" 
@@ -130,6 +111,8 @@ export const ProtectionRollDialog = ({
             onChange={(e) => setModifier(e.target.value)} 
             placeholder="Ex: +1 (Bênção) ou -1 (Corrosão)" 
             className="bg-background/50"
+            // Impedir que o foco neste input dispare onBlur no form principal
+            onFocus={(e) => e.stopPropagation()}
         />
       </div>
     </BaseRollDialog>

@@ -1,5 +1,3 @@
-// src/components/ShareDialog.tsx
-
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -18,10 +16,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useTableContext } from "@/features/table/TableContext";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { UserCheck, Users } from "lucide-react";
-import { Separator } from "@/components/ui/separator"; // <-- 1. IMPORTAR SEPARATOR
+import { Separator } from "@/components/ui/separator";
 
 interface ShareDialogProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   itemTitle: string;
   currentSharedWith: string[]; // array de UUIDs
   onSave: (newPlayerIds: string[]) => Promise<void>;
@@ -40,9 +38,10 @@ export const ShareDialog = ({
   const [loading, setLoading] = useState(false);
   const { members } = useTableContext();
 
+  // Filtra apenas jogadores (não mostra o Mestre na lista de partilha)
   const players = members.filter(m => !m.isMaster);
 
-  // --- 2. LÓGICA DO "SELECIONAR TODOS" ---
+  // --- LÓGICA DO "SELECIONAR TODOS" ---
   const allPlayerIds = players.map(p => p.id);
   const isAllSelected = players.length > 0 && selectedPlayers.length === players.length;
 
@@ -53,7 +52,6 @@ export const ShareDialog = ({
       setSelectedPlayers([]);
     }
   };
-  // --- FIM DA LÓGICA ---
 
   useEffect(() => {
     if (open) {
@@ -76,10 +74,23 @@ export const ShareDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild disabled={disabled}>
-        {children}
-      </DialogTrigger>
-      <DialogContent>
+      {/* CORREÇÃO DO CRASH:
+          Se 'children' existir, usamos 'asChild' para fundir o Trigger com o botão filho.
+          Se não existir, renderizamos um botão padrão DENTRO do Trigger (sem asChild).
+      */}
+      {children ? (
+        <DialogTrigger asChild disabled={disabled}>
+          {children}
+        </DialogTrigger>
+      ) : (
+        <DialogTrigger asChild disabled={disabled}>
+          <Button variant="outline" size="sm">
+            <Users className="w-4 h-4 mr-2" /> Partilhar
+          </Button>
+        </DialogTrigger>
+      )}
+
+      <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Compartilhar: {itemTitle}</DialogTitle>
           <DialogDescription>
@@ -87,10 +98,10 @@ export const ShareDialog = ({
           </DialogDescription>
         </DialogHeader>
         
-        {/* --- 3. ADICIONAR CHECKBOX "COMPARTILHAR COM TODOS" --- */}
+        {/* Checkbox Selecionar Todos */}
         {players.length > 0 && (
           <>
-            <div className="flex items-center space-x-3 p-2 rounded-md bg-muted/50">
+            <div className="flex items-center space-x-3 p-2 rounded-md bg-muted/50 border border-border/50">
               <Checkbox
                 id="share-all"
                 checked={isAllSelected}
@@ -98,26 +109,28 @@ export const ShareDialog = ({
               />
               <Label 
                 htmlFor="share-all" 
-                className="flex-1 cursor-pointer flex items-center gap-2 font-semibold"
+                className="flex-1 cursor-pointer flex items-center gap-2 font-semibold select-none"
               >
-                <Users className="w-4 h-4" />
+                <Users className="w-4 h-4 text-primary" />
                 Compartilhar com Todos
               </Label>
             </div>
-            <Separator />
+            <Separator className="my-2" />
           </>
         )}
-        {/* --- FIM DA ADIÇÃO --- */}
 
-        <ScrollArea className="max-h-[300px] pr-4">
-          <div className="space-y-4">
+        <ScrollArea className="max-h-[300px] pr-4 -mr-4">
+          <div className="space-y-1 p-1">
             {players.length === 0 && (
-              <p className="text-muted-foreground text-center py-4">
+              <p className="text-muted-foreground text-center py-8 text-sm italic">
                 Não há jogadores nesta mesa para compartilhar.
               </p>
             )}
             {players.map(player => (
-              <div key={player.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50">
+              <div 
+                key={player.id} 
+                className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent transition-colors"
+              >
                 <Checkbox
                   id={`share-${player.id}`}
                   checked={selectedPlayers.includes(player.id)}
@@ -125,25 +138,25 @@ export const ShareDialog = ({
                 />
                 <Label 
                   htmlFor={`share-${player.id}`} 
-                  className="flex-1 cursor-pointer flex items-center gap-2"
+                  className="flex-1 cursor-pointer flex items-center gap-3 select-none py-1"
                 >
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback>
+                  <Avatar className="h-8 w-8 border border-border">
+                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
                       {player.display_name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  {player.display_name}
+                  <span className="font-medium">{player.display_name}</span>
                 </Label>
               </div>
             ))}
           </div>
         </ScrollArea>
         
-        <DialogFooter>
+        <DialogFooter className="mt-4 gap-2 sm:gap-0">
           <DialogClose asChild>
             <Button variant="outline" disabled={loading}>Cancelar</Button>
           </DialogClose>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button onClick={handleSave} disabled={loading} className="min-w-[100px]">
             {loading ? "Salvando..." : <><UserCheck className="w-4 h-4 mr-2" /> Salvar</>}
           </Button>
         </DialogFooter>
