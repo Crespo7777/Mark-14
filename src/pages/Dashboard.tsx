@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+// src/pages/Dashboard.tsx
+
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,9 +32,11 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Interface estendida para incluir dados calculados no frontend
 interface TableWithRole extends Table {
   is_owner: boolean;
   is_member: boolean;
+  master_name?: string; // Nome do mestre carregado separadamente
 }
 
 const Dashboard = () => {
@@ -44,61 +48,83 @@ const Dashboard = () => {
   
   const [tableToDelete, setTableToDelete] = useState<Table | null>(null);
   const [tableToLeave, setTableToLeave] = useState<Table | null>(null);
-  
   const [tableToEdit, setTableToEdit] = useState<Table | null>(null);
   const [selectedTableToJoin, setSelectedTableToJoin] = useState<Table | null>(null);
   const [isJoinDialogOpen, setIsJoinDialogOpen] = useState(false);
 
-  // 1. QUERY PRINCIPAL
+  // 1. QUERY PRINCIPAL (RESTAURADA E SEGURA)
   const { data: dashboardData, isLoading, isError, refetch } = useQuery({
-    queryKey: ["dashboard-tables"],
+    queryKey: ["dashboard-tables-full"],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Não autenticado");
 
       const user = session.user;
-      const metadataUsername = user.user_metadata?.username;
 
-      const [profileResponse, tablesResponse, membersResponse] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
-        supabase.from("tables").select("*").order("created_at", { ascending: false }),
-        supabase.from("table_members").select("table_id").eq("user_id", user.id)
-      ]);
-
-      let profile = profileResponse.data;
+      // A. Carregar Perfil do Utilizador Atual
+      let { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).maybeSingle();
       
+      // Fallback: Cria perfil se não existir
       if (!profile) {
         const { data: newProfile } = await supabase.from("profiles").insert({
           id: user.id, 
-          display_name: metadataUsername || user.email?.split('@')[0] || 'Jogador'
+          display_name: user.email?.split('@')[0] || 'Viajante'
         }).select().single();
         profile = newProfile;
       }
 
-      const allTables = tablesResponse.data || [];
-      const memberTableIds = new Set(membersResponse.data?.map(m => m.table_id));
+      // B. Carregar TODAS as mesas (sem Joins quebrados)
+      const { data: allTablesData, error: tablesError } = await supabase
+        .from("tables")
+        .select("*")
+        .order("created_at", { ascending: false });
 
-      const processedTables: TableWithRole[] = allTables.map((t: any) => ({
+      if (tablesError) throw tablesError;
+
+      // C. Carregar onde sou membro
+      const { data: myMemberships } = await supabase
+        .from("table_members")
+        .select("table_id")
+        .eq("user_id", user.id);
+
+      const myMemberTableIds = new Set(myMemberships?.map(m => m.table_id));
+
+      // D. Carregar nomes dos mestres (Manual Join - Seguro)
+      // Recolhemos todos os IDs de mestres únicos para buscar seus nomes
+      const masterIds = Array.from(new Set(allTablesData?.map(t => t.master_id) || []));
+      
+      let masterMap: Record<string, string> = {};
+      if (masterIds.length > 0) {
+          const { data: masters } = await supabase
+            .from("profiles")
+            .select("id, display_name")
+            .in("id", masterIds);
+          
+          masters?.forEach(m => {
+              masterMap[m.id] = m.display_name || "Desconhecido";
+          });
+      }
+
+      // E. Processar e Combinar Tudo
+      const processedTables: TableWithRole[] = (allTablesData || []).map((t: any) => ({
         ...t,
         is_owner: t.master_id === user.id,
-        is_member: memberTableIds.has(t.id)
+        is_member: myMemberTableIds.has(t.id),
+        master_name: masterMap[t.master_id] || "Mestre Oculto"
       }));
 
       return { user, profile, tables: processedTables };
     },
     retry: 1,
-    staleTime: 1000 * 60 * 2, 
+    staleTime: 1000 * 60 * 2, // Cache por 2 minutos
   });
 
   const handleSignOut = async () => {
     queryClient.clear();
-    localStorage.removeItem('sb-gbxpzxwmymggsburpnjm-auth-token'); 
-    
     try {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-    } catch (error: any) {
-        console.warn("Aviso ao sair:", error.message);
+        await supabase.auth.signOut();
+    } catch (error) {
+        console.warn("Erro ao sair:", error);
     } finally {
         navigate("/auth");
     }
@@ -112,28 +138,25 @@ const Dashboard = () => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Sucesso", description: "Mesa removida." });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-tables-full"] });
     }
     setTableToDelete(null);
   };
 
   const handleLeaveTable = async () => {
-    if (!tableToLeave) return;
-    
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!tableToLeave || !dashboardData?.user) return;
 
     const { error } = await supabase
         .from("table_members")
         .delete()
         .eq("table_id", tableToLeave.id)
-        .eq("user_id", user.id);
+        .eq("user_id", dashboardData.user.id);
 
     if (error) {
       toast({ title: "Erro ao sair", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Saiu da mesa", description: `Você deixou a mesa "${tableToLeave.name}".` });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-tables-full"] });
     }
     setTableToLeave(null);
   };
@@ -154,7 +177,7 @@ const Dashboard = () => {
             <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse" />
             <Loader2 className="h-12 w-12 animate-spin text-primary relative z-10" />
         </div>
-        <p className="text-muted-foreground animate-pulse font-medium">Invocando Tenebre...</p>
+        <p className="text-muted-foreground animate-pulse font-medium">Carregando o Multiverso...</p>
       </div>
     );
   }
@@ -162,16 +185,17 @@ const Dashboard = () => {
   if (isError || !dashboardData) {
     return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-            <p className="text-destructive">Conexão perdida.</p>
-            <Button onClick={() => refetch()} variant="outline"><RefreshCw className="mr-2 h-4 w-4"/> Reconectar</Button>
+            <p className="text-destructive">Erro de conexão com o servidor.</p>
+            <Button onClick={() => refetch()} variant="outline"><RefreshCw className="mr-2 h-4 w-4"/> Tentar Novamente</Button>
             <Button onClick={handleSignOut} variant="link">Sair</Button>
         </div>
     )
   }
 
   const { user, profile, tables } = dashboardData;
-  const displayName = user.user_metadata?.username || profile?.display_name || user.email?.split('@')[0] || "Viajante";
+  const displayName = profile?.display_name || user.email?.split('@')[0] || "Viajante";
 
+  // Filtros
   const filteredTables = tables.filter(t => 
     t.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -222,7 +246,7 @@ const Dashboard = () => {
                    />
                 </div>
                 
-                <CreateTableDialog onTableCreated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] })}>
+                <CreateTableDialog onTableCreated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables-full"] })}>
                    <Button className="shrink-0 gap-2 shadow-lg shadow-primary/20 bg-gradient-to-r from-primary to-primary/90 hover:opacity-90 transition-opacity">
                       <Plus className="w-4 h-4" /> Nova Mesa
                    </Button>
@@ -236,6 +260,7 @@ const Dashboard = () => {
                <TabsTrigger value="browse" className="px-6 data-[state=active]:bg-background data-[state=active]:shadow-sm">Explorar ({browseTables.length})</TabsTrigger>
             </TabsList>
 
+            {/* TAB: MINHAS MESAS */}
             <TabsContent value="my-tables" className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 {myTables.length === 0 ? (
                     <div className="text-center py-20 border-2 border-dashed rounded-xl bg-secondary/5 border-muted-foreground/20">
@@ -244,7 +269,7 @@ const Dashboard = () => {
                         </div>
                         <h3 className="text-lg font-medium mb-2">Sem missões ativas</h3>
                         <p className="text-muted-foreground mb-6 max-w-sm mx-auto">Você ainda não faz parte de nenhuma campanha.</p>
-                        <CreateTableDialog onTableCreated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] })}>
+                        <CreateTableDialog onTableCreated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables-full"] })}>
                            <Button variant="outline">Iniciar Jornada</Button>
                         </CreateTableDialog>
                     </div>
@@ -264,16 +289,23 @@ const Dashboard = () => {
                 )}
             </TabsContent>
 
+            {/* TAB: EXPLORAR */}
             <TabsContent value="browse" className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {browseTables.map(table => (
-                        <TableCard 
-                            key={table.id} 
-                            table={table} 
-                            onAction={() => handleJoinClick(table)}
-                        />
-                    ))}
-                </div>
+                {browseTables.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground">
+                        <p>Nenhuma mesa pública encontrada.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {browseTables.map(table => (
+                            <TableCard 
+                                key={table.id} 
+                                table={table} 
+                                onAction={() => handleJoinClick(table)}
+                            />
+                        ))}
+                    </div>
+                )}
             </TabsContent>
         </Tabs>
       </main>
@@ -282,7 +314,7 @@ const Dashboard = () => {
         table={tableToEdit}
         open={!!tableToEdit}
         onOpenChange={(open) => !open && setTableToEdit(null)}
-        onTableUpdated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] })}
+        onTableUpdated={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables-full"] })}
       />
 
       <AlertDialog
@@ -328,7 +360,7 @@ const Dashboard = () => {
          table={selectedTableToJoin}
          open={isJoinDialogOpen}
          onOpenChange={setIsJoinDialogOpen}
-         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables"] })}
+         onSuccess={() => queryClient.invalidateQueries({ queryKey: ["dashboard-tables-full"] })}
       />
     </div>
   );
@@ -346,7 +378,6 @@ const TableCard = ({ table, onAction, onEdit, onDelete, onLeave }: TableCardProp
     return (
       <Card className="group overflow-hidden border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col h-full bg-card">
         <div className="relative h-40 overflow-hidden bg-muted/50">
-            {/* CORREÇÃO: Removemos a prioridade do map_background_url */}
             {table.image_url ? ( 
                 <>
                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent z-10" />
@@ -377,6 +408,8 @@ const TableCard = ({ table, onAction, onEdit, onDelete, onLeave }: TableCardProp
           <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
              <Clock className="w-3 h-3" /> 
              {new Date(table.created_at).toLocaleDateString()}
+             <span className="mx-1">•</span>
+             <span>{table.master_name}</span>
           </div>
         </CardHeader>
         
