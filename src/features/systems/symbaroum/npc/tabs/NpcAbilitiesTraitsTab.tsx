@@ -1,14 +1,19 @@
 import { useState } from "react";
-import { useNpcSheet } from "../NpcSheetContext";
+// CORREÇÃO: Usar o hook do Symbaroum
+import { useSymbaroumNpcSheet } from "../SymbaroumNpcSheetContext";
 import { useFormContext } from "react-hook-form"; 
 import { useToast } from "@/hooks/use-toast";
 import { attributesList } from "@/features/character/character.constants";
 import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
+
+// IMPORTANTE: Certifica-te que estes arquivos existem na pasta './abilities/' dentro da nova estrutura
+// Se não existirem, terás de os copiar da pasta antiga para 'src/features/systems/symbaroum/npc/tabs/abilities/'
 import { NpcAbilitiesSection } from "./abilities/NpcAbilitiesSection";
 import { NpcTraitsSection } from "./abilities/NpcTraitsSection";
 
 export const NpcAbilitiesTraitsTab = () => {
-  const { form, npc, isReadOnly } = useNpcSheet();
+  // CORREÇÃO: Hook do Symbaroum
+  const { form, npc, isReadOnly } = useSymbaroumNpcSheet();
   const { getValues, setValue } = useFormContext();
   const { toast } = useToast();
   
@@ -57,7 +62,6 @@ export const NpcAbilitiesTraitsTab = () => {
           open={!!selectedAbilityRoll}
           onOpenChange={(open) => !open && setSelectedAbilityRoll(null)}
           npc={npc}
-          // --- CORREÇÃO AQUI: Passar o nome do atributo ---
           attributeName={selectedAbilityRoll.attributeName} 
           abilityName={selectedAbilityRoll.abilityName}
           abilityValue={selectedAbilityRoll.attributeValue}

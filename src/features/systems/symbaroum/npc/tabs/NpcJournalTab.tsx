@@ -1,11 +1,9 @@
-// src/features/npc/tabs/NpcJournalTab.tsx
-
-import { useNpcSheet } from "../NpcSheetContext";
+import { useSymbaroumNpcSheet } from "../SymbaroumNpcSheetContext"; // <--- NOVO
 import { useTableContext } from "@/features/table/TableContext";
-import { SharedEntityJournalTab } from "@/components/SharedEntityJournalTab"; // <-- Importado
+import { SharedEntityJournalTab } from "@/components/SharedEntityJournalTab"; 
 
 export const NpcJournalTab = () => { 
-  const { npc, isReadOnly } = useNpcSheet();
+  const { npc, isReadOnly } = useSymbaroumNpcSheet(); // <--- NOVO
   const { tableId } = useTableContext();
 
   return (

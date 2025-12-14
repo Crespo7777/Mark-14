@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Plus, Zap, BookOpen } from "lucide-react";
 import { getDefaultAbility } from "@/features/character/character.schema";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-import { NpcAbilityCard } from "../../components/NpcAbilityCard"; // Import do novo componente
-import { useNpcSheet } from "../../NpcSheetContext";
+// Ajuste o caminho se necessário (assumindo que moveste ou que está no antigo)
+// Se NpcAbilityCard estiver na pasta antiga global, usa-se @/features/npc...
+import { NpcAbilityCard } from "@/features/npc/components/NpcAbilityCard"; 
+import { useSymbaroumNpcSheet } from "../../SymbaroumNpcSheetContext";
 
 interface NpcAbilitiesSectionProps {
   isReadOnly?: boolean;
@@ -13,7 +15,7 @@ interface NpcAbilitiesSectionProps {
 
 export const NpcAbilitiesSection = ({ isReadOnly, handleRoll }: NpcAbilitiesSectionProps) => {
     const { control, setValue } = useFormContext();
-    const { npc } = useNpcSheet();
+    const { npc } = useSymbaroumNpcSheet(); // <--- NOVO HOOK
     
     const { fields, append, remove } = useFieldArray({
         control,
@@ -83,8 +85,8 @@ export const NpcAbilitiesSection = ({ isReadOnly, handleRoll }: NpcAbilitiesSect
                             remove={remove} 
                             isReadOnly={isReadOnly} 
                             handleRoll={handleRoll}
-                            control={control} // Passa control
-                            setValue={setValue} // Passa setValue
+                            control={control} 
+                            setValue={setValue} 
                         />
                     ))}
                 </div>

@@ -1,21 +1,21 @@
-import { useNpcSheet } from "../NpcSheetContext";
+// CORREÇÃO: Importar o contexto do Symbaroum
+import { useSymbaroumNpcSheet } from "../SymbaroumNpcSheetContext";
 import { useFieldArray } from "react-hook-form"; 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Sword, Shield, AlertOctagon, AlertCircle, Heart, ShieldCheck } from "lucide-react";
+import { Plus, Sword, Shield, AlertCircle, ShieldCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { FormControl, FormField } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
 
+// CORREÇÃO: Imports relativos ajustados
 import { useNpcCalculations } from "../hooks/useNpcCalculations";
-import { getDefaultNpcWeapon, getDefaultNpcArmor } from "@/features/npc/npc.schema"; 
+import { getDefaultNpcWeapon, getDefaultNpcArmor } from "../npc.schema"; 
 
-import { VitalityCard } from "@/features/combat/components/VitalityCard"; // Se ainda usado
-import { NpcVitalityCard } from "@/features/combat/components/NpcVitalityCard"; // Usado
-import { CorruptionCard } from "@/features/combat/components/CorruptionCard"; // Se ainda usado
-import { NpcCorruptionCard } from "@/features/combat/components/NpcCorruptionCard"; // Usado
-
+// Componentes Partilhados (Assumindo que estão nestes caminhos globais)
+import { NpcVitalityCard } from "@/features/combat/components/NpcVitalityCard";
+import { NpcCorruptionCard } from "@/features/combat/components/NpcCorruptionCard";
 import { useCombatLogic } from "@/features/combat/hooks/useCombatLogic";
 import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
 import { WeaponDamageDialog } from "@/components/WeaponDamageDialog";
@@ -24,16 +24,17 @@ import { NpcArmorCard } from "@/features/combat/components/NpcArmorCard";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
 export const NpcCombatEquipmentTab = () => {
-  const { form, npc } = useNpcSheet();
+  // CORREÇÃO: Usar o hook do Symbaroum
+  const { form, npc } = useSymbaroumNpcSheet();
   const { toast } = useToast();
   
   // Cálculos
-  const { toughnessMax, damageReduction, corruptionThreshold, totalDefense, painThreshold } = useNpcCalculations();
+  const { toughnessMax, damageReduction, painThreshold } = useNpcCalculations();
 
   // Lógica de Combate
   const combatLogic = useCombatLogic({ 
       form, 
-      fields: { currentToughness: "toughness.current", maxToughness: "toughness.max" },
+      fields: { currentToughness: "combat.toughness_current", maxToughness: "combat.toughness_max" },
       activeBerserk: undefined,
       featOfStrength: undefined,
       isBloodied: false 
@@ -42,8 +43,7 @@ export const NpcCombatEquipmentTab = () => {
   const { fields: weaponFields, append: appendWeapon, remove: removeWeapon } = useFieldArray({ control: form.control, name: "weapons" });
   const { fields: armorFields, append: appendArmor, remove: removeArmor } = useFieldArray({ control: form.control, name: "armors" });
   
-  // --- CORREÇÃO AQUI ---
-  // Antes olhava para 'inventory', agora olha para 'projectiles' onde a NpcProjectileList salva
+  // Lista de projéteis (assumindo que existe no form)
   const projectiles = form.watch("projectiles") || [];
 
   const onDamage = (val: number) => {

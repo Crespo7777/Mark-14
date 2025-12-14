@@ -7,11 +7,7 @@ import { PlayerView } from "@/components/PlayerView";
 import { Button } from "@/components/ui/button";
 import { Loader2, AlertCircle, RefreshCcw } from "lucide-react";
 import { Table, Character, Combatant } from "@/types/app-types"; 
-
-// Importamos o novo Chat Flutuante (certifique-se que criou este componente)
 import { ChatOverlay } from "@/components/chat/ChatOverlay"; 
-
-// --- FUNÇÕES DE BUSCA ---
 
 const fetchCharacters = async (tableId: string) => {
     const { data, error } = await supabase.from("characters").select("*").eq("table_id", tableId);
@@ -29,7 +25,7 @@ const TableView = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
 
-    // --- Query Principal (Dados da Mesa e Membros) ---
+    // --- Query Principal ---
     const { 
         data: contextData, 
         isLoading: isLoadingContext, 
@@ -43,7 +39,13 @@ const TableView = () => {
             if (!session) throw new Error("Não autenticado");
             const user = session.user;
 
-            const { data: tableData, error: tableError } = await supabase.from("tables").select("*").eq("id", id).maybeSingle();
+            // --- CORREÇÃO AQUI: system_type ---
+            const { data: tableData, error: tableError } = await supabase
+                .from("tables")
+                .select("*, system_type") 
+                .eq("id", id)
+                .maybeSingle();
+
             if (tableError || !tableData) throw new Error("Mesa não encontrada");
 
             const { data: masterProfile } = await supabase.from("profiles").select("id, display_name").eq("id", tableData.master_id).single();
@@ -89,7 +91,6 @@ const TableView = () => {
         retry: 1
     });
 
-    // --- Queries Secundárias ---
     const { data: characters = [], isLoading: isLoadingChars } = useQuery({
         queryKey: ["characters", id], queryFn: () => fetchCharacters(id!), enabled: !!id
     });
@@ -117,20 +118,21 @@ const TableView = () => {
         );
     }
 
-    // Contexto Limpo (Sem dados de mapa)
+    // --- CONTEXTO PREENCHIDO CORRETAMENTE ---
     const contextValue = {
         tableId: contextData.table.id,
         masterId: contextData.table.master_id,
         userId: contextData.user.id,
         isMaster: contextData.isMaster,
         isHelper: contextData.isHelper,
+        
+        // AQUI ESTÁ A CORREÇÃO QUE FAZ O PATHFINDER FUNCIONAR
+        tableData: contextData.table, 
+        
         members: contextData.members,
         setMembers: () => {}, 
-        
-        // Mantemos estes vazios para compatibilidade se algum componente ainda os pedir
         mapTokens: [], setMapTokens: () => {},
         fogShapes: [], setFogShapes: () => {},
-        
         characters: characters,
         combatants: combatants
     };
@@ -138,12 +140,9 @@ const TableView = () => {
     return (
         <TableProvider value={contextValue as any}>
             <div className="h-screen w-screen overflow-hidden bg-background relative flex">
-                {/* Área Principal (Fichas, Regras, etc) */}
                 <div className="flex-1 h-full overflow-hidden relative z-10 bg-background">
                     {contextData.isMaster || contextData.isHelper ? <MasterView /> : <PlayerView />}
                 </div>
-
-                {/* Chat Global Flutuante (Onipresente) */}
                 <ChatOverlay />
             </div>
         </TableProvider>

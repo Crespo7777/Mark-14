@@ -15,13 +15,11 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-// --- 1. IMPORTAÇÕES CORRIGIDAS ---
-// Importar o schema e o default data do NPC, não do Character
+// --- CORREÇÃO AQUI: Importar do novo local (Symbaroum) ---
 import {
   getDefaultNpcSheetData,
   npcSheetSchema,
-} from "@/features/npc/npc.schema";
-// --- FIM DA CORREÇÃO ---
+} from "@/features/systems/symbaroum/npc/npc.schema";
 
 interface CreateNpcDialogProps {
   children: React.ReactNode;
@@ -53,15 +51,12 @@ export const CreateNpcDialog = ({
 
     setLoading(true);
 
-    // --- 2. LÓGICA DE CRIAÇÃO CORRIGIDA ---
-    // Usar a função correta para gerar os dados padrão do NPC
+    // Gera os dados padrão de Symbaroum
     const defaultData = getDefaultNpcSheetData(name.trim());
 
-    // Sobrescrever com os campos do formulário se preenchidos
     if (race.trim()) defaultData.race = race.trim();
     if (occupation.trim()) defaultData.occupation = occupation.trim();
 
-    // Validação final com o schema do NPC (opcional, mas recomendado)
     const parsedData = npcSheetSchema.safeParse(defaultData);
 
     if (!parsedData.success) {
@@ -74,12 +69,11 @@ export const CreateNpcDialog = ({
       setLoading(false);
       return;
     }
-    // --- FIM DA CORREÇÃO ---
 
     const { error } = await supabase.from("npcs").insert({
       name: name.trim(),
       table_id: tableId,
-      data: parsedData.data, // Salva os dados validados
+      data: parsedData.data,
       is_shared: false,
     });
 
@@ -128,7 +122,6 @@ export const CreateNpcDialog = ({
                 onChange={(e) => setRace(e.target.value)}
               />
             </div>
-            {/* --- 3. LABEL CORRIGIDO --- */}
             <div className="space-y-2">
               <Label htmlFor="npc-occupation">Resistência</Label>
               <Input
@@ -138,7 +131,6 @@ export const CreateNpcDialog = ({
                 onChange={(e) => setOccupation(e.target.value)}
               />
             </div>
-            {/* --- FIM DA CORREÇÃO --- */}
           </div>
 
           <Button onClick={handleCreate} disabled={loading} className="w-full">

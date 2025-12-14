@@ -1,6 +1,6 @@
 import { createContext, useContext, ReactNode, SetStateAction, Dispatch } from "react";
 import { MapToken, FogShape } from "@/types/map-types"; 
-import { Character, Combatant } from "@/types/app-types"; // <--- Importar Combatant
+import { Character, Combatant, Table } from "@/types/app-types"; // <--- Importar Table
 
 export interface TableMember {
   id: string; 
@@ -15,6 +15,10 @@ interface TableContextType {
   userId: string;
   isMaster: boolean;
   isHelper: boolean;
+  
+  // --- NOVO: DADOS DA MESA (Para saber o sistema) ---
+  tableData: Table; 
+  
   members: TableMember[]; 
   setMembers: Dispatch<SetStateAction<TableMember[]>>;
 
@@ -26,7 +30,6 @@ interface TableContextType {
   fogShapes: FogShape[]; 
   setFogShapes: Dispatch<SetStateAction<FogShape[]>>;
 
-  // --- NOVO: COMBATENTES GLOBAIS ---
   combatants: Combatant[];
 }
 

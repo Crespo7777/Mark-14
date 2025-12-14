@@ -2,12 +2,13 @@ import { useFieldArray, useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Plus, Fingerprint, Tag } from "lucide-react";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-import { NpcTraitCard } from "../../components/NpcTraitCard"; // Import do novo componente
-import { useNpcSheet } from "../../NpcSheetContext";
+// Import do componente global
+import { NpcTraitCard } from "@/features/npc/components/NpcTraitCard"; 
+import { useSymbaroumNpcSheet } from "../../SymbaroumNpcSheetContext";
 
 export const NpcTraitsSection = ({ isReadOnly }: any) => {
     const { control } = useFormContext();
-    const { npc } = useNpcSheet();
+    const { npc } = useSymbaroumNpcSheet(); // <--- NOVO HOOK
     
     const { fields, append, remove } = useFieldArray({
         control,
@@ -72,7 +73,7 @@ export const NpcTraitsSection = ({ isReadOnly }: any) => {
                             index={index} 
                             remove={remove} 
                             isReadOnly={isReadOnly}
-                            control={control} // Passa control
+                            control={control} 
                         />
                     ))}
                 </div>

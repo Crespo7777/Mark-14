@@ -60,7 +60,7 @@ export const SharedProjectileList = ({ control, name, tableId }: SharedProjectil
             {tableId && (
                 <ItemSelectorDialog
                     tableId={tableId}
-                    categories={['ammunition']} // <--- O FILTRO SIMPLES
+                    categories={['ammunition']} // Corrigido: minúsculo para bater com o filtro
                     title="Buscar Munição"
                     onSelect={handleAddFromDatabase}
                 >
@@ -106,7 +106,7 @@ export const SharedProjectileList = ({ control, name, tableId }: SharedProjectil
                 <span className="text-[10px] text-muted-foreground">Qtd:</span>
                 <Input
                     type="number"
-                    {...control.register(`${name}.${index}.amount`)}
+                    {...control.register(`${name}.${index}.amount`, { valueAsNumber: true })}
                     className="w-12 h-6 text-sm text-center border-none bg-transparent focus-visible:ring-0 p-0"
                 />
             </div>

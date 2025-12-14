@@ -1,5 +1,3 @@
-// src/features/npc/npc.schema.ts
-
 import { z } from "zod";
 import {
   abilitySchema,
@@ -20,7 +18,7 @@ export const signedNumeric = z.union([z.string(), z.number()]).transform((val) =
 
 // --- ATRIBUTOS ---
 const attributeItemSchema = z.object({
-  value: signedNumeric.default(0), // Mantido como 0 (original)
+  value: signedNumeric.default(0), 
   note: z.string().default(""), 
 });
 
@@ -37,18 +35,16 @@ const npcAttributesSchema = z.object({
 
 // --- COMBATE ---
 const npcCombatSchema = z.object({
-  // --- MUDANÇA APENAS AQUI: Vida começa em 10 ---
   toughness_current: numeric.default(10),
   toughness_max: numeric.default(10),
-  // ----------------------------------------------
   temporary: numeric.default(0), 
   defense: signedNumeric.default(0),
   armor_rd: numeric.default(0),
-  pain_threshold: numeric.default(0), // Mantido como 0 (original)
+  pain_threshold: numeric.default(0), 
   pain_threshold_bonus: signedNumeric.default(0),
 });
 
-// --- ARMADURA (Igual PC) ---
+// --- ARMADURA ---
 export const npcArmorSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default("Nova Armadura"),
@@ -60,7 +56,7 @@ export const npcArmorSchema = z.object({
   equipped: z.boolean().default(true), 
 });
 
-// --- ARMA (Igual PC) ---
+// --- ARMA ---
 export const npcWeaponSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default("Novo Ataque"),
