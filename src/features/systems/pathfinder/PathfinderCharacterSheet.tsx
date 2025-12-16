@@ -9,16 +9,14 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useCharacterStore } from "@/stores/character-store";
 
-// Imports do Sistema Pathfinder
+// Imports Pathfinder
 import { pathfinderSchema, defaultPathfinderData, PathfinderSheetData } from "./pathfinder.schema";
 import { usePathfinderCalculations } from "./usePathfinderCalculations";
 import { PathfinderProvider } from "./PathfinderContext";
-
-// --- NOVOS IMPORTS DE AUTOMAÇÃO ---
 import { RollProvider } from "./context/RollContext";
 import { RollLog } from "./components/RollLog";
 
-// Componentes da Ficha
+// Componentes
 import { PathfinderHeader } from "./components/PathfinderHeader";
 import { AbilitiesSection } from "./components/AbilitiesSection";
 import { GeneralStatsSection } from "./components/GeneralStatsSection";
@@ -29,6 +27,7 @@ import { SpellcastingSection } from "./components/SpellcastingSection";
 import { BiographySection } from "./components/BiographySection";
 import { FeatsSection } from "./components/FeatsSection";
 import { ActionsTab } from "./components/ActionsTab";
+import { ConditionsManager } from "./components/ConditionsManager"; 
 
 interface Props {
   characterId: string;
@@ -44,6 +43,9 @@ export const PathfinderCharacterSheet = ({ characterId, isReadOnly = false, onBa
   const [isSaving, setIsSaving] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [activeTab, setActiveTab] = useState("main");
+  
+  // State para o Webhook da Mesa
+  const [discordWebhook, setDiscordWebhook] = useState<string | null>(null);
 
   const initializeStore = useCharacterStore((s) => s.initialize);
   const updateStore = useCharacterStore((s) => s.updateData);
@@ -54,9 +56,19 @@ export const PathfinderCharacterSheet = ({ characterId, isReadOnly = false, onBa
     mode: "onChange"
   });
 
-  // Cálculos em tempo real
   const currentValues = form.watch();
   const calculations = usePathfinderCalculations(currentValues as PathfinderSheetData);
+
+  // Helper para achatar inventário (Global Store Compatibility)
+  const flattenInventoryForStore = (data: any) => {
+      const inv = data.inventory;
+      if (!inv || Array.isArray(inv)) return inv || [];
+      return [
+          ...(Array.isArray(inv.weapons) ? inv.weapons : []),
+          ...(Array.isArray(inv.armors) ? inv.armors : []),
+          ...(Array.isArray(inv.gear) ? inv.gear : [])
+      ];
+  };
 
   // Carregamento de Dados
   useEffect(() => {
@@ -75,20 +87,52 @@ export const PathfinderCharacterSheet = ({ characterId, isReadOnly = false, onBa
         console.error("Erro ao carregar:", error);
         toast({ title: "Erro", description: "Ficha não encontrada.", variant: "destructive" });
       } else if (data) {
-        const mergedData = { 
+        const rawData = data.data as any;
+        const rawInv = rawData?.inventory;
+        
+        // 1. Prepara dados para o Formulário (Objeto)
+        const formInventory = Array.isArray(rawInv) 
+            ? { weapons: [], armors: [], gear: rawInv } 
+            : { 
+                weapons: rawInv?.weapons || [],
+                armors: rawInv?.armors || [],
+                gear: rawInv?.gear || [] 
+              };
+
+        const formData = { 
             ...defaultPathfinderData, 
-            ...(data.data as any),
+            ...rawData,
+            inventory: formInventory,
             spellcasting: {
                 ...defaultPathfinderData.spellcasting,
-                ...(data.data?.spellcasting || {})
+                ...(rawData?.spellcasting || {})
             }
         };
         
-        mergedData.name = data.name;
-        
         setCharacterData(data);
-        initializeStore(characterId, mergedData);
-        form.reset(mergedData);
+
+        // --- BUSCA O WEBHOOK DA MESA ---
+        if (data.table_id) {
+            const { data: tableData } = await supabase
+                .from("tables")
+                .select("discord_webhook_url")
+                .eq("id", data.table_id)
+                .single();
+            
+            if (tableData?.discord_webhook_url) {
+                setDiscordWebhook(tableData.discord_webhook_url);
+            }
+        }
+        // -------------------------------
+
+        // 2. Prepara dados para o Store Global (Lista)
+        const storeData = {
+            ...formData,
+            inventory: flattenInventoryForStore(formData)
+        };
+
+        initializeStore(characterId, storeData);
+        form.reset(formData);
       }
       setLoading(false);
     };
@@ -118,7 +162,6 @@ export const PathfinderCharacterSheet = ({ characterId, isReadOnly = false, onBa
       setIsSaving(false);
       
       if (error) {
-        console.error("Erro ao salvar:", error);
         if (!options.silent) toast({ title: "Erro ao salvar", variant: "destructive" });
       } else if (!options.silent) {
         toast({ title: "Salvo", description: "Ficha atualizada com sucesso." });
@@ -127,8 +170,13 @@ export const PathfinderCharacterSheet = ({ characterId, isReadOnly = false, onBa
 
   // Auto-Save
   useEffect(() => {
-      const subscription = form.watch((value, { type }) => {
-          if (value) updateStore((draft) => { Object.assign(draft, value); });
+      const subscription = form.watch((value) => {
+          if (value) {
+              const safeInventory = flattenInventoryForStore(value);
+              updateStore((draft) => { 
+                  Object.assign(draft, { ...value, inventory: safeInventory });
+              });
+          }
           
           if (!isReadOnly) {
               if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -155,10 +203,15 @@ export const PathfinderCharacterSheet = ({ characterId, isReadOnly = false, onBa
   return (
     <CharacterSheetContext.Provider value={{ form, characterId, isReadOnly, activeTab, character: characterData, isSaving, saveSheet }}>
       <PathfinderProvider calculations={calculations}>
-        {/* --- PROVEDOR DE ROLAGENS (NOVO) --- */}
-        <RollProvider>
+        {/* Passamos o Webhook Dinâmico aqui */}
+        <RollProvider 
+            key={characterId} 
+            characterName={characterData?.name || "Personagem"} 
+            isGm={isNpc}
+            webhookUrl={discordWebhook}
+        >
             <Form {...form}>
-                <form onSubmit={(e) => e.preventDefault()} className="h-full flex flex-col bg-background relative">
+                <form onSubmit={(e) => e.preventDefault()} className="h-full flex flex-col bg-background relative overflow-hidden">
                     
                     <PathfinderHeader 
                         onBack={onBack} 
@@ -184,43 +237,43 @@ export const PathfinderCharacterSheet = ({ characterId, isReadOnly = false, onBa
                             </TabsList>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background scrollbar-thin pb-20">
-                            <TabsContent value="main" className="mt-0 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <AbilitiesSection isReadOnly={isReadOnly} />
+                        <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-background scrollbar-thin pb-24">
+                            <TabsContent value="main" className="mt-0 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <ConditionsManager isReadOnly={isReadOnly} />
                                 <GeneralStatsSection isReadOnly={isReadOnly} />
+                                <AbilitiesSection isReadOnly={isReadOnly} />
                             </TabsContent>
                             
-                            <TabsContent value="combat" className="mt-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <TabsContent value="combat" className="mt-0 h-full animate-in fade-in">
                                 <CombatTab isReadOnly={isReadOnly} />
                             </TabsContent>
 
-                            <TabsContent value="actions" className="mt-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <TabsContent value="actions" className="mt-0 h-full animate-in fade-in">
                                 <ActionsTab isReadOnly={isReadOnly} />
                             </TabsContent>
 
-                            <TabsContent value="skills" className="mt-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <TabsContent value="skills" className="mt-0 h-full animate-in fade-in">
                                 <SkillsSection isReadOnly={isReadOnly} />
                             </TabsContent>
 
-                            <TabsContent value="feats" className="mt-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <TabsContent value="feats" className="mt-0 h-full animate-in fade-in">
                                 <FeatsSection isReadOnly={isReadOnly} />
                             </TabsContent>
 
-                            <TabsContent value="spells" className="mt-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <TabsContent value="spells" className="mt-0 h-full animate-in fade-in">
                                 <SpellcastingSection isReadOnly={isReadOnly} />
                             </TabsContent>
 
-                            <TabsContent value="inventory" className="mt-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <TabsContent value="inventory" className="mt-0 h-full animate-in fade-in">
                                 <InventorySection isReadOnly={isReadOnly} />
                             </TabsContent>
 
-                            <TabsContent value="bio" className="mt-0 h-full animate-in fade-in slide-in-from-bottom-2 duration-300">
+                            <TabsContent value="bio" className="mt-0 h-full animate-in fade-in">
                                 <BiographySection isReadOnly={isReadOnly} />
                             </TabsContent>
                         </div>
                     </Tabs>
 
-                    {/* --- LOG DE DADOS VISUAL --- */}
                     <RollLog />
                     
                 </form>

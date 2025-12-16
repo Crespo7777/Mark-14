@@ -3,20 +3,20 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Heart, Shield, Brain, Activity, Eye, Zap, Footprints } from "lucide-react"; // Adicionei Zap e Footprints que faltavam na tua lista original
+import { Heart, Shield, Brain, Activity, Eye, Zap, Footprints } from "lucide-react";
 import { usePathfinderContext } from "../PathfinderContext";
-import { useRollContext } from "../context/RollContext"; // <--- NOVO IMPORT
+import { useRoll } from "../context/RollContext";
 
 export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
   const { register, setValue, watch } = useFormContext();
-  const { acTotal, classDC, perception, saves } = usePathfinderContext();
-  const { makeRoll } = useRollContext(); // <--- HOOK DE ROLAGEM
+  const { acTotal, acBreakdown, classDC, perception, saves } = usePathfinderContext();
+  const { rollCheck } = useRoll();
 
-  // Componente StatBox Agora Clicável
+  // Componente StatBox Clicável
   const StatBox = ({ label, value, rawValue, icon: Icon, color }: any) => (
     <button 
         type="button"
-        onClick={() => makeRoll(rawValue, `Teste de ${label}`, "save")}
+        onClick={() => rollCheck({ bonus: rawValue, label: `Teste de ${label}`, type: "save", dice: "1d20" })}
         className="flex flex-col items-center justify-center p-3 bg-card border rounded-xl shadow-sm relative overflow-hidden group w-full hover:border-primary/50 transition-all active:scale-95 cursor-pointer"
     >
       <div className={`absolute top-0 right-0 p-1.5 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}>
@@ -53,16 +53,6 @@ export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) =>
                         <Input type="number" {...register("hp.temp")} className="h-12 text-center text-xl text-blue-400 bg-blue-500/5 border-transparent" readOnly={isReadOnly}/>
                     </div>
                 </div>
-                <div className="flex gap-4 pt-2 border-t border-border/50">
-                    <div className="flex-1 flex items-center gap-2 bg-muted/10 p-2 rounded">
-                        <Label className="text-[10px] w-16 text-muted-foreground font-bold">MORRENDO</Label>
-                        <Input type="number" {...register("hp.dying")} className="h-7 text-center w-full bg-transparent border-none" max={4} readOnly={isReadOnly}/>
-                    </div>
-                    <div className="flex-1 flex items-center gap-2 bg-muted/10 p-2 rounded">
-                        <Label className="text-[10px] w-16 text-muted-foreground font-bold">FERIDO</Label>
-                        <Input type="number" {...register("hp.wounded")} className="h-7 text-center w-full bg-transparent border-none" max={3} readOnly={isReadOnly}/>
-                    </div>
-                </div>
             </CardContent>
           </Card>
 
@@ -95,18 +85,18 @@ export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) =>
                      <span className="text-2xl font-black text-blue-500 leading-none">{acTotal}</span>
                      <span className="text-[9px] font-bold uppercase text-blue-400/70">AC</span>
                  </div>
-                 <div className="grid grid-cols-3 gap-2 flex-1">
-                     <div className="flex flex-col gap-1">
-                         <Label className="text-[9px] text-center uppercase text-muted-foreground">Item</Label>
-                         <Input type="number" {...register("ac.item")} className="h-8 text-center text-xs bg-muted/10 border-transparent" placeholder="0" readOnly={isReadOnly}/>
+                 <div className="grid grid-cols-3 gap-2 flex-1 text-center">
+                     <div>
+                         <Label className="text-[9px] uppercase">Item</Label>
+                         <div className="text-lg font-bold">{acBreakdown.itemBonus}</div>
                      </div>
-                     <div className="flex flex-col gap-1">
-                         <Label className="text-[9px] text-center uppercase text-muted-foreground">Escudo</Label>
-                         <Input type="number" {...register("ac.shield")} className="h-8 text-center text-xs bg-muted/10 border-transparent" placeholder="0" readOnly={isReadOnly}/>
+                     <div>
+                         <Label className="text-[9px] uppercase">Dex</Label>
+                         <div className="text-lg font-bold">{acBreakdown.dexBonus}</div>
                      </div>
-                     <div className="flex flex-col gap-1">
-                         <Label className="text-[9px] text-center uppercase text-muted-foreground">Cap</Label>
-                         <Input type="number" {...register("ac.cap")} className="h-8 text-center text-xs bg-muted/10 border-transparent" placeholder="99" readOnly={isReadOnly}/>
+                     <div>
+                         <Label className="text-[9px] uppercase">Prof</Label>
+                         <div className="text-lg font-bold">{acBreakdown.profBonus}</div>
                      </div>
                  </div>
              </CardContent>
@@ -114,12 +104,10 @@ export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) =>
 
           <Card className="border-l-4 border-l-green-500/50">
              <CardContent className="p-4 flex items-center gap-4">
-                 {/* PERCEPÇÃO CLICÁVEL */}
                  <button 
                     type="button"
-                    onClick={() => makeRoll(perception, "Percepção (Iniciativa)", "skill")}
+                    onClick={() => rollCheck({ bonus: perception, label: "Percepção (Iniciativa)", type: "skill", dice: "1d20" })}
                     className="flex flex-col items-center justify-center w-20 h-20 bg-green-500/10 rounded-full border-2 border-green-500/20 shrink-0 hover:bg-green-500/20 transition-colors cursor-pointer active:scale-95"
-                    title="Clique para rolar Iniciativa"
                  >
                      <Eye className="w-5 h-5 text-green-500 mb-1" />
                      <span className="text-2xl font-black text-green-500 leading-none">{perception >= 0 ? "+" : ""}{perception}</span>
@@ -129,11 +117,10 @@ export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) =>
                  <div className="flex-1 pl-4 border-l border-border/50">
                      <div className="flex justify-between items-center mb-2">
                          <Label className="text-xs">Proficiência</Label>
-                         {isReadOnly ? <span className="text-xs font-bold bg-muted px-2 py-0.5 rounded">{watch("perception.rank")}</span> :
-                         <Select onValueChange={(v) => setValue("perception.rank", v)} defaultValue={watch("perception.rank") || "U"}>
+                         <Select onValueChange={(v) => setValue("perception.rank", v)} defaultValue={watch("perception.rank") || "U"} disabled={isReadOnly}>
                              <SelectTrigger className="h-6 w-24 text-[10px]"><SelectValue/></SelectTrigger>
                              <SelectContent><SelectItem value="U">Untrained</SelectItem><SelectItem value="T">Trained</SelectItem><SelectItem value="E">Expert</SelectItem><SelectItem value="M">Master</SelectItem><SelectItem value="L">Legendary</SelectItem></SelectContent>
-                         </Select>}
+                         </Select>
                      </div>
                      <div className="flex justify-between items-center">
                          <Label className="text-xs">Senses</Label>
@@ -144,7 +131,7 @@ export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) =>
           </Card>
       </div>
 
-      {/* 3. SAVES (Agora Clicáveis) */}
+      {/* 3. SAVES */}
       <div className="grid grid-cols-3 gap-4">
           <StatBox label="Fortitude" value={`+${saves?.fortitude || 0}`} rawValue={saves?.fortitude} icon={Activity} color="text-red-500" />
           <StatBox label="Reflex" value={`+${saves?.reflex || 0}`} rawValue={saves?.reflex} icon={Zap} color="text-amber-500" />

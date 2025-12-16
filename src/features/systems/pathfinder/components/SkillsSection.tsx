@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2, Book, Dices, ShieldAlert } from "lucide-react";
 import { usePathfinderContext } from "../PathfinderContext";
-import { useRollContext } from "../context/RollContext";
+import { useRoll } from "../context/RollContext";
 
 const SKILLS = [
   { key: "acrobatics", label: "Acrobatics", attr: "Dex", armor: true },
@@ -31,7 +31,7 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
   const { register, setValue, watch, control } = useFormContext();
   const { skills, lores } = usePathfinderContext();
   const { fields, append, remove } = useFieldArray({ control, name: "lores" });
-  const { makeRoll } = useRollContext();
+  const { rollCheck } = useRoll();
 
   const getRankStyle = (rank: string) => {
       switch(rank) {
@@ -41,11 +41,6 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
           case 'L': return "text-orange-700 bg-orange-100 border-orange-200";
           default: return "text-muted-foreground bg-muted border-transparent opacity-50";
       }
-  };
-
-  const getRowStyle = (rank: string) => {
-      if (!rank || rank === 'U') return "hover:bg-muted/5";
-      return "bg-primary/5 hover:bg-primary/10 border-l-2 border-l-primary";
   };
 
   return (
@@ -72,11 +67,12 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
               <TableBody>
                 {SKILLS.map((skill) => {
                   const currentRank = watch(`skills.${skill.key}.rank`) || "U";
+                  // Aqui usamos o VALOR CALCULADO do Contexto, que já soma tudo!
                   const total = skills?.[skill.key] || 0;
                   const armorPen = Number(watch(`skills.${skill.key}.armor`)) || 0;
                   
                   return (
-                    <TableRow key={skill.key} className={`border-b border-primary/5 h-12 transition-colors ${getRowStyle(currentRank)}`}>
+                    <TableRow key={skill.key} className="border-b border-primary/5 h-12 transition-colors hover:bg-muted/5">
                       <TableCell className="py-1">
                           <div className="flex flex-col">
                               <span className="text-sm font-bold text-foreground/90">{skill.label}</span>
@@ -91,7 +87,7 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
                       <TableCell className="text-center py-1">
                         <button 
                             type="button"
-                            onClick={() => makeRoll(total, skill.label, "skill")}
+                            onClick={() => rollCheck({ bonus: total, label: `Teste de ${skill.label}`, type: "skill", dice: "1d20" })}
                             className="w-full h-8 flex items-center justify-center font-black text-lg bg-background border border-primary/20 rounded-md shadow-sm hover:border-primary hover:text-primary transition-all active:scale-95 active:bg-primary/5"
                             title={`Rolar ${skill.label}`}
                         >
@@ -100,21 +96,19 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
                       </TableCell>
 
                       <TableCell className="text-center py-1 px-1">
-                        {isReadOnly ? (
-                            <Badge variant="outline" className={`w-full justify-center text-[10px] h-6 border ${getRankStyle(currentRank)}`}>{currentRank}</Badge>
-                        ) : (
-                            <Select onValueChange={(v) => setValue(`skills.${skill.key}.rank`, v, { shouldDirty: true })} defaultValue={currentRank}>
-                                <SelectTrigger className={`h-7 w-full text-[10px] font-bold border ${getRankStyle(currentRank)} focus:ring-0`}><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="U">Untrained</SelectItem>
-                                    <SelectItem value="T">Trained</SelectItem>
-                                    <SelectItem value="E">Expert</SelectItem>
-                                    <SelectItem value="M">Master</SelectItem>
-                                    <SelectItem value="L">Legendary</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        )}
+                        <Select onValueChange={(v) => setValue(`skills.${skill.key}.rank`, v, { shouldDirty: true })} defaultValue={currentRank} disabled={isReadOnly}>
+                            <SelectTrigger className={`h-7 w-full text-[10px] font-bold border ${getRankStyle(currentRank)} focus:ring-0`}><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="U">Untrained</SelectItem>
+                                <SelectItem value="T">Trained</SelectItem>
+                                <SelectItem value="E">Expert</SelectItem>
+                                <SelectItem value="M">Master</SelectItem>
+                                <SelectItem value="L">Legendary</SelectItem>
+                            </SelectContent>
+                        </Select>
                       </TableCell>
+                      
+                      {/* Inputs de Item e ACP (Edição) */}
                       <TableCell className="p-1"><Input type="number" {...register(`skills.${skill.key}.item`)} className="h-7 text-center text-xs bg-transparent border-transparent hover:bg-background focus:bg-background focus:border-primary/30 p-0 font-medium" placeholder="0" readOnly={isReadOnly}/></TableCell>
                       <TableCell className="p-1"><Input type="number" {...register(`skills.${skill.key}.armor`)} className={`h-7 text-center text-xs bg-transparent border-transparent p-0 font-medium ${armorPen > 0 ? "text-red-500 font-bold" : "text-muted-foreground"}`} placeholder="-" readOnly={isReadOnly}/></TableCell>
                     </TableRow>
@@ -133,14 +127,8 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
         </div>
         
         <div className="space-y-3">
-            {fields.length === 0 && (
-                <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50/20 text-indigo-400">
-                    <Book className="w-8 h-8 mb-2 opacity-50"/>
-                    <span className="text-xs font-medium">Nenhum conhecimento específico.</span>
-                </div>
-            )}
-            
             {fields.map((field, index) => {
+                // Pega o valor CALCULADO do hook (que já somou Int + Nível + Proficiência)
                 const loreTotal = lores?.[index]?.total || 0;
                 const loreName = watch(`lores.${index}.name`) || "Saber";
                 const currentRank = watch(`lores.${index}.rank`) || "T";
@@ -160,7 +148,7 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
                         {/* BOTÃO DE ROLAGEM LORE */}
                         <button 
                             type="button"
-                            onClick={() => makeRoll(loreTotal, loreName, "skill")}
+                            onClick={() => rollCheck({ bonus: loreTotal, label: `Teste de ${loreName}`, type: "skill", dice: "1d20" })}
                             className="w-12 h-10 flex items-center justify-center font-black text-lg bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 cursor-pointer active:scale-95 transition-all shadow-sm"
                             title={`Rolar ${loreName}`}
                         >
@@ -168,20 +156,16 @@ export const SkillsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
                         </button>
 
                         <div className="w-[100px]">
-                            {!isReadOnly ? (
-                                <Select onValueChange={(v) => setValue(`lores.${index}.rank`, v)} defaultValue={currentRank}>
-                                    <SelectTrigger className={`h-8 text-[10px] font-bold border ${getRankStyle(currentRank)}`}><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="U">Untrained</SelectItem>
-                                        <SelectItem value="T">Trained</SelectItem>
-                                        <SelectItem value="E">Expert</SelectItem>
-                                        <SelectItem value="M">Master</SelectItem>
-                                        <SelectItem value="L">Legendary</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            ) : (
-                                <Badge variant="outline" className={getRankStyle(currentRank)}>{currentRank}</Badge>
-                            )}
+                             <Select onValueChange={(v) => setValue(`lores.${index}.rank`, v)} defaultValue={currentRank} disabled={isReadOnly}>
+                                 <SelectTrigger className={`h-8 text-[10px] font-bold border ${getRankStyle(currentRank)}`}><SelectValue/></SelectTrigger>
+                                 <SelectContent>
+                                     <SelectItem value="U">Untrained</SelectItem>
+                                     <SelectItem value="T">Trained</SelectItem>
+                                     <SelectItem value="E">Expert</SelectItem>
+                                     <SelectItem value="M">Master</SelectItem>
+                                     <SelectItem value="L">Legendary</SelectItem>
+                                 </SelectContent>
+                             </Select>
                         </div>
                         
                         {!isReadOnly && <Button variant="ghost" size="icon" className="h-8 w-8 text-indigo-200 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all" onClick={() => remove(index)}><Trash2 className="w-4 h-4"/></Button>}

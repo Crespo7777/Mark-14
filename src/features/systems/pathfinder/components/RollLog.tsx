@@ -1,72 +1,136 @@
-import { useRollContext } from "../context/RollContext";
+import { useEffect, useRef } from "react";
+import { useRoll } from "../context/RollContext";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { Trash2, Dices } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Trash2, Dices, Skull, Shield, Sword, Eye, EyeOff } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 export const RollLog = () => {
-  const { history, clearHistory } = useRollContext();
+  const { history, clearHistory, isGm, isSecretMode, toggleSecretMode } = useRoll();
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const getDegreeColor = (degree?: string) => {
-    switch (degree) {
-      case "crit-success": return "bg-green-500 text-white border-green-600";
-      case "success": return "bg-green-100 text-green-800 border-green-200";
-      case "failure": return "bg-red-50 text-red-800 border-red-200";
-      case "crit-failure": return "bg-red-500 text-white border-red-600";
-      default: return "bg-card border-border";
+  // Auto-scroll
+  useEffect(() => {
+    if (bottomRef.current) {
+        bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
+  }, [history]);
+
+  // Se não houver histórico e não for GM (que precisa ver os botões), esconde
+  if (history.length === 0 && !isGm) return null;
+
+  const getIcon = (type: string) => {
+      switch(type) {
+          case 'attack': return <Sword className="w-3 h-3"/>;
+          case 'damage': return <Skull className="w-3 h-3"/>;
+          case 'save': return <Shield className="w-3 h-3"/>;
+          case 'skill': return <Dices className="w-3 h-3"/>;
+          default: return <Dices className="w-3 h-3"/>;
+      }
   };
 
-  const getDegreeLabel = (degree?: string) => {
-    switch (degree) {
-      case "crit-success": return "SUCESSO CRÍTICO";
-      case "success": return "SUCESSO";
-      case "failure": return "FALHA";
-      case "crit-failure": return "FALHA CRÍTICA";
-      default: return "";
-    }
-  };
+  const getDegreeStyles = (degree?: string, type?: string, isSecret?: boolean) => {
+      if (isSecret) {
+          return {
+              container: "border-l-purple-500 bg-purple-50/50 dark:bg-purple-950/20",
+              text: "text-purple-700 dark:text-purple-400",
+              label: "SECRETO"
+          };
+      }
 
-  if (history.length === 0) return null;
+      if (type === 'damage') {
+          return {
+              container: "border-l-red-600 bg-red-50 dark:bg-red-950/30",
+              text: "text-red-700 dark:text-red-400",
+              label: "DANO"
+          };
+      }
+      
+      switch (degree) {
+          case "crit-success": return { container: "border-l-yellow-500 bg-yellow-50 dark:bg-yellow-950/30", text: "text-yellow-700 dark:text-yellow-400", label: "CRÍTICO" };
+          case "success": return { container: "border-l-green-500 bg-green-50 dark:bg-green-950/30", text: "text-green-700 dark:text-green-400", label: "SUCESSO" };
+          case "failure": return { container: "border-l-slate-400 bg-slate-100 dark:bg-slate-900/50", text: "text-slate-600 dark:text-slate-400", label: "FALHA" };
+          case "crit-failure": return { container: "border-l-red-600 bg-red-50 dark:bg-red-950/30", text: "text-red-700 dark:text-red-400", label: "FALHA CRÍT." };
+          default: return { container: "border-l-primary bg-card", text: "text-foreground", label: "" };
+      }
+  };
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 shadow-2xl flex flex-col gap-2 max-h-[500px]">
-      <div className="flex justify-between items-center bg-primary text-primary-foreground p-2 rounded-t-lg shadow-md">
-        <h3 className="font-bold flex items-center gap-2 text-sm"><Dices className="w-4 h-4"/> Log de Dados</h3>
-        <Button variant="ghost" size="icon" className="h-6 w-6 hover:bg-primary-foreground/20" onClick={clearHistory}>
+    <div className="fixed bottom-4 right-4 z-50 w-80 shadow-2xl flex flex-col gap-0 max-h-[400px] animate-in slide-in-from-bottom-5 pointer-events-auto">
+      <div className="flex justify-between items-center bg-foreground text-background p-2 rounded-t-lg shadow-md z-10 border-b border-border/10">
+        <div className="flex items-center gap-2">
+            <span className="text-xs font-bold flex items-center gap-2 uppercase tracking-wider">
+                <Dices className="w-3 h-3"/> Log
+            </span>
+            
+            {/* TOGGLE GM SECRETO */}
+            {isGm && (
+                <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className={`h-6 px-2 text-[10px] gap-1 font-bold transition-all ${isSecretMode ? "bg-purple-600 hover:bg-purple-500 text-white" : "bg-white/10 hover:bg-white/20 text-white"}`}
+                    onClick={toggleSecretMode}
+                    title={isSecretMode ? "Modo Secreto ATIVO (Clique para Público)" : "Modo Público (Clique para Secreto)"}
+                >
+                    {isSecretMode ? <EyeOff className="w-3 h-3"/> : <Eye className="w-3 h-3"/>}
+                    {isSecretMode ? "SECRETO" : "PÚBLICO"}
+                </Button>
+            )}
+        </div>
+
+        <Button variant="ghost" size="icon" className="h-5 w-5 hover:bg-background/20 hover:text-white" onClick={clearHistory}>
           <Trash2 className="w-3 h-3"/>
         </Button>
       </div>
       
-      <ScrollArea className="flex-1 bg-background/95 backdrop-blur border rounded-b-lg p-3 gap-2 h-full overflow-y-auto">
-        {history.map((roll, i) => (
-          <Card key={i} className={`mb-3 p-3 border-l-4 shadow-sm ${roll.degree ? getDegreeColor(roll.degree).replace('bg-', 'border-l-') : 'border-l-primary'}`}>
-            <div className="flex justify-between items-start mb-1">
-              <span className="font-bold text-sm uppercase truncate w-[70%]">{roll.label}</span>
-              <span className="text-xs text-muted-foreground">{new Date().toLocaleTimeString()}</span>
-            </div>
-            
-            <div className="flex items-center gap-3">
-              {/* Dado Visual */}
-              <div className={`flex flex-col items-center justify-center w-10 h-10 rounded-lg font-black text-lg border ${roll.die === 20 ? "text-green-600 border-green-500 bg-green-50" : roll.die === 1 ? "text-red-600 border-red-500 bg-red-50" : "bg-muted text-foreground"}`}>
-                {roll.die}
-              </div>
-              
-              <div className="flex flex-col">
-                <span className="text-xl font-bold">
-                  {roll.total} <span className="text-xs font-normal text-muted-foreground">({roll.die} + {roll.modifier})</span>
-                </span>
+      <ScrollArea className="flex-1 bg-background/95 backdrop-blur-sm border border-t-0 rounded-b-lg p-3 h-full shadow-inner min-h-[100px]">
+        <div className="flex flex-col gap-2">
+            {history.length === 0 && (
+                <div className="text-center text-xs text-muted-foreground py-8 italic opacity-50">
+                    O destino aguarda...
+                </div>
+            )}
+
+            {history.map((roll: any, i) => {
+                const style = getDegreeStyles(roll.degree, roll.type, roll.isSecret);
                 
-                {/* Resultado do Grau */}
-                {roll.degree && (
-                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded w-fit ${getDegreeColor(roll.degree)}`}>
-                    {getDegreeLabel(roll.degree)}
-                  </span>
-                )}
-              </div>
-            </div>
-          </Card>
-        ))}
+                return (
+                  <div key={i} className={`relative p-2 pl-3 rounded border border-l-4 shadow-sm text-sm ${style.container} animate-in slide-in-from-right-2 duration-300`}>
+                    
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-bold flex items-center gap-1.5 text-foreground/90 leading-none">
+                          {getIcon(roll.type)} {roll.label}
+                      </span>
+                      {roll.isSecret && <EyeOff className="w-3 h-3 text-purple-500 opacity-50"/>}
+                    </div>
+                    
+                    <div className="flex items-end justify-between mt-2">
+                        <div className="flex flex-col text-[10px] text-muted-foreground font-mono leading-tight">
+                            {roll.type === 'damage' ? (
+                                <>
+                                    <span className="opacity-70">Fórmula: {roll.formula}</span>
+                                    <span>{roll.bonusBreakdown}</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="opacity-70">d20 ({roll.die}) {roll.modifier >= 0 ? '+' : ''} {roll.modifier}</span>
+                                    {roll.bonusBreakdown && <span>{roll.bonusBreakdown}</span>}
+                                </>
+                            )}
+                        </div>
+
+                        <div className="text-right">
+                            {style.label && <div className={`text-[9px] font-black uppercase mb-0.5 ${style.text}`}>{style.label}</div>}
+                            <span className={`text-2xl font-black leading-none ${style.text}`}>
+                                {roll.total}
+                            </span>
+                        </div>
+                    </div>
+                  </div>
+                );
+            })}
+            <div ref={bottomRef} className="h-1" />
+        </div>
       </ScrollArea>
     </div>
   );

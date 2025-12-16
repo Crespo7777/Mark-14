@@ -20,15 +20,15 @@ export const ConditionsManager = () => {
 
   const toggleCondition = (slug: string) => {
     const existingIndex = activeConditions.findIndex((c: any) => c.slug === slug);
+    const def = CONDITIONS_DB[slug];
     
     if (existingIndex >= 0) {
-        // Se já existe e não tem valor numérico, remove (toggle off)
-        // Se tem valor numérico, não removemos aqui (usa o botão X na lista)
-        if (!CONDITIONS_DB[slug].hasValue) {
+        // Se não tem valor numérico (ex: Prone), remove ao clicar novamente
+        if (!def.hasValue) {
             remove(existingIndex);
         }
     } else {
-        // Adiciona
+        // Adiciona nova condição
         append({ slug, value: 1, active: true });
     }
   };
@@ -36,21 +36,26 @@ export const ConditionsManager = () => {
   const updateValue = (index: number, delta: number) => {
       const current = activeConditions[index];
       const newValue = (current.value || 1) + delta;
-      if (newValue < 1) remove(index);
-      else update(index, { ...current, value: newValue });
+      
+      if (newValue < 1) {
+          remove(index);
+      } else {
+          // Importante: Manter todos os campos do objeto ao atualizar
+          update(index, { ...current, value: newValue });
+      }
   };
 
   return (
-    <div className="flex items-center gap-2">
-        {/* DROPDOWN PARA ADICIONAR */}
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+        {/* MENU DE ADICIONAR */}
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed border-primary/40">
+                <Button variant="outline" size="sm" className="h-8 gap-2 border-dashed border-primary/40 bg-background/50">
                     <AlertCircle className="w-4 h-4 text-primary"/> 
                     <span className="hidden sm:inline">Condições</span>
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56 max-h-96 overflow-y-auto">
+            <DropdownMenuContent className="w-64 max-h-[300px] overflow-y-auto" align="start">
                 <DropdownMenuLabel>Adicionar Condição</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 
@@ -63,7 +68,10 @@ export const ConditionsManager = () => {
                                 onClick={(e) => { e.preventDefault(); toggleCondition(cond.slug); }}
                                 className={`flex justify-between cursor-pointer ${isActive ? "bg-primary/10" : ""}`}
                             >
-                                <span>{cond.label}</span>
+                                <div className="flex items-center gap-2">
+                                    <cond.icon className="w-4 h-4 opacity-70"/>
+                                    <span>{cond.label.split('(')[0]}</span>
+                                </div>
                                 {isActive && <Badge variant="secondary" className="h-5 text-[10px]">Ativo</Badge>}
                             </DropdownMenuItem>
                         );
@@ -72,27 +80,29 @@ export const ConditionsManager = () => {
             </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* LISTA DE CONDIÇÕES ATIVAS (BADGES) */}
+        {/* LISTA DE BADGES ATIVAS */}
         <div className="flex flex-wrap gap-2">
             {fields.map((field: any, index) => {
                 const def = CONDITIONS_DB[field.slug];
-                if (!def) return null;
+                if (!def) return null; // Proteção contra dados antigos/inválidos
 
                 return (
-                    <Badge key={field.id} variant="secondary" className="h-8 pl-2 pr-1 gap-2 border border-primary/20 bg-background hover:bg-accent flex items-center">
-                        {def.type === 'status' ? <Skull className="w-3 h-3 text-red-500"/> : <Shield className="w-3 h-3 text-blue-500"/>}
+                    <Badge key={field.id} variant="secondary" className={`h-8 pl-2 pr-1 gap-2 border ${def.color} flex items-center`}>
+                        {def.type === 'status' ? <Skull className="w-3 h-3"/> : <Shield className="w-3 h-3"/>}
                         
-                        <span className="text-xs font-bold truncate max-w-[100px]">{def.label.split('(')[0]}</span>
+                        <span className="text-xs font-bold truncate max-w-[120px]" title={def.desc}>
+                            {def.label.split('(')[0]}
+                        </span>
                         
                         {def.hasValue && (
-                            <div className="flex items-center gap-1 bg-muted rounded px-1 ml-1">
-                                <button type="button" onClick={() => updateValue(index, -1)} className="hover:text-red-500"><Minus className="w-3 h-3"/></button>
-                                <span className="w-4 text-center text-sm font-black">{field.value}</span>
-                                <button type="button" onClick={() => updateValue(index, 1)} className="hover:text-green-500"><Plus className="w-3 h-3"/></button>
+                            <div className="flex items-center gap-1 bg-white/50 dark:bg-black/20 rounded px-1 ml-1">
+                                <button type="button" onClick={() => updateValue(index, -1)} className="hover:text-red-500 px-0.5"><Minus className="w-3 h-3"/></button>
+                                <span className="w-4 text-center text-sm font-black leading-none">{field.value}</span>
+                                <button type="button" onClick={() => updateValue(index, 1)} className="hover:text-green-500 px-0.5"><Plus className="w-3 h-3"/></button>
                             </div>
                         )}
                         
-                        <button type="button" onClick={() => remove(index)} className="ml-1 text-muted-foreground hover:text-red-600 p-1 rounded-full hover:bg-red-100">
+                        <button type="button" onClick={() => remove(index)} className="ml-1 text-muted-foreground/70 hover:text-red-600 p-0.5 rounded-full hover:bg-red-500/10 transition-colors">
                             <X className="w-3 h-3"/>
                         </button>
                     </Badge>

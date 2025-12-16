@@ -15,7 +15,7 @@ export const FeatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
   };
 
   const FeatGroup = ({ title, type, icon: Icon, color }: any) => {
-    // Filtra e mantém o índice original para o react-hook-form funcionar corretamente
+    // IMPORTANTE: type deve ser minúsculo para bater com o Schema (ancestry, class, etc)
     const featList = fields.map((f, i) => ({ ...f, index: i })).filter((f: any) => f.type === type);
 
     return (
@@ -40,33 +40,33 @@ export const FeatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
              {featList.map((feat) => (
                <AccordionItem key={feat.id} value={feat.id} className="border rounded-lg bg-background px-2 data-[state=open]:bg-accent/5 transition-colors">
                  <div className="flex items-center gap-2 py-2">
-                    {/* Input de Nome */}
-                    <Input 
-                      {...register(`feats.${feat.index}.name`)} 
-                      className="h-8 font-bold border-transparent bg-transparent focus-visible:ring-0 flex-1 px-0 text-sm hover:bg-muted/10 transition-colors rounded-sm px-2"
-                      placeholder="Nome do Talento"
-                      readOnly={isReadOnly}
-                    />
-                    
-                    {/* Input de Nível (Badge Style) */}
-                    <div className="relative">
-                        <span className="absolute -top-2 -left-1 text-[8px] font-bold text-muted-foreground uppercase bg-background px-1">Lvl</span>
-                        <Input 
-                          type="number"
-                          {...register(`feats.${feat.index}.level`)} 
-                          className="h-8 w-10 text-center text-xs bg-muted/20 border-none font-bold"
-                          title="Nível do Talento"
-                          readOnly={isReadOnly}
-                        />
-                    </div>
+                   {/* Input de Nome */}
+                   <Input 
+                     {...register(`feats.${feat.index}.name`)} 
+                     className="h-8 font-bold border-transparent bg-transparent focus-visible:ring-0 flex-1 px-0 text-sm hover:bg-muted/10 transition-colors rounded-sm px-2"
+                     placeholder="Nome do Talento"
+                     readOnly={isReadOnly}
+                   />
+                   
+                   {/* Input de Nível */}
+                   <div className="relative">
+                       <span className="absolute -top-2 -left-1 text-[8px] font-bold text-muted-foreground uppercase bg-background px-1">Lvl</span>
+                       <Input 
+                         type="number"
+                         {...register(`feats.${feat.index}.level`)} 
+                         className="h-8 w-10 text-center text-xs bg-muted/20 border-none font-bold"
+                         title="Nível do Talento"
+                         readOnly={isReadOnly}
+                       />
+                   </div>
 
-                    <AccordionTrigger className="w-6 h-8 p-0 hover:no-underline" />
-                    
-                    {!isReadOnly && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500 hover:bg-red-50" onClick={() => remove(feat.index)}>
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
+                   <AccordionTrigger className="w-6 h-8 p-0 hover:no-underline" />
+                   
+                   {!isReadOnly && (
+                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-red-500 hover:bg-red-50" onClick={() => remove(feat.index)}>
+                       <Trash2 className="w-3.5 h-3.5" />
+                     </Button>
+                   )}
                  </div>
                  <AccordionContent className="pb-3 pt-0 px-2">
                     <Textarea 
@@ -87,10 +87,11 @@ export const FeatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 pb-10">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <FeatGroup title="Ancestralidade" type="Ancestry" icon={Crown} color="border-t-amber-600" />
-        <FeatGroup title="Classe" type="Class" icon={Award} color="border-t-blue-600" />
-        <FeatGroup title="Geral" type="General" icon={Zap} color="border-t-slate-600" />
-        <FeatGroup title="Perícia" type="Skill" icon={GraduationCap} color="border-t-emerald-600" />
+        {/* Passando os tipos em minúsculo para bater com o Schema */}
+        <FeatGroup title="Ancestralidade" type="ancestry" icon={Crown} color="border-t-amber-600" />
+        <FeatGroup title="Classe" type="class" icon={Award} color="border-t-blue-600" />
+        <FeatGroup title="Geral" type="general" icon={Zap} color="border-t-slate-600" />
+        <FeatGroup title="Perícia" type="skill" icon={GraduationCap} color="border-t-emerald-600" />
       </div>
       
       {/* BÔNUS / OUTROS */}
@@ -100,13 +101,14 @@ export const FeatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
                <Scroll className="w-5 h-5 opacity-70" /> Habilidades Especiais & Bônus
              </h3>
              {!isReadOnly && (
-               <Button variant="ghost" size="sm" onClick={() => addFeat("Bonus")} className="text-xs h-7 border border-dashed border-primary/30 hover:border-primary hover:bg-primary/5">
+               <Button variant="ghost" size="sm" onClick={() => addFeat("bonus")} className="text-xs h-7 border border-dashed border-primary/30 hover:border-primary hover:bg-primary/5">
                  <Plus className="w-3 h-3 mr-1" /> Adicionar
                </Button>
              )}
          </div>
          <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-             {fields.map((f, i) => f.type === "Bonus" && (
+             {/* Filtro por "bonus" minúsculo */}
+             {fields.map((f, i) => f.type === "bonus" && (
                 <div key={f.id} className="p-3 rounded-lg border bg-card shadow-sm group hover:border-purple-300 transition-colors">
                    <div className="flex justify-between mb-2 items-start">
                       <Input {...register(`feats.${i}.name`)} className="h-7 font-bold border-none p-0 text-sm focus-visible:ring-0 bg-transparent" placeholder="Nome da Habilidade" readOnly={isReadOnly}/>
@@ -115,7 +117,7 @@ export const FeatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
                    <Textarea {...register(`feats.${i}.description`)} className="text-xs min-h-[60px] bg-muted/10 resize-none border-transparent focus:bg-background" placeholder="Descrição..." readOnly={isReadOnly}/>
                 </div>
              ))}
-             {fields.filter(f => f.type === "Bonus").length === 0 && (
+             {fields.filter(f => f.type === "bonus").length === 0 && (
                 <div className="col-span-full text-center py-4 text-muted-foreground text-xs italic">Nenhuma habilidade bônus.</div>
              )}
          </CardContent>
