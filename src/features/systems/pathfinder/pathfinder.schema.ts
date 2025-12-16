@@ -1,16 +1,21 @@
 import { z } from "zod";
 
-// Helper para garantir que números são tratados corretamente (converte string vazia para 0)
+// --- HELPERS ---
+
+// Helper para garantir que números são tratados corretamente 
+// (converte string vazia, null ou undefined para 0)
 const numeric = z.union([z.string(), z.number(), z.null(), z.undefined()])
   .transform((val) => {
     if (val === null || val === undefined || val === "") return 0;
-    return Number(val) || 0;
+    const n = Number(val);
+    return isNaN(n) ? 0 : n;
   });
 
 // Enum de Proficiência (Untrained, Trained, Expert, Master, Legendary)
 const proficiencyEnum = z.enum(["U", "T", "E", "M", "L"]).default("U");
 
-// Schemas Reutilizáveis
+// --- SUB-SCHEMAS REUTILIZÁVEIS ---
+
 const abilityScoreSchema = z.object({
   value: numeric.default(10),
   temp: numeric.default(0),
@@ -23,7 +28,7 @@ const skillSchema = z.object({
   misc: numeric.default(0),
 });
 
-// Schema de Magia (para as listas)
+// Schema de Magia (para as listas de grimório)
 const spellSchema = z.object({
   name: z.string().default(""),
   level: numeric.default(1),
@@ -31,12 +36,29 @@ const spellSchema = z.object({
   actions: z.string().default(""),
   range: z.string().default(""),
   duration: z.string().default(""),
-  components: z.string().default(""),
+  components: z.string().default(""), // V, S, M
   prepared: z.boolean().default(false),
   tradition: z.string().default(""),
 });
 
+// Schema para a aba de Ações Táticas
+const actionSchema = z.object({
+  name: z.string().default(""),
+  type: z.string().default("action"), // action, reaction, free, passive
+  actions: z.string().default("1"),   // "1", "2", "3" ou texto para reaction
+  description: z.string().default(""),
+  traits: z.string().default(""),
+});
+
+// Schema para Condições Ativas (Automação)
+const conditionSchema = z.object({
+  slug: z.string(),           // ID único da condição (ex: 'frightened')
+  value: numeric.default(1),  // Valor numérico (ex: 1, 2)
+  active: z.boolean().default(true)
+});
+
 // --- SCHEMA PRINCIPAL DA FICHA ---
+
 export const pathfinderSchema = z.object({
   // 1. Identidade e Informações Básicas
   name: z.string().default("Novo Personagem"),
@@ -113,7 +135,7 @@ export const pathfinderSchema = z.object({
     raised: z.boolean().default(false),
   }).default({}),
 
-  // 6. Proficiências de Combate
+  // 6. Proficiências de Combate (Genérico)
   proficiencies: z.object({
     unarmed: proficiencyEnum,
     simple: proficiencyEnum,
@@ -161,7 +183,7 @@ export const pathfinderSchema = z.object({
     senses: z.string().default(""),
     resistances: z.string().default(""),
     immunities: z.string().default(""),
-    conditions: z.string().default(""),
+    conditions: z.string().default(""), // Campo de texto livre (legado ou notas)
     appearance: z.string().default(""),
     personality: z.string().default(""),
     attitude: z.string().default(""),
@@ -181,29 +203,40 @@ export const pathfinderSchema = z.object({
 
   // 9. Inventário e Economia
   money: z.object({
-    pp: numeric.default(0),
-    gp: numeric.default(0),
-    sp: numeric.default(0),
-    cp: numeric.default(0),
+    pp: numeric.default(0), // Platina
+    gp: numeric.default(0), // Ouro
+    sp: numeric.default(0), // Prata
+    cp: numeric.default(0), // Cobre
   }).default({}),
 
+  // Itens: Usamos z.any() aqui para flexibilidade, mas a UI espera { name, quantity, bulk, type }
   inventory: z.array(z.any()).default([]),
 
-  // 10. Listas de Dados
-  strikes: z.array(z.any()).default([]), 
-  feats: z.array(z.any()).default([]), // Unificado (Ancestry, Class, General, Skill, Bonus via 'type')
-  actions: z.array(z.any()).default([]), // Nova aba de Ações
+  // 10. Listas de Dados Dinâmicos
   
+  // Ataques (Aba Combate)
+  strikes: z.array(z.any()).default([]), 
+  
+  // Talentos (Aba Talentos)
+  feats: z.array(z.any()).default([]), 
+  
+  // Ações Táticas (Aba Ações - NOVO)
+  actions: z.array(actionSchema).default([]),
+  
+  // Condições Ativas (Header/Automação - NOVO)
+  active_conditions: z.array(conditionSchema).default([]),
+  
+  // Notas Gerais
   notes: z.string().default(""),
 
   // 11. SISTEMA DE MAGIA COMPLETO
   spellcasting: z.object({
     key_attribute: z.string().default("intelligence"), // int, wis, cha
     proficiency: proficiencyEnum,
-    attack: numeric.default(0), // Calculado, mas guardado se houver override
-    dc: numeric.default(10),    // Calculado, mas guardado se houver override
+    attack: numeric.default(0), // Bônus base manual (se houver)
+    dc: numeric.default(0),     // Bônus base manual (se houver)
     
-    // Slots organizados por nível (1-10)
+    // Slots organizados por nível (Chave numérica: 1 a 10)
     slotsPerDay: z.record(numeric).default({}),
     slotsRemaining: z.record(numeric).default({}),
     
@@ -213,14 +246,14 @@ export const pathfinderSchema = z.object({
       max: numeric.default(1) 
     }).default({}),
     
-    // Listas Separadas
+    // Listas Separadas de Magias
     cantrips: z.array(spellSchema).default([]),
     spells: z.array(spellSchema).default([]),
     focusSpells: z.array(spellSchema).default([]),
     innateSpells: z.array(spellSchema).default([]),
   }).default({}),
 
-}).passthrough();
+}).passthrough(); // Permite campos extras não definidos (útil para migrações futuras)
 
 export type PathfinderSheetData = z.infer<typeof pathfinderSchema>;
 export const defaultPathfinderData = pathfinderSchema.parse({});

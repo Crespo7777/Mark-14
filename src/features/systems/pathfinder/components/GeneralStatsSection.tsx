@@ -3,21 +3,28 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Heart, Shield, Brain, Zap, Footprints, Activity, Eye } from "lucide-react";
+import { Heart, Shield, Brain, Activity, Eye, Zap, Footprints } from "lucide-react"; // Adicionei Zap e Footprints que faltavam na tua lista original
 import { usePathfinderContext } from "../PathfinderContext";
+import { useRollContext } from "../context/RollContext"; // <--- NOVO IMPORT
 
 export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) => {
   const { register, setValue, watch } = useFormContext();
   const { acTotal, classDC, perception, saves } = usePathfinderContext();
+  const { makeRoll } = useRollContext(); // <--- HOOK DE ROLAGEM
 
-  const StatBox = ({ label, value, icon: Icon, color }: any) => (
-    <div className="flex flex-col items-center justify-center p-3 bg-card border rounded-xl shadow-sm relative overflow-hidden group">
+  // Componente StatBox Agora Clicável
+  const StatBox = ({ label, value, rawValue, icon: Icon, color }: any) => (
+    <button 
+        type="button"
+        onClick={() => makeRoll(rawValue, `Teste de ${label}`, "save")}
+        className="flex flex-col items-center justify-center p-3 bg-card border rounded-xl shadow-sm relative overflow-hidden group w-full hover:border-primary/50 transition-all active:scale-95 cursor-pointer"
+    >
       <div className={`absolute top-0 right-0 p-1.5 opacity-10 group-hover:opacity-20 transition-opacity ${color}`}>
         <Icon className="w-8 h-8" />
       </div>
       <span className={`text-2xl font-black z-10 ${color.replace('bg-', 'text-')}`}>{value}</span>
       <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider z-10">{label}</span>
-    </div>
+    </button>
   );
 
   return (
@@ -107,11 +114,18 @@ export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) =>
 
           <Card className="border-l-4 border-l-green-500/50">
              <CardContent className="p-4 flex items-center gap-4">
-                 <div className="flex flex-col items-center justify-center w-20 h-20 bg-green-500/10 rounded-full border-2 border-green-500/20 shrink-0">
+                 {/* PERCEPÇÃO CLICÁVEL */}
+                 <button 
+                    type="button"
+                    onClick={() => makeRoll(perception, "Percepção (Iniciativa)", "skill")}
+                    className="flex flex-col items-center justify-center w-20 h-20 bg-green-500/10 rounded-full border-2 border-green-500/20 shrink-0 hover:bg-green-500/20 transition-colors cursor-pointer active:scale-95"
+                    title="Clique para rolar Iniciativa"
+                 >
                      <Eye className="w-5 h-5 text-green-500 mb-1" />
-                     <span className="text-2xl font-black text-green-500 leading-none">+{perception}</span>
+                     <span className="text-2xl font-black text-green-500 leading-none">{perception >= 0 ? "+" : ""}{perception}</span>
                      <span className="text-[9px] font-bold uppercase text-green-400/70">Percepção</span>
-                 </div>
+                 </button>
+
                  <div className="flex-1 pl-4 border-l border-border/50">
                      <div className="flex justify-between items-center mb-2">
                          <Label className="text-xs">Proficiência</Label>
@@ -130,11 +144,11 @@ export const GeneralStatsSection = ({ isReadOnly }: { isReadOnly?: boolean }) =>
           </Card>
       </div>
 
-      {/* 3. SAVES */}
+      {/* 3. SAVES (Agora Clicáveis) */}
       <div className="grid grid-cols-3 gap-4">
-          <StatBox label="Fortitude" value={`+${saves?.fortitude || 0}`} icon={Activity} color="text-red-500" />
-          <StatBox label="Reflex" value={`+${saves?.reflex || 0}`} icon={Activity} color="text-amber-500" />
-          <StatBox label="Will" value={`+${saves?.will || 0}`} icon={Brain} color="text-blue-500" />
+          <StatBox label="Fortitude" value={`+${saves?.fortitude || 0}`} rawValue={saves?.fortitude} icon={Activity} color="text-red-500" />
+          <StatBox label="Reflex" value={`+${saves?.reflex || 0}`} rawValue={saves?.reflex} icon={Zap} color="text-amber-500" />
+          <StatBox label="Will" value={`+${saves?.will || 0}`} rawValue={saves?.will} icon={Brain} color="text-blue-500" />
       </div>
 
     </div>
