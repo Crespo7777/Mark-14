@@ -12,16 +12,17 @@ import { Plus, Database, Loader2, Infinity as InfinityIcon } from "lucide-react"
 import { Separator } from "@/components/ui/separator";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { ItemIconUploader } from "@/components/ItemIconUploader";
-import { QualitySelector } from "@/components/QualitySelector";
+import { QualitySelector } from "@/features/systems/symbaroum/components/QualitySelector";
 import { ShopItemCard } from "./ShopItemCard";
 
+// IMPORTAÇÕES CORRIGIDAS (Symbaroum)
 import { 
     CATEGORIES, 
     WEAPON_SUBCATEGORIES, 
     ARMOR_SUBCATEGORIES, 
     FOOD_SUBCATEGORIES,
     RPG_ATTRIBUTES 
-} from "../database.constants";
+} from "@/features/systems/symbaroum/master/database.constants";
 
 interface ExtendedShopItem extends ShopItem {
   data?: any;
@@ -62,7 +63,7 @@ export const ShopManager = ({ shop, tableId }: { shop: Shop, tableId: string }) 
 
   const updateData = (key: string, value: any) => { setNewItem(prev => ({ ...prev, data: { ...prev.data, [key]: value } })); };
 
-  // RENDERIZADOR DE CAMPOS (IDÊNTICO AO DATABASE FORM PARA CONSISTÊNCIA)
+  // RENDERIZADOR DE CAMPOS ESPECÍFICOS (Symbaroum)
   const renderSpecificFields = () => {
     switch (newItem.category) {
         case 'weapon': return (

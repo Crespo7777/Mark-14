@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
 // IMPORTANTE: Use o SharedProjectileList que criámos/corrigimos em src/components
-import { SharedProjectileList } from "@/components/SharedProjectileList"; 
+import { SharedProjectileList } from "@/features/systems/symbaroum/components/SharedProjectileList"; 
 
 const ALLOWED_CATEGORIES = [
     "general", "consumable", "container", "tool", "clothing", 

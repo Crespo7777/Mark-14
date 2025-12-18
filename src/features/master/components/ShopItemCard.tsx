@@ -1,9 +1,8 @@
-// src/features/master/components/ShopItemCard.tsx
-
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Trash2, Send, Infinity as InfinityIcon, Image as ImageIcon } from "lucide-react";
-import { formatPrice } from "@/lib/economy-utils";
+// IMPORTAÇÃO CORRIGIDA (Symbaroum)
+import { formatPrice } from "@/features/systems/symbaroum/utils/economy-utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { CharacterWithRelations, ShopItem } from "@/types/app-types";
 import { PackagePlus } from "lucide-react";

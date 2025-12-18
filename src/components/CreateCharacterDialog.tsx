@@ -1,5 +1,3 @@
-// src/components/CreateCharacterDialog.tsx
-
 import { useState } from "react";
 import {
   Dialog,
@@ -22,15 +20,18 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getDefaultCharacterSheetData } from "@/features/character/character.schema";
 import { TableMember } from "@/features/table/TableContext";
+
+// IMPORTAÇÃO CORRIGIDA - Agora aponta para o arquivo que você renomeou no Passo 0
+import { getDefaultCharacterSheetData as getSymbaroumDefaults } from "@/features/systems/symbaroum/utils/symbaroum.schema";
 
 interface CreateCharacterDialogProps {
   children: React.ReactNode;
   onCharacterCreated: () => void;
   tableId: string;
-  masterId: string; // <-- Precisa disto
-  members: TableMember[]; // <-- Precisa disto
+  masterId: string;
+  members: TableMember[];
+  systemType?: string; 
 }
 
 export const CreateCharacterDialog = ({
@@ -39,6 +40,7 @@ export const CreateCharacterDialog = ({
   tableId,
   masterId,
   members,
+  systemType = 'symbaroum' 
 }: CreateCharacterDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -50,19 +52,21 @@ export const CreateCharacterDialog = ({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      toast({
-        title: "Erro",
-        description: "O nome do personagem é obrigatório",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "O nome do personagem é obrigatório", variant: "destructive" });
       return;
     }
 
     setLoading(true);
 
-    const defaultData = getDefaultCharacterSheetData(name.trim());
-    if (race.trim()) defaultData.race = race.trim();
-    if (occupation.trim()) defaultData.occupation = occupation.trim();
+    let defaultData: any = {};
+
+    if (systemType === 'pathfinder') {
+        defaultData = {}; 
+    } else {
+        defaultData = getSymbaroumDefaults(name.trim());
+        if (race.trim()) defaultData.race = race.trim();
+        if (occupation.trim()) defaultData.occupation = occupation.trim();
+    }
 
     const { error } = await supabase.from("characters").insert({
       name: name.trim(),
@@ -80,7 +84,7 @@ export const CreateCharacterDialog = ({
       setOccupation("");
       setAssignedPlayerId(masterId);
       setOpen(false);
-      onCharacterCreated(); // <-- CHAMA O INVALIDADOR DO PAI
+      onCharacterCreated();
     }
 
     setLoading(false);
@@ -92,57 +96,34 @@ export const CreateCharacterDialog = ({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Criar Nova Ficha</DialogTitle>
-          <DialogDescription>
-            Crie uma nova ficha de personagem e atribua-a a um jogador (ou a
-            você mesmo).
-          </DialogDescription>
+          <DialogDescription>Crie uma nova ficha e atribua a um jogador.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="char-name">Nome do Personagem</Label>
-            <Input
-              id="char-name"
-              placeholder="Novo Aventureiro"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input id="char-name" placeholder="Novo Aventureiro" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="char-race">Raça</Label>
-              <Input
-                id="char-race"
-                placeholder="Humano"
-                value={race}
-                onChange={(e) => setRace(e.target.value)}
-              />
+              <Input id="char-race" placeholder="Humano" value={race} onChange={(e) => setRace(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="char-occupation">Ocupação</Label>
-              <Input
-                id="char-occupation"
-                placeholder="Aventureiro"
-                value={occupation}
-                onChange={(e) => setOccupation(e.target.value)}
-              />
+              <Input id="char-occupation" placeholder="Aventureiro" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="player-assign">Atribuir a</Label>
             <Select onValueChange={setAssignedPlayerId} value={assignedPlayerId}>
-              <SelectTrigger id="player-assign">
-                <SelectValue placeholder="Atribuir a um jogador..." />
-              </SelectTrigger>
+              <SelectTrigger id="player-assign"><SelectValue placeholder="Atribuir..." /></SelectTrigger>
               <SelectContent>
                 <SelectItem value={masterId}>Mestre (Você)</SelectItem>
                 <SelectSeparator />
-                
                 {members.filter(m => !m.isMaster).map((member) => (
-                  <SelectItem key={member.id} value={member.id}>
-                    {member.display_name}
-                  </SelectItem>
+                  <SelectItem key={member.id} value={member.id}>{member.display_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

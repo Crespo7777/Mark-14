@@ -3,8 +3,8 @@ import { useState } from "react";
 import { useSymbaroumNpcSheet } from "../SymbaroumNpcSheetContext";
 import { useFormContext } from "react-hook-form"; 
 import { useToast } from "@/hooks/use-toast";
-import { attributesList } from "@/features/character/character.constants";
-import { NpcAbilityRollDialog } from "@/components/NpcAbilityRollDialog";
+import { attributesList } from "@/features/systems/symbaroum/utils/symbaroum.constants";
+import { NpcAbilityRollDialog } from "@/features/systems/symbaroum/combat/components/NpcAbilityRollDialog";
 
 // IMPORTANTE: Certifica-te que estes arquivos existem na pasta './abilities/' dentro da nova estrutura
 // Se não existirem, terás de os copiar da pasta antiga para 'src/features/systems/symbaroum/npc/tabs/abilities/'

@@ -8,12 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Loader2, Save, Plus, X } from "lucide-react";
 import { ItemIconUploader } from "@/components/ItemIconUploader";
-import { FOOD_SUBCATEGORIES } from "../database.constants";
 
-// --- NOVOS IMPORTS MODULARIZADOS ---
-import { WeaponFormFields } from "./forms/WeaponFormFields";
-import { ArmorFormFields } from "./forms/ArmorFormFields";
-import { AbilityFormFields } from "./forms/AbilityFormFields";
+// IMPORTAÇÕES CORRIGIDAS (Apontam para Symbaroum)
+import { FOOD_SUBCATEGORIES } from "@/features/systems/symbaroum/master/database.constants";
+import { WeaponFormFields } from "@/features/systems/symbaroum/master/components/forms/WeaponFormFields";
+import { ArmorFormFields } from "@/features/systems/symbaroum/master/components/forms/ArmorFormFields";
+import { AbilityFormFields } from "@/features/systems/symbaroum/master/components/forms/AbilityFormFields";
 
 const RichTextEditor = lazy(() => 
   import("@/components/RichTextEditor").then(module => ({ default: module.RichTextEditor }))
@@ -41,7 +41,6 @@ export const DatabaseForm = ({
 
     const renderSpecificFields = () => {
         switch (category) {
-          // --- COMPONENTES MODULARIZADOS ---
           case 'weapon': 
             return <WeaponFormFields data={data.data} tableId={tableId} updateData={updateData} />;
           
@@ -51,7 +50,7 @@ export const DatabaseForm = ({
           case 'ability': 
             return <AbilityFormFields data={data.data} updateData={updateData} />;
           
-          // --- Itens Menores (Mantidos Inline por agora) ---
+          // --- Itens Menores (Mantidos Inline por agora, mas idealmente moveriam-se também) ---
           case 'quality': return (
             <div className="grid grid-cols-2 gap-3">
                 <Input placeholder="Alvo (Arma/Armadura...)" value={data.data.targetType || ""} onChange={e => updateData('targetType', e.target.value)} className="bg-background col-span-2"/>
@@ -113,9 +112,9 @@ export const DatabaseForm = ({
                <div className="flex flex-col md:flex-row gap-6">
                    <div className="shrink-0 flex justify-center md:justify-start">
                       <ItemIconUploader 
-                         currentUrl={data.icon_url}
-                         onUpload={(url) => onChange({ ...data, icon_url: url })}
-                         onRemove={() => onChange({ ...data, icon_url: null })}
+                          currentUrl={data.icon_url}
+                          onUpload={(url) => onChange({ ...data, icon_url: url })}
+                          onRemove={() => onChange({ ...data, icon_url: null })}
                       />
                    </div>
 
@@ -140,10 +139,10 @@ export const DatabaseForm = ({
                    <Label>Descrição Completa</Label>
                    <Suspense fallback={<Skeleton className="h-[200px] w-full" />}>
                       <RichTextEditor 
-                         key={`${isEditing ? 'edit' : 'new'}-${category}-${editorKey}`}
-                         value={data.description} 
-                         onChange={val => onChange({ ...data, description: val })} 
-                         placeholder="Regras e detalhes..." 
+                          key={`${isEditing ? 'edit' : 'new'}-${category}-${editorKey}`}
+                          value={data.description} 
+                          onChange={val => onChange({ ...data, description: val })} 
+                          placeholder="Regras e detalhes..." 
                       />
                    </Suspense>
                </div>

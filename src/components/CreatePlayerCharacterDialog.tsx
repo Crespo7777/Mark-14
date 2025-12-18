@@ -1,5 +1,3 @@
-// src/components/CreatePlayerCharacterDialog.tsx
-
 import { useState } from "react";
 import {
   Dialog,
@@ -14,18 +12,22 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { getDefaultCharacterSheetData } from "@/features/character/character.schema";
+
+// IMPORTAÇÃO CORRIGIDA
+import { getDefaultCharacterSheetData as getSymbaroumDefaults } from "@/features/systems/symbaroum/utils/symbaroum.schema";
 
 interface CreatePlayerCharacterDialogProps {
   children: React.ReactNode;
   onCharacterCreated: () => void;
   tableId: string;
+  systemType?: string;
 }
 
 export const CreatePlayerCharacterDialog = ({
   children,
   onCharacterCreated,
   tableId,
+  systemType = 'symbaroum'
 }: CreatePlayerCharacterDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -36,38 +38,33 @@ export const CreatePlayerCharacterDialog = ({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      toast({
-        title: "Erro",
-        description: "O nome do personagem é obrigatório",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "O nome do personagem é obrigatório", variant: "destructive" });
       return;
     }
 
     setLoading(true);
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      toast({
-        title: "Erro",
-        description: "Você precisa estar logado.",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "Você precisa estar logado.", variant: "destructive" });
       setLoading(false);
       return;
     }
 
-    // Gerar dados padrão da ficha
-    const defaultData = getDefaultCharacterSheetData(name.trim());
-    if (race.trim()) defaultData.race = race.trim();
-    if (occupation.trim()) defaultData.occupation = occupation.trim();
+    let defaultData: any = {};
+
+    if (systemType === 'pathfinder') {
+        defaultData = {}; 
+    } else {
+        defaultData = getSymbaroumDefaults(name.trim());
+        if (race.trim()) defaultData.race = race.trim();
+        if (occupation.trim()) defaultData.occupation = occupation.trim();
+    }
 
     const { error } = await supabase.from("characters").insert({
       name: name.trim(),
       table_id: tableId,
-      player_id: user.id, // Atribui a ficha ao usuário logado
+      player_id: user.id, 
       data: defaultData,
     });
 
@@ -79,7 +76,7 @@ export const CreatePlayerCharacterDialog = ({
       setRace("");
       setOccupation("");
       setOpen(false);
-      onCharacterCreated(); // <-- CHAMA O INVALIDADOR DO PAI
+      onCharacterCreated();
     }
 
     setLoading(false);
@@ -91,42 +88,23 @@ export const CreatePlayerCharacterDialog = ({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Criar Nova Ficha</DialogTitle>
-          <DialogDescription>
-            Crie sua nova ficha de personagem para esta mesa.
-          </DialogDescription>
+          <DialogDescription>Crie sua nova ficha de personagem para esta mesa.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="char-name">Nome do Personagem</Label>
-            <Input
-              id="char-name"
-              placeholder="Novo Aventureiro"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input id="char-name" placeholder="Novo Aventureiro" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="char-race">Raça</Label>
-              <Input
-                id="char-race"
-                placeholder="Humano"
-                value={race}
-                onChange={(e) => setRace(e.target.value)}
-              />
+              <Input id="char-race" placeholder="Humano" value={race} onChange={(e) => setRace(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="char-occupation">Ocupação</Label>
-              <Input
-                id="char-occupation"
-                placeholder="Aventureiro"
-                value={occupation}
-                onChange={(e) => setOccupation(e.target.value)}
-              />
+              <Input id="char-occupation" placeholder="Aventureiro" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
             </div>
           </div>
-
           <Button onClick={handleCreate} disabled={loading} className="w-full">
             {loading ? "Criando..." : "Criar Ficha"}
           </Button>

@@ -18,12 +18,12 @@ import { Progress } from "@/components/ui/progress";
 import { useFormContext } from "react-hook-form";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-// Imports Locais (que você moveu)
+// IMPORTS LOCAIS DO SISTEMA SYMBAROUM
 import { NpcSheetData, getDefaultNpcSheetData } from "./npc.schema";
 import { SymbaroumNpcSheetProvider, useSymbaroumNpcSheet } from "./SymbaroumNpcSheetContext";
 import { useNpcCalculations } from "./hooks/useNpcCalculations"; 
 
-// Abas (que você moveu)
+// ABAS DO NPC (Certifique-se de que estão em src/features/systems/symbaroum/npc/tabs/)
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcCombatEquipmentTab } from "./tabs/NpcCombatEquipmentTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
@@ -32,6 +32,15 @@ import { NpcInventoryTab } from "./tabs/NpcInventoryTab";
 import { NpcJournalTab } from "./tabs/NpcJournalTab";
 
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
+
+// Interface atualizada para aceitar o que o Roteador envia
+interface SymbaroumNpcSheetProps {
+  initialNpc?: Npc; // Opcional, caso venha do Roteador com ID
+  npcId?: string;   // Opcional, caso venha do Roteador apenas com ID
+  onClose: () => void;
+  isReadOnly?: boolean;
+  onBack?: () => void; // Para compatibilidade se usado fora de modal
+}
 
 // --- HEADER ---
 const NpcHeader = memo(({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
@@ -217,33 +226,53 @@ const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; onSave: 
   );
 };
 
-export const SymbaroumNpcSheet = ({ initialNpc, onClose }: { initialNpc: Npc, onClose: () => void }) => {
+// Componente Principal Exportado
+export const SymbaroumNpcSheet = ({ initialNpc, npcId, onClose, isReadOnly }: SymbaroumNpcSheetProps) => {
   const queryClient = useQueryClient();
+  const [fetchedNpc, setFetchedNpc] = useState<Npc | undefined>(initialNpc);
+  const { toast } = useToast();
+
+  // Se não veio initialNpc, mas tem ID, busca do banco (Fallback)
+  useEffect(() => {
+      if (!initialNpc && npcId) {
+          supabase.from("npcs").select("*").eq("id", npcId).single()
+              .then(({ data, error }) => {
+                  if (data) setFetchedNpc(data);
+                  if (error) toast({ title: "Erro ao carregar", description: error.message, variant: "destructive" });
+              });
+      }
+  }, [initialNpc, npcId, toast]);
+
+  const targetNpc = initialNpc || fetchedNpc;
+
   const validatedData = useMemo(() => {
-      if (!initialNpc) return null;
-      const defaults = getDefaultNpcSheetData(initialNpc.name || "Novo NPC");
-      const rawData = initialNpc.data as any;
+      if (!targetNpc) return null;
+      const defaults = getDefaultNpcSheetData(targetNpc.name || "Novo NPC");
+      const rawData = targetNpc.data as any;
       return {
         ...defaults,
         ...rawData,
-        name: initialNpc.name,
-        image_url: initialNpc.image_url, 
+        name: targetNpc.name,
+        image_url: targetNpc.image_url, 
         attributes: { ...defaults.attributes, ...(rawData?.attributes || {}) },
         combat: { ...defaults.combat, ...(rawData?.combat || {}) },
       };
-  }, [initialNpc]); 
+  }, [targetNpc]); 
   
-  if (!initialNpc || !validatedData) return null;
+  if (!targetNpc || !validatedData) {
+      // Estado de carregamento ou erro se não tiver NPC
+      return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-muted-foreground" /></div>;
+  }
 
   const handleSave = async (data: NpcSheetData) => {
-    const { error } = await supabase.from("npcs").update({ name: data.name, image_url: data.image_url, data: data }).eq("id", initialNpc.id);
+    const { error } = await supabase.from("npcs").update({ name: data.name, image_url: data.image_url, data: data }).eq("id", targetNpc.id);
     if (error) throw new Error(error.message);
-    await queryClient.invalidateQueries({ queryKey: ['npcs', initialNpc.table_id] });
-    await queryClient.invalidateQueries({ queryKey: ['npc', initialNpc.id] });
+    await queryClient.invalidateQueries({ queryKey: ['npcs', targetNpc.table_id] });
+    await queryClient.invalidateQueries({ queryKey: ['npc', targetNpc.id] });
   };
 
   return (
-    <SymbaroumNpcSheetProvider npc={initialNpc} onSave={handleSave}>
+    <SymbaroumNpcSheetProvider npc={targetNpc} onSave={handleSave} isReadOnly={isReadOnly}>
       <NpcSheetInner onClose={onClose} onSave={handleSave} initialData={validatedData as NpcSheetData} />
     </SymbaroumNpcSheetProvider>
   );

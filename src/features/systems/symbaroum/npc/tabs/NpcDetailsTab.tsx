@@ -3,7 +3,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { StigmaSelector } from "@/components/StigmaSelector";
+import { StigmaSelector } from "@/features/systems/symbaroum/components/StigmaSelector";
 import { Brain, Scroll, Gem, Users } from "lucide-react";
 
 export const NpcDetailsTab = () => {

@@ -1,11 +1,11 @@
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Plus, Zap, BookOpen } from "lucide-react";
-import { getDefaultAbility } from "@/features/character/character.schema";
+import { getDefaultAbility } from "@/features/systems/symbaroum/utils/symbaroum.schema";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 // Ajuste o caminho se necessário (assumindo que moveste ou que está no antigo)
 // Se NpcAbilityCard estiver na pasta antiga global, usa-se @/features/npc...
-import { NpcAbilityCard } from "@/features/npc/components/NpcAbilityCard"; 
+import { NpcAbilityCard } from "@/features/systems/symbaroum/npc/components/NpcAbilityCard"; 
 import { useSymbaroumNpcSheet } from "../../SymbaroumNpcSheetContext";
 
 interface NpcAbilitiesSectionProps {

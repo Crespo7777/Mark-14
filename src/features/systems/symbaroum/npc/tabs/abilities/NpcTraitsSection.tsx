@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Plus, Fingerprint, Tag } from "lucide-react";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 // Import do componente global
-import { NpcTraitCard } from "@/features/npc/components/NpcTraitCard"; 
+import { NpcTraitCard } from "@/features/systems/symbaroum/npc/components/NpcTraitCard"; 
 import { useSymbaroumNpcSheet } from "../../SymbaroumNpcSheetContext";
 
 export const NpcTraitsSection = ({ isReadOnly }: any) => {

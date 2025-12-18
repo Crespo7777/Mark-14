@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { CATEGORIES } from "../database.constants";
+import { CATEGORIES } from "@/features/systems/symbaroum/master/database.constants";
 import { Wand2 } from "lucide-react";
 
 export const DatabaseSeeder = ({ tableId }: { tableId: string }) => {
@@ -20,7 +20,6 @@ export const DatabaseSeeder = ({ tableId }: { tableId: string }) => {
         type: cat.id,
         name: `[Teste] ${cat.label}`,
         description: `<p>Item de teste gerado automaticamente para a categoria <strong>${cat.label}</strong>.</p>`,
-        // CORREÇÃO: Removemos 'weight' e 'icon_url' da raiz
         data: {
             ...specificData,
             weight: Math.floor(Math.random() * 5) + 1, // Peso vai aqui

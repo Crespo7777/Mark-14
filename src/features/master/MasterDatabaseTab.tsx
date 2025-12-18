@@ -3,12 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  Sword, Shield, FlaskConical, Backpack, Gem, 
-  PawPrint, Zap, Dna, Star, Box, CircleDot, Wheat, 
-  Shirt, Hammer, Utensils, Sparkles, Skull, Wrench, Music,
-  Loader2, Search, X
-} from "lucide-react";
+import { Loader2, Search, X } from "lucide-react";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,38 +17,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { validateItemData } from "./database.schemas";
+
+// IMPORTAÇÕES CORRIGIDAS (Apontam para a pasta do Symbaroum)
+import { validateItemData } from "@/features/systems/symbaroum/master/database.schemas";
+import { CATEGORIES } from "@/features/systems/symbaroum/master/database.constants";
 
 import { DatabaseItemCard } from "./components/DatabaseItemCard";
 import { DatabaseForm } from "./components/DatabaseForm";
 import { DatabaseSeeder } from "./components/DatabaseSeeder";
 
-const CATEGORIES = [
-  { id: 'quality', label: 'Qualidades', icon: Star },
-  { id: 'weapon', label: 'Armas', icon: Sword },
-  { id: 'armor', label: 'Armaduras', icon: Shield },
-  { id: 'ability', label: 'Habilidades', icon: Zap },
-  { id: 'trait', label: 'Traços & Dádivas', icon: Dna },
-  { id: 'consumable', label: 'Elixires', icon: FlaskConical },
-  { id: 'general', label: 'Equipamentos', icon: Backpack },
-  { id: 'container', label: 'Recipientes', icon: Box },
-  { id: 'ammunition', label: 'Munições', icon: CircleDot },
-  { id: 'tool', label: 'Ferramenta', icon: Hammer },
-  { id: 'spec_tool', label: 'Especializadas', icon: Wrench },
-  { id: 'clothing', label: 'Roupas', icon: Shirt },
-  { id: 'food', label: 'Comida', icon: Utensils },
-  { id: 'mount', label: 'Transporte', icon: PawPrint },
-  { id: 'animal', label: 'Animais', icon: Wheat },
-  { id: 'construction', label: 'Construções', icon: Box }, 
-  { id: 'trap', label: 'Armadilhas', icon: Skull },
-  { id: 'artifact', label: 'Artefatos', icon: Sparkles },
-  { id: 'musical', label: 'Instrumentos', icon: Music },
-  { id: 'material', label: 'Materiais', icon: Gem },
-];
-
 const fetchItems = async (tableId: string, category: string) => {
   if (!tableId) return [];
-  // Seleciona * (não podemos selecionar weight/icon_url explicitamente pois não existem)
   const { data, error } = await supabase
     .from("items")
     .select("*")
@@ -139,6 +113,7 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
   const handleSave = async () => {
     if (!newItem.name) return toast({ title: "Erro", description: "O nome é obrigatório.", variant: "destructive" });
     
+    // Validação usando o schema importado do sistema correto
     const validation = validateItemData(category, newItem.data);
     if (!validation.success) {
         return toast({ title: "Erro de Validação", description: validation.error.errors[0]?.message || "Dados inválidos", variant: "destructive" });
@@ -146,7 +121,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
     setIsSaving(true);
     
-    // --- CORREÇÃO: Guardar weight e icon_url dentro de data ---
     const payload = {
         table_id: tableId,
         type: category,
@@ -192,7 +166,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
           return;
       }
       
-      // --- CORREÇÃO: Ler weight e icon_url de data ---
       const itemData = item.data || {};
       
       setEditingId(item.id);
@@ -209,7 +182,6 @@ const DatabaseCategoryManager = ({ tableId, category }: { tableId: string, categ
 
   const handleDuplicate = async (item: any) => {
       const { id, created_at, table_id, ...itemData } = item;
-      // Duplicação funciona bem porque copia o objeto 'data' inteiro, onde weight e icon já estão
       const newItemPayload = { ...itemData, table_id: tableId, name: `${item.name} (Cópia)` };
 
       try {

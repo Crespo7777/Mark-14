@@ -3,8 +3,8 @@ import { Input } from "@/components/ui/input";
 import { Shield, ShieldCheck } from "lucide-react";
 import { FormControl, FormField } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
-import { NpcVitalityCard } from "@/features/combat/components/NpcVitalityCard";
-import { CorruptionCard } from "@/features/combat/components/CorruptionCard";
+import { NpcVitalityCard } from "@/features/systems/symbaroum/combat/components/NpcVitalityCard";
+import { CorruptionCard } from "@/features/systems/symbaroum/combat/components/CorruptionCard";
 import { useNpcSheet } from "../../NpcSheetContext";
 
 interface NpcCombatStatsProps {

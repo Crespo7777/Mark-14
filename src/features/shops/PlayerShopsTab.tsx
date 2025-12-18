@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ShoppingBag, Weight, Infinity as InfinityIcon, Image as ImageIcon, Shield, Sword, Zap, FlaskConical, Star, Store, User, Loader2 } from "lucide-react";
-import { convertFromOrtegas, convertToOrtegas, formatPrice } from "@/lib/economy-utils";
+import { convertFromOrtegas, convertToOrtegas, formatPrice } from "@/features/systems/symbaroum/utils/economy-utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";

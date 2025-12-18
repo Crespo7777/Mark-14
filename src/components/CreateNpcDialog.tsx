@@ -1,5 +1,3 @@
-// src/components/CreateNpcDialog.tsx
-
 import { useState } from "react";
 import {
   Dialog,
@@ -15,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
-// --- CORREÇÃO AQUI: Importar do novo local (Symbaroum) ---
+// SYMBAROUM IMPORTS
 import {
   getDefaultNpcSheetData,
   npcSheetSchema,
@@ -25,12 +23,14 @@ interface CreateNpcDialogProps {
   children: React.ReactNode;
   onNpcCreated: () => void;
   tableId: string;
+  systemType?: string;
 }
 
 export const CreateNpcDialog = ({
   children,
   onNpcCreated,
   tableId,
+  systemType = 'symbaroum'
 }: CreateNpcDialogProps) => {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -41,39 +41,36 @@ export const CreateNpcDialog = ({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      toast({
-        title: "Erro",
-        description: "O nome do NPC é obrigatório",
-        variant: "destructive",
-      });
+      toast({ title: "Erro", description: "O nome do NPC é obrigatório", variant: "destructive" });
       return;
     }
 
     setLoading(true);
 
-    // Gera os dados padrão de Symbaroum
-    const defaultData = getDefaultNpcSheetData(name.trim());
+    let finalData: any = {};
 
-    if (race.trim()) defaultData.race = race.trim();
-    if (occupation.trim()) defaultData.occupation = occupation.trim();
-
-    const parsedData = npcSheetSchema.safeParse(defaultData);
-
-    if (!parsedData.success) {
-      console.error("Erro de validação ao criar NPC:", parsedData.error);
-      toast({
-        title: "Erro de Schema",
-        description: "Os dados padrão do NPC falharam na validação.",
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
+    if (systemType === 'pathfinder') {
+        // Lógica futura Pathfinder
+        finalData = {}; 
+    } else {
+        // Lógica Symbaroum
+        const defaultData = getDefaultNpcSheetData(name.trim());
+        if (race.trim()) defaultData.race = race.trim();
+        if (occupation.trim()) defaultData.occupation = occupation.trim();
+        
+        const parsed = npcSheetSchema.safeParse(defaultData);
+        if (!parsed.success) {
+            console.error("Erro de validação:", parsed.error);
+            setLoading(false);
+            return;
+        }
+        finalData = parsed.data;
     }
 
     const { error } = await supabase.from("npcs").insert({
       name: name.trim(),
       table_id: tableId,
-      data: parsedData.data,
+      data: finalData,
       is_shared: false,
     });
 
@@ -97,42 +94,23 @@ export const CreateNpcDialog = ({
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Criar Novo NPC</DialogTitle>
-          <DialogDescription>
-            Crie uma ficha de NPC para sua mesa.
-          </DialogDescription>
+          <DialogDescription>Crie uma ficha de NPC para sua mesa.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="npc-name">Nome do NPC</Label>
-            <Input
-              id="npc-name"
-              placeholder="Guarda do Portão"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <Input id="npc-name" placeholder="Guarda do Portão" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="npc-race">Raça</Label>
-              <Input
-                id="npc-race"
-                placeholder="Goblin"
-                value={race}
-                onChange={(e) => setRace(e.target.value)}
-              />
+              <Input id="npc-race" placeholder="Goblin" value={race} onChange={(e) => setRace(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="npc-occupation">Resistência</Label>
-              <Input
-                id="npc-occupation"
-                placeholder="Ex: Normal, Fraco"
-                value={occupation}
-                onChange={(e) => setOccupation(e.target.value)}
-              />
+              <Label htmlFor="npc-occupation">Resistência/Tipo</Label>
+              <Input id="npc-occupation" placeholder="Ex: Normal, Fraco" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
             </div>
           </div>
-
           <Button onClick={handleCreate} disabled={loading} className="w-full">
             {loading ? "Criando..." : "Criar NPC"}
           </Button>

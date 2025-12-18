@@ -14,13 +14,13 @@ import { useNpcCalculations } from "../hooks/useNpcCalculations";
 import { getDefaultNpcWeapon, getDefaultNpcArmor } from "../npc.schema"; 
 
 // Componentes Partilhados (Assumindo que estão nestes caminhos globais)
-import { NpcVitalityCard } from "@/features/combat/components/NpcVitalityCard";
-import { NpcCorruptionCard } from "@/features/combat/components/NpcCorruptionCard";
-import { useCombatLogic } from "@/features/combat/hooks/useCombatLogic";
-import { WeaponAttackDialog } from "@/components/WeaponAttackDialog";
-import { WeaponDamageDialog } from "@/components/WeaponDamageDialog";
-import { WeaponCard } from "@/features/combat/components/WeaponCard";
-import { NpcArmorCard } from "@/features/combat/components/NpcArmorCard"; 
+import { NpcVitalityCard } from "@/features/systems/symbaroum/combat/components/NpcVitalityCard";
+import { NpcCorruptionCard } from "@/features/systems/symbaroum/combat/components/NpcCorruptionCard";
+import { useCombatLogic } from "@/features/systems/symbaroum/hooks/useCombatLogic";
+import { WeaponAttackDialog } from "@/features/systems/symbaroum/components/WeaponAttackDialog";
+import { WeaponDamageDialog } from "@/features/systems/symbaroum/components/WeaponDamageDialog";
+import { WeaponCard } from "@/features/systems/symbaroum/combat/components/WeaponCard";
+import { NpcArmorCard } from "@/features/systems/symbaroum/combat/components/NpcArmorCard"; 
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 
 export const NpcCombatEquipmentTab = () => {

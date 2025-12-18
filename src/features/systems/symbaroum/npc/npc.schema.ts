@@ -6,7 +6,7 @@ import {
   projectileSchema,
   simpleUUID,
   numeric,
-} from "@/features/character/character.schema";
+} from "@/features/systems/symbaroum/utils/symbaroum.schema";
 
 // Helper para aceitar números negativos e strings vazias
 export const signedNumeric = z.union([z.string(), z.number()]).transform((val) => {

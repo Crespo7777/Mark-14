@@ -1,5 +1,3 @@
-// src/features/systems/symbaroum/SymbaroumCharacterSheet.tsx
-
 import { useState, useRef, useEffect, memo, useCallback } from "react";
 import { CharacterSheetContext, useCharacterSheet } from "@/features/character/CharacterSheetContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,22 +12,23 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form } from "@/components/ui/form";       
 
 import { useToast } from "@/hooks/use-toast";
-import { ShareDialog } from "@/components/ShareDialog"; // O arquivo que corrigimos acima
+import { ShareDialog } from "@/components/ShareDialog"; 
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 
-import { defaultCharacterData, characterSheetSchema, CharacterSheetData } from "@/features/character/character.schema";
+// IMPORTAÇÕES ATUALIZADAS (APONTAM PARA DENTRO DA PASTA SYMBAROUM)
+import { defaultCharacterData, characterSheetSchema, CharacterSheetData } from "./utils/symbaroum.schema";
 import { useCharacterStore } from "@/stores/character-store"; 
 
-import { DetailsTab } from "@/features/character/tabs/DetailsTab";
-import { AttributesTab } from "@/features/character/tabs/AttributesTab";
-import { AbilitiesTraitsTab } from "@/features/character/tabs/AbilitiesTraitsTab";
-import { CombatEquipmentTab } from "@/features/character/tabs/CombatEquipmentTab";
-import { BackpackTab } from "@/features/character/tabs/BackpackTab";
-import { CharacterJournalTab } from "@/features/character/tabs/CharacterJournalTab";
-import { useCharacterCalculations } from "@/features/character/hooks/useCharacterCalculations";
+import { DetailsTab } from "./tabs/DetailsTab";
+import { AttributesTab } from "./tabs/AttributesTab";
+import { AbilitiesTraitsTab } from "./tabs/AbilitiesTraitsTab";
+import { CombatEquipmentTab } from "./tabs/CombatEquipmentTab";
+import { BackpackTab } from "./tabs/BackpackTab";
+import { CharacterJournalTab } from "./tabs/CharacterJournalTab";
+import { useSymbaroumCalculations } from "./hooks/useSymbaroumCalculations";
 
 interface CharacterSheetProps {
   characterId: string;
@@ -41,7 +40,10 @@ interface CharacterSheetProps {
 const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, sharedWith }: any) => {
     const { register, watch, setValue, formState: { isDirty } } = useFormContext();
     const { toast } = useToast();
-    const calculations = useCharacterCalculations(); 
+    
+    // Hook atualizado
+    const calculations = useSymbaroumCalculations(); 
+    
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { isSaving, saveSheet } = useCharacterSheet(); 
@@ -135,7 +137,6 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
                             
                             {!isReadOnly && (
                                 <>
-                                    {/* CORREÇÃO DO SHAREDIALOG: Passamos o botão como filho direto */}
                                     <ShareDialog itemTitle={characterName} currentSharedWith={sharedWith || []} onSave={async () => {}}> 
                                         <Button variant="ghost" size="icon" type="button" title="Partilhar">
                                             <Share2 className="w-4 h-4"/>
@@ -232,13 +233,11 @@ export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBac
       }
   }, [characterId, form, isReadOnly, toast]);
 
-  // 3. AUTO-SAVE INTELIGENTE (Debounce)
+  // 3. AUTO-SAVE INTELIGENTE
   useEffect(() => {
       const subscription = form.watch((value) => {
-          // Atualiza store
           if (value) updateStore((draft) => { Object.assign(draft, value); });
 
-          // Agenda save
           if (!isReadOnly) {
               if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
               
@@ -246,7 +245,7 @@ export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBac
                   if (form.formState.isDirty) {
                       saveSheet({ silent: true });
                   }
-              }, 2000); // 2 segundos de inatividade para salvar
+              }, 2000); 
           }
       });
 
@@ -270,7 +269,6 @@ export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBac
         <Form {...form}>
           <form 
             onSubmit={(e) => { e.preventDefault(); saveSheet({ silent: false }); }} 
-            // SEM onBlur AQUI -> Isso corrige o problema do modal fechar
             className="h-full flex flex-col bg-background"
           >
             

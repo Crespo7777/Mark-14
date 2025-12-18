@@ -2,7 +2,7 @@ import { useFieldArray } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Plus, Sword, AlertCircle } from "lucide-react";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-import { WeaponCard } from "@/features/combat/components/WeaponCard";
+import { WeaponCard } from "@/features/systems/symbaroum/combat/components/WeaponCard";
 import { getDefaultNpcWeapon } from "@/features/npc/npc.schema";
 import { useNpcSheet } from "../../NpcSheetContext";
 

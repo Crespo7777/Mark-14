@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { CharacterSheetData, defaultCharacterData } from '@/features/character/character.schema';
+import { CharacterSheetData, defaultCharacterData } from '@/features/systems/symbaroum/utils/symbaroum.schema';
 import { calculateCharacterStats, CharacterDerivedStats } from '@/features/character/logic/character-calculations';
 import { setAutoFreeze } from 'immer';
 
