@@ -12,11 +12,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-
-// SYMBAROUM IMPORTS
 import {
   getDefaultNpcSheetData,
-  npcSheetSchema,
+  npcSchema, // Confirme que isto está aqui
 } from "@/features/systems/symbaroum/npc/npc.schema";
 
 interface CreateNpcDialogProps {
@@ -35,7 +33,7 @@ export const CreateNpcDialog = ({
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [race, setRace] = useState("");
-  const [occupation, setOccupation] = useState("");
+  const [occupation, setOccupation] = useState(""); 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -50,17 +48,19 @@ export const CreateNpcDialog = ({
     let finalData: any = {};
 
     if (systemType === 'pathfinder') {
-        // Lógica futura Pathfinder
         finalData = {}; 
     } else {
-        // Lógica Symbaroum
         const defaultData = getDefaultNpcSheetData(name.trim());
         if (race.trim()) defaultData.race = race.trim();
-        if (occupation.trim()) defaultData.occupation = occupation.trim();
+        if (occupation.trim()) {
+            defaultData.occupation = occupation.trim();
+            defaultData.resistance = occupation.trim();
+        }
         
-        const parsed = npcSheetSchema.safeParse(defaultData);
+        const parsed = npcSchema.safeParse(defaultData);
         if (!parsed.success) {
             console.error("Erro de validação:", parsed.error);
+            toast({ title: "Erro de Validação", description: "Verifique os dados do NPC.", variant: "destructive" });
             setLoading(false);
             return;
         }
@@ -107,8 +107,8 @@ export const CreateNpcDialog = ({
               <Input id="npc-race" placeholder="Goblin" value={race} onChange={(e) => setRace(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="npc-occupation">Resistência/Tipo</Label>
-              <Input id="npc-occupation" placeholder="Ex: Normal, Fraco" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
+              <Label htmlFor="npc-occupation">Resistência / Tipo</Label>
+              <Input id="npc-occupation" placeholder="Ex: Forte, Ordinário" value={occupation} onChange={(e) => setOccupation(e.target.value)} />
             </div>
           </div>
           <Button onClick={handleCreate} disabled={loading} className="w-full">

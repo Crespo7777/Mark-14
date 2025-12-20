@@ -10,8 +10,8 @@ import {
 import { useForm, UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Database } from "@/integrations/supabase/types";
-// Ajuste de importação para o schema que movemos
-import { NpcSheetData, npcSheetSchema } from "./npc.schema"; 
+// CORREÇÃO: Importar npcSchema
+import { NpcSheetData, npcSchema } from "./npc.schema"; 
 import { useTableContext } from "@/features/table/TableContext";
 import { useToast } from "@/hooks/use-toast";
 
@@ -51,12 +51,12 @@ export const SymbaroumNpcSheetProvider = ({ children, npc, onSave }: ProviderPro
     return {
         ...rawData,
         name: npcRow.name,
-        image_url: npcRow.image_url,
+        image_url: (npcRow as any).image_url || rawData.image_url, 
     };
   };
 
   const form = useForm<NpcSheetData>({
-    resolver: zodResolver(npcSheetSchema),
+    resolver: zodResolver(npcSchema), // CORREÇÃO: Usar npcSchema
     defaultValues: getInitialValues(npc),
   });
 
@@ -123,6 +123,7 @@ export const SymbaroumNpcSheetProvider = ({ children, npc, onSave }: ProviderPro
     const subscription = form.watch((value, { type }) => {
       if (!type) return; 
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
+      
       debounceTimer.current = setTimeout(() => {
         if (form.formState.isDirty && !isSavingRef.current) {
           programmaticSaveRef.current(); 

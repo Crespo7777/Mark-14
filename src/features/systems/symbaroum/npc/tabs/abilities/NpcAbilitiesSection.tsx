@@ -1,10 +1,9 @@
 import { useFieldArray, useFormContext } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Plus, Zap, BookOpen } from "lucide-react";
+// CORREÇÃO: Importar de 'symbaroum.schema' em vez de 'character.schema'
 import { getDefaultAbility } from "@/features/systems/symbaroum/utils/symbaroum.schema";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
-// Ajuste o caminho se necessário (assumindo que moveste ou que está no antigo)
-// Se NpcAbilityCard estiver na pasta antiga global, usa-se @/features/npc...
 import { NpcAbilityCard } from "@/features/systems/symbaroum/npc/components/NpcAbilityCard"; 
 import { useSymbaroumNpcSheet } from "../../SymbaroumNpcSheetContext";
 
@@ -15,7 +14,7 @@ interface NpcAbilitiesSectionProps {
 
 export const NpcAbilitiesSection = ({ isReadOnly, handleRoll }: NpcAbilitiesSectionProps) => {
     const { control, setValue } = useFormContext();
-    const { npc } = useSymbaroumNpcSheet(); // <--- NOVO HOOK
+    const { npc } = useSymbaroumNpcSheet(); 
     
     const { fields, append, remove } = useFieldArray({
         control,

@@ -18,11 +18,12 @@ export const signedNumeric = z.union([z.string(), z.number()]).transform((val) =
 
 // --- ATRIBUTOS ---
 const attributeItemSchema = z.object({
-  value: signedNumeric.default(0), 
+  value: signedNumeric.default(10), 
   note: z.string().default(""), 
 });
 
 const npcAttributesSchema = z.object({
+  strong: attributeItemSchema.default({}),
   cunning: attributeItemSchema.default({}),
   discreet: attributeItemSchema.default({}),
   persuasive: attributeItemSchema.default({}),
@@ -30,17 +31,22 @@ const npcAttributesSchema = z.object({
   quick: attributeItemSchema.default({}),
   resolute: attributeItemSchema.default({}),
   vigilant: attributeItemSchema.default({}),
-  vigorous: attributeItemSchema.default({}),
 });
 
 // --- COMBATE ---
 const npcCombatSchema = z.object({
   toughness_current: numeric.default(10),
   toughness_max: numeric.default(10),
+  
+  // --- CORREÇÃO: Estes campos FALTAVAM no seu código original ---
+  toughness_temp: numeric.default(0), 
+  toughness_max_modifier: signedNumeric.default(0),
+  // -------------------------------------------------------------
+
   temporary: numeric.default(0), 
   defense: signedNumeric.default(0),
   armor_rd: numeric.default(0),
-  pain_threshold: numeric.default(0), 
+  pain_threshold: numeric.default(5), 
   pain_threshold_bonus: signedNumeric.default(0),
 });
 
@@ -48,7 +54,7 @@ const npcCombatSchema = z.object({
 export const npcArmorSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default("Nova Armadura"),
-  protection: z.string().default("1d4"),
+  protection: z.string().default("0"),
   obstructive: numeric.default(0), 
   quality: z.string().default(""),
   quality_desc: z.string().default(""), 
@@ -61,7 +67,7 @@ export const npcWeaponSchema = z.object({
   id: z.string().default(simpleUUID),
   name: z.string().default("Novo Ataque"),
   damage: z.string().default("1d8"),
-  attackAttribute: z.string().default("vigorous"),
+  attackAttribute: z.string().default("strong"),
   quality: z.string().default(""),
   quality_desc: z.string().default(""), 
   weight: numeric.default(0), 
@@ -69,20 +75,23 @@ export const npcWeaponSchema = z.object({
 });
 
 // --- SCHEMA PRINCIPAL ---
-export const npcSheetSchema = z.object({
+export const npcSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").default("Novo NPC"),
   race: z.string().default("Criatura"),
   occupation: z.string().default("Monstro"),
   image_url: z.string().nullable().optional(), 
   data: z.any().optional(), 
 
+  resistance: z.string().default("Ordinário"),
+  tactics: z.string().default(""),
+  
   shadow: z.string().default(""), 
   personalGoal: z.string().default(""), 
   importantAllies: z.string().default(""), 
   notes: z.string().default(""),
 
   attributes: npcAttributesSchema.default({}),
-  combat: npcCombatSchema.default({}),
+  combat: npcCombatSchema.default({}), // Usa o schema corrigido
   corruption: z.object({
       temporary: numeric.default(0),
       permanent: numeric.default(0),
@@ -96,16 +105,32 @@ export const npcSheetSchema = z.object({
   inventory: z.array(inventoryItemSchema).default([]),
   projectiles: z.array(projectileSchema).default([]),
 
+  image_settings: z.object({
+    x: z.number().default(50),
+    y: z.number().default(50),
+    scale: z.number().default(100)
+  }).optional(),
+
 }).passthrough();
 
-export type NpcSheetData = z.infer<typeof npcSheetSchema>;
+export type NpcSheetData = z.infer<typeof npcSchema>;
 export type NpcArmor = z.infer<typeof npcArmorSchema>;
 export type NpcWeapon = z.infer<typeof npcWeaponSchema>; 
 
 export const getDefaultNpcArmor = (): NpcArmor => npcArmorSchema.parse({});
 export const getDefaultNpcWeapon = (): NpcWeapon => npcWeaponSchema.parse({}); 
+
 export const getDefaultNpcSheetData = (name: string): NpcSheetData => {
-  const defaultData = npcSheetSchema.parse({});
+  const defaultData = npcSchema.parse({
+    combat: {
+        // Inicializa com zeros
+        toughness_max_modifier: 0,
+        toughness_temp: 0,
+        toughness_current: 10,
+        toughness_max: 10,
+        pain_threshold: 5
+    }
+  });
   defaultData.name = name;
   return defaultData;
 };

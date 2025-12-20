@@ -3,15 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Plus, Shield } from "lucide-react";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { NpcArmorCard } from "@/features/systems/symbaroum/combat/components/NpcArmorCard";
-import { getDefaultNpcArmor } from "@/features/npc/npc.schema";
-import { useNpcSheet } from "../../NpcSheetContext";
+import { getDefaultNpcArmor } from "@/features/systems/symbaroum/npc/npc.schema"; // Import Corrigido
+import { useSymbaroumNpcSheet } from "../../SymbaroumNpcSheetContext";
 
-interface NpcArmorSectionProps {
-  tableId: string;
-}
-
-export const NpcArmorSection = ({ tableId }: NpcArmorSectionProps) => {
-  const { form } = useNpcSheet();
+export const NpcArmorSection = () => {
+  const { form, npc } = useSymbaroumNpcSheet();
   
   const { fields, append, remove } = useFieldArray({ 
     control: form.control, 
@@ -22,9 +18,9 @@ export const NpcArmorSection = ({ tableId }: NpcArmorSectionProps) => {
     <div className="space-y-3">
         <div className="flex items-center justify-between px-1">
             <h3 className="text-lg font-bold flex items-center gap-2">
-                <Shield className="w-5 h-5 text-slate-500" /> Armadura Natural / Equip.
+                <Shield className="w-5 h-5 text-slate-500" /> Armadura & Proteção
             </h3>
-            <ItemSelectorDialog tableId={tableId} categories={['armor']} onSelect={(template) => {
+            <ItemSelectorDialog tableId={npc.table_id} categories={['armor']} onSelect={(template) => {
                 if(template) append({ ...getDefaultNpcArmor(), name: template.name, protection: template.data.protection, obstructive: template.data.obstructive, quality: template.data.quality, quality_desc: template.description, weight: template.weight });
                 else append(getDefaultNpcArmor());
             }}>
@@ -44,9 +40,9 @@ export const NpcArmorSection = ({ tableId }: NpcArmorSectionProps) => {
                 <NpcArmorCard 
                     key={field.id} 
                     index={index} 
-                    tableId={tableId}
+                    tableId={npc.table_id}
                     onRemove={() => remove(index)}
-                    control={form.control} // <--- PASSA O CONTROL
+                    control={form.control}
                 />
             ))}
         </div>

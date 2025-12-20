@@ -17,7 +17,7 @@ import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { QualitySelector } from "@/features/systems/symbaroum/components/QualitySelector";
 import { QualityInfoButton } from "@/features/systems/symbaroum/components/QualityInfoButton";
 import { useToast } from "@/hooks/use-toast";
-import { getDefaultProjectile } from "@/features/systems/symbaroum/utils/symbaroum.schema"; // Podemos reutilizar o schema base
+import { getDefaultProjectile } from "@/features/systems/symbaroum/utils/symbaroum.schema"; 
 
 interface NpcProjectileListProps {
   control: Control<any>; 
@@ -30,7 +30,7 @@ export const NpcProjectileList = ({ control, tableId }: NpcProjectileListProps) 
 
   const { fields, append, remove } = useFieldArray({
     control,
-    name: "projectiles", // Nome do campo no schema do NPC
+    name: "projectiles", 
   });
 
   const handleAddManual = () => {
@@ -58,7 +58,6 @@ export const NpcProjectileList = ({ control, tableId }: NpcProjectileListProps) 
     toast({ title: "Munição Adicionada", description: itemTemplate.name });
   };
 
-  // Componente interno para renderizar o Header do Accordion (precisa de useWatch para reatividade)
   const ProjectileHeader = ({ index }: { index: number }) => {
       const name = useWatch({ control, name: `projectiles.${index}.name` });
       const quantity = useWatch({ control, name: `projectiles.${index}.quantity` });
@@ -135,7 +134,7 @@ export const NpcProjectileList = ({ control, tableId }: NpcProjectileListProps) 
                         <FormField control={control} name={`projectiles.${index}.name`} render={({ field }) => (
                             <div className="col-span-8 space-y-1">
                                 <FormLabel className="text-[10px]">Nome</FormLabel>
-                                <FormControl><Input {...field} className="h-7 text-xs" placeholder="Ex: Flechas de Fogo" /></FormControl>
+                                <FormControl><Input {...field} className="h-7 text-xs" /></FormControl>
                             </div>
                         )}/>
                         <FormField control={control} name={`projectiles.${index}.quantity`} render={({ field }) => (
@@ -150,14 +149,14 @@ export const NpcProjectileList = ({ control, tableId }: NpcProjectileListProps) 
                         <FormField control={control} name={`projectiles.${index}.damage`} render={({ field }) => (
                             <div className="space-y-1">
                                 <FormLabel className="text-[10px]">Dano Extra</FormLabel>
-                                <FormControl><Input {...field} placeholder="+0" className="h-7 text-xs" title="Ex: +2, 1d4" /></FormControl>
+                                <FormControl><Input {...field} className="h-7 text-xs" /></FormControl>
                             </div>
                         )}/>
 
                         <FormField control={control} name={`projectiles.${index}.attack_modifier`} render={({ field }) => (
                             <div className="space-y-1">
                                 <FormLabel className="text-[10px] text-blue-600">Bônus Atq</FormLabel>
-                                <FormControl><Input {...field} placeholder="+0" className="h-7 text-xs border-blue-200 focus:border-blue-500" /></FormControl>
+                                <FormControl><Input {...field} className="h-7 text-xs border-blue-200 focus:border-blue-500" /></FormControl>
                             </div>
                         )}/>
 
@@ -181,8 +180,6 @@ export const NpcProjectileList = ({ control, tableId }: NpcProjectileListProps) 
                                     value={field.value} 
                                     onChange={(val, desc) => { 
                                         field.onChange(val); 
-                                        // Nota: Se o desc for usado, teríamos de ter acesso ao setValue, 
-                                        // mas para manter simples usamos apenas o valor aqui ou passamos setValue como prop se necessário.
                                     }} 
                                     targetType="weapon" 
                                 />
@@ -194,7 +191,7 @@ export const NpcProjectileList = ({ control, tableId }: NpcProjectileListProps) 
                         <div className="space-y-1">
                             <FormLabel className="text-[10px]">Descrição</FormLabel>
                             <FormControl>
-                                <Textarea {...field} className="min-h-[60px] text-xs bg-muted/20 resize-none" placeholder="Detalhes..." />
+                                <Textarea {...field} className="min-h-[60px] text-xs bg-muted/20 resize-none" />
                             </FormControl>
                         </div>
                     )}/>

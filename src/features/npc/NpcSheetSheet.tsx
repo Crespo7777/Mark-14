@@ -11,7 +11,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { NpcSheet } from "@/features/npc/NpcSheet";
-import { useToast } from "@/hooks/use-toast";
 
 interface NpcSheetSheetProps {
   children?: React.ReactNode;
@@ -21,6 +20,7 @@ interface NpcSheetSheetProps {
 }
 
 const fetchNpc = async (npcId: string) => {
+  // CORREÇÃO: Tabela 'npcs'
   const { data, error } = await supabase
     .from("npcs")
     .select("*")
@@ -38,8 +38,6 @@ export const NpcSheetSheet = ({
   onOpenChange: externalOnOpenChange 
 }: NpcSheetSheetProps) => {
   const [internalOpen, setInternalOpen] = useState(false);
-  
-  // Controle de estado (interno ou externo)
   const isControlled = externalOpen !== undefined;
   const open = isControlled ? externalOpen : internalOpen;
   const setOpen = isControlled ? (externalOnOpenChange || (() => {})) : setInternalOpen;
@@ -51,7 +49,7 @@ export const NpcSheetSheet = ({
   } = useQuery({
     queryKey: ["npc", npcId],
     queryFn: () => fetchNpc(npcId!),
-    enabled: open && !!npcId, // Só busca se estiver aberto e com ID
+    enabled: !!open && !!npcId, 
   });
 
   return (
@@ -76,10 +74,9 @@ export const NpcSheetSheet = ({
           </Alert>
         )}
         
-        {/* CORREÇÃO AQUI: Passamos o NPC diretamente para o componente inteligente */}
         {npc && (
            <NpcSheet 
-              initialNpc={npc} 
+              initialNpc={npc as any} 
               onClose={() => setOpen(false)} 
            />
         )}

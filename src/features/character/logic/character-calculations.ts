@@ -1,4 +1,4 @@
-import { CharacterSheetData } from "../../systems/symbaroum/utils/symbaroum.schema";
+import { CharacterSheetData } from "../../systems/symbaroum/utils/character.schema";
 // Importamos o calculador ESPECÍFICO do Symbaroum
 import { calculateSymbaroumStats, DerivedStats } from "@/features/systems/symbaroum/logic/symbaroum-calculator";
 

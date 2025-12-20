@@ -3,8 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Plus, Sword, AlertCircle } from "lucide-react";
 import { ItemSelectorDialog } from "@/components/ItemSelectorDialog";
 import { WeaponCard } from "@/features/systems/symbaroum/combat/components/WeaponCard";
-import { getDefaultNpcWeapon } from "@/features/npc/npc.schema";
-import { useNpcSheet } from "../../NpcSheetContext";
+import { getDefaultNpcWeapon } from "@/features/systems/symbaroum/npc/npc.schema";
+import { useSymbaroumNpcSheet } from "../../SymbaroumNpcSheetContext";
 
 interface NpcArsenalSectionProps {
   tableId: string;
@@ -13,7 +13,7 @@ interface NpcArsenalSectionProps {
 }
 
 export const NpcArsenalSection = ({ tableId, projectiles, combatLogic }: NpcArsenalSectionProps) => {
-  const { form } = useNpcSheet();
+  const { form, npc } = useSymbaroumNpcSheet();
   
   const { fields, append, remove } = useFieldArray({ 
     control: form.control, 
@@ -57,7 +57,8 @@ export const NpcArsenalSection = ({ tableId, projectiles, combatLogic }: NpcArse
                         onAttack={() => combatLogic.prepareNpcAttack(index)}
                         onDamage={() => combatLogic.prepareDamage(index)}
                         onRemove={() => remove(index)}
-                        control={form.control} // <--- PASSA O CONTROL
+                        control={form.control}
+                        hideRolls={true} // <--- AQUI ESTÁ A MÁGICA: Esconde os botões apenas aqui
                     />
                 ))}
             </div>

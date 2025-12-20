@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, memo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Database } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { X, Save, Loader2, ImagePlus, Camera, Settings2, Move, Heart } from "lucide-react";
 import { Form } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button"; 
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -18,12 +18,10 @@ import { Progress } from "@/components/ui/progress";
 import { useFormContext } from "react-hook-form";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-// IMPORTS LOCAIS DO SISTEMA SYMBAROUM
 import { NpcSheetData, getDefaultNpcSheetData } from "./npc.schema";
 import { SymbaroumNpcSheetProvider, useSymbaroumNpcSheet } from "./SymbaroumNpcSheetContext";
-import { useNpcCalculations } from "./hooks/useNpcCalculations"; 
 
-// ABAS DO NPC (Certifique-se de que estão em src/features/systems/symbaroum/npc/tabs/)
+// IMPORTAÇÃO DE TODAS AS ABAS
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcCombatEquipmentTab } from "./tabs/NpcCombatEquipmentTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
@@ -33,36 +31,33 @@ import { NpcJournalTab } from "./tabs/NpcJournalTab";
 
 type Npc = Database["public"]["Tables"]["npcs"]["Row"];
 
-// Interface atualizada para aceitar o que o Roteador envia
-interface SymbaroumNpcSheetProps {
-  initialNpc?: Npc; // Opcional, caso venha do Roteador com ID
-  npcId?: string;   // Opcional, caso venha do Roteador apenas com ID
-  onClose: () => void;
-  isReadOnly?: boolean;
-  onBack?: () => void; // Para compatibilidade se usado fora de modal
-}
-
-// --- HEADER ---
-const NpcHeader = memo(({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
+const NpcHeader = ({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
     const { register, watch, setValue } = useFormContext();
     const { toast } = useToast();
-    const calculations = useNpcCalculations(); 
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { npc } = useSymbaroumNpcSheet();
 
+    // WATCH EM TEMPO REAL (Sem memo, sem lag)
     const name = watch("name");
     const race = watch("race");
     const occupation = watch("occupation");
     const imageUrl = watch("image_url");
-    const imageSettings = watch("data.image_settings") || { x: 50, y: 50, scale: 100 };
-    const currentHp = watch("toughness.current") || 0;
-    const maxHp = calculations.toughnessMax;
-    const hpPercentage = Math.min(100, Math.max(0, (currentHp / (maxHp || 1)) * 100));
+    const imageSettings = watch("image_settings") || { x: 50, y: 50, scale: 100 };
+
+    // LÓGICA DE VIDA SINCRONIZADA
+    const currentHp = Number(watch("combat.toughness_current")) || 0;
+    const baseMax = Number(watch("combat.toughness_max")) || 10;
+    // Atenção: O nome aqui tem de bater com o schema (toughness_max_modifier)
+    const bonusMax = Number(watch("combat.toughness_max_modifier")) || 0;
+    const tempHp = Number(watch("combat.toughness_temp")) || 0;
+
+    const totalMax = baseMax + bonusMax;
+    const hpPercentage = Math.min(100, Math.max(0, (currentHp / (totalMax || 1)) * 100));
 
     const updateImageSettings = (key: string, value: number[]) => {
         const newSettings = { ...imageSettings, [key]: value[0] };
-        setValue("data.image_settings", newSettings, { shouldDirty: true });
+        setValue("image_settings", newSettings, { shouldDirty: true });
     };
 
     const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -131,34 +126,37 @@ const NpcHeader = memo(({ isReadOnly, onClose, onSave, isDirty, isSaving }: any)
                             <Button size="sm" variant="ghost" onClick={onClose} disabled={isSaving}><X className="w-4 h-4" /></Button>
                         </div>
                     </div>
+                    {/* BARRA DE VIDA TOTALMENTE RESPONSIVA */}
                     <div className="w-full p-3 bg-muted/30 rounded-lg border border-border/50">
                         <div className="flex items-center justify-between mb-1">
                              <div className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
                                 <Heart className="w-3 h-3 text-red-500 fill-red-500"/> Vitalidade
                              </div>
-                             <div className="text-lg font-black text-red-600 leading-none">{currentHp} / {maxHp}</div>
+                             <div className="text-lg font-black text-red-600 leading-none">
+                                {currentHp} / {totalMax} 
+                                {tempHp > 0 && <span className="ml-2 text-xs text-blue-500 font-bold tracking-tight">(+{tempHp})</span>}
+                             </div>
                         </div>
-                        <Progress value={hpPercentage} className="h-3 bg-red-950" indicatorClassName="bg-red-600" />
+                        <Progress value={hpPercentage} className="h-3 bg-red-950" indicatorClassName="bg-red-600 transition-all duration-300" />
                     </div>
                 </div>
             </div>
         </Card>
     );
-});
-NpcHeader.displayName = "NpcHeader";
+};
 
 const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; onSave: (data: NpcSheetData) => Promise<void>; initialData: NpcSheetData; }) => {
   const { form, isReadOnly, isDirty, isSaving, saveSheet, programmaticSave } = useSymbaroumNpcSheet();
   const { toast } = useToast();
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("details");
+  const [activeTab, setActiveTab] = useState("combat_equip");
 
+  // Mantém os dados sincronizados apenas se o formulário não estiver 'sujo' (editado pelo usuário)
   useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; return ""; };
-    if (isDirty && !isReadOnly) window.addEventListener("beforeunload", handleBeforeUnload);
-    else window.removeEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isDirty, isReadOnly]);
+    if (!isDirty && initialData) {
+      form.reset(initialData, { keepValues: true });
+    }
+  }, [initialData, isDirty, form]);
 
   const handleCloseClick = () => {
     if (isSaving) { toast({ title: "Aguarde", description: "Salvando..." }); return; }
@@ -189,22 +187,22 @@ const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; onSave: 
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0">
                 <div className="px-4 border-b bg-muted/20">
                     <TabsList className="h-9 bg-transparent p-0 w-full justify-start gap-2 overflow-x-auto scrollbar-none">
-                        <TabsTrigger value="details" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Detalhes</TabsTrigger>
+                        <TabsTrigger value="combat_equip" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none font-bold">Combate</TabsTrigger>
                         <TabsTrigger value="attributes" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Atributos</TabsTrigger>
-                        <TabsTrigger value="combat_equip" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Combate</TabsTrigger>
                         <TabsTrigger value="abilities_traits" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Habilidades</TabsTrigger>
                         <TabsTrigger value="backpack" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Inventário</TabsTrigger>
-                        <TabsTrigger value="journal" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Lore</TabsTrigger>
+                        <TabsTrigger value="details" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Detalhes</TabsTrigger>
+                        <TabsTrigger value="journal" className="text-xs data-[state=active]:border-b-2 data-[state=active]:border-destructive rounded-none">Anotações</TabsTrigger>
                     </TabsList>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
                     <div className={isReadOnly ? "pointer-events-none opacity-90 h-full" : "h-full"}>
-                        <TabsContent value="details" className="mt-0"><NpcDetailsTab /></TabsContent>
-                        <TabsContent value="attributes" className="mt-0"><NpcAttributesTab /></TabsContent>
-                        <TabsContent value="combat_equip" className="mt-0"><NpcCombatEquipmentTab /></TabsContent>
-                        <TabsContent value="abilities_traits" className="mt-0"><NpcAbilitiesTraitsTab /></TabsContent>
-                        <TabsContent value="backpack" className="mt-0"><NpcInventoryTab /></TabsContent>
-                        <TabsContent value="journal" className="mt-0"><NpcJournalTab /></TabsContent>
+                        <TabsContent value="combat_equip" className="mt-0 h-full"><NpcCombatEquipmentTab /></TabsContent>
+                        <TabsContent value="attributes" className="mt-0 h-full"><NpcAttributesTab /></TabsContent>
+                        <TabsContent value="abilities_traits" className="mt-0 h-full"><NpcAbilitiesTraitsTab /></TabsContent>
+                        <TabsContent value="backpack" className="mt-0 h-full"><NpcInventoryTab /></TabsContent>
+                        <TabsContent value="details" className="mt-0 h-full"><NpcDetailsTab /></TabsContent>
+                        <TabsContent value="journal" className="mt-0 h-full"><NpcJournalTab /></TabsContent>
                     </div>
                 </div>
                 </Tabs>
@@ -226,53 +224,50 @@ const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; onSave: 
   );
 };
 
-// Componente Principal Exportado
-export const SymbaroumNpcSheet = ({ initialNpc, npcId, onClose, isReadOnly }: SymbaroumNpcSheetProps) => {
+export const SymbaroumNpcSheet = ({ initialNpc, onClose }: { initialNpc: Npc, onClose: () => void }) => {
   const queryClient = useQueryClient();
-  const [fetchedNpc, setFetchedNpc] = useState<Npc | undefined>(initialNpc);
-  const { toast } = useToast();
-
-  // Se não veio initialNpc, mas tem ID, busca do banco (Fallback)
-  useEffect(() => {
-      if (!initialNpc && npcId) {
-          supabase.from("npcs").select("*").eq("id", npcId).single()
-              .then(({ data, error }) => {
-                  if (data) setFetchedNpc(data);
-                  if (error) toast({ title: "Erro ao carregar", description: error.message, variant: "destructive" });
-              });
-      }
-  }, [initialNpc, npcId, toast]);
-
-  const targetNpc = initialNpc || fetchedNpc;
 
   const validatedData = useMemo(() => {
-      if (!targetNpc) return null;
-      const defaults = getDefaultNpcSheetData(targetNpc.name || "Novo NPC");
-      const rawData = targetNpc.data as any;
+      if (!initialNpc) return null;
+      const defaults = getDefaultNpcSheetData(initialNpc.name || "Novo NPC");
+      const rawData = (initialNpc.data as any) || {};
+      
+      // MERGE CRÍTICO: Garante que os campos novos EXISTAM mesmo que o banco não os tenha
       return {
         ...defaults,
         ...rawData,
-        name: targetNpc.name,
-        image_url: targetNpc.image_url, 
+        name: initialNpc.name,
+        image_url: initialNpc.image_url, 
         attributes: { ...defaults.attributes, ...(rawData?.attributes || {}) },
-        combat: { ...defaults.combat, ...(rawData?.combat || {}) },
+        combat: { 
+            ...defaults.combat, 
+            ...(rawData?.combat || {}),
+            // FORÇA A EXISTÊNCIA DOS CAMPOS para que o reset não os apague
+            toughness_max_modifier: Number(rawData?.combat?.toughness_max_modifier || 0),
+            toughness_temp: Number(rawData?.combat?.toughness_temp || 0)
+        },
       };
-  }, [targetNpc]); 
+  }, [initialNpc]); 
   
-  if (!targetNpc || !validatedData) {
-      // Estado de carregamento ou erro se não tiver NPC
-      return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-muted-foreground" /></div>;
-  }
+  if (!initialNpc || !validatedData) return null;
 
   const handleSave = async (data: NpcSheetData) => {
-    const { error } = await supabase.from("npcs").update({ name: data.name, image_url: data.image_url, data: data }).eq("id", targetNpc.id);
+    // SALVA TUDO, INCLUINDO MODIFICADORES
+    const { error } = await supabase.from("npcs").update({ 
+        name: data.name, 
+        image_url: data.image_url, 
+        data: data 
+    }).eq("id", initialNpc.id);
+    
     if (error) throw new Error(error.message);
-    await queryClient.invalidateQueries({ queryKey: ['npcs', targetNpc.table_id] });
-    await queryClient.invalidateQueries({ queryKey: ['npc', targetNpc.id] });
+    
+    // Invalida o cache para atualizar a lista, mas o useEffect acima cuida do formulário local
+    await queryClient.invalidateQueries({ queryKey: ['npcs', initialNpc.table_id] });
+    await queryClient.invalidateQueries({ queryKey: ['npc', initialNpc.id] });
   };
 
   return (
-    <SymbaroumNpcSheetProvider npc={targetNpc} onSave={handleSave} isReadOnly={isReadOnly}>
+    <SymbaroumNpcSheetProvider npc={initialNpc} onSave={handleSave}>
       <NpcSheetInner onClose={onClose} onSave={handleSave} initialData={validatedData as NpcSheetData} />
     </SymbaroumNpcSheetProvider>
   );
