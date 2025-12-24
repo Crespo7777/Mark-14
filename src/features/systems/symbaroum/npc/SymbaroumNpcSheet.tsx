@@ -105,7 +105,6 @@ const NpcHeader = ({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
                                     {isDirty ? "Salvar" : "Salvo"}
                                 </Button>
                             )}
-                            <Button size="sm" variant="ghost" onClick={onClose} disabled={isSaving}><X className="w-4 h-4" /></Button>
                         </div>
                     </div>
                     <div className="mx-3 p-3 bg-muted/30 rounded-lg border border-border/50">

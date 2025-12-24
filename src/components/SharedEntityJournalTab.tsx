@@ -340,20 +340,21 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
 
       <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
 
-      {/* Diálogo de Edição com Trigger Invisível */}
+      // ... no final do arquivo SharedEntityJournalTab.tsx
+      {/* Diálogo de Edição agora CONTROLADO pelo estado do pai */}
       {entryToEdit && (
         <Suspense fallback={null}>
-            <JournalEntryDialog
-                tableId={tableId}
-                onEntrySaved={invalidate}
-                entry={entryToEdit}
-                characterId={entityType === "character" ? entityId : undefined}
-                npcId={entityType === "npc" ? entityId : undefined}
-            >
-                <span className="hidden">Trigger</span>
-            </JournalEntryDialog>
-        </Suspense>
-      )}
+          <JournalEntryDialog
+             tableId={tableId}
+             onEntrySaved={invalidate}
+             entry={entryToEdit}
+             open={!!entryToEdit} // ABRE AUTOMATICAMENTE QUANDO EXISTE UM ITEM
+             onOpenChange={(open) => !open && setEntryToEdit(null)} // LIMPA AO FECHAR
+             characterId={entityType === "character" ? entityId : undefined}
+            npcId={entityType === "npc" ? entityId : undefined}
+      />
+    </Suspense>
+   )}
     </div>
   );
 };
