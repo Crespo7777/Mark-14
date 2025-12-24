@@ -21,7 +21,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { NpcSheetData, getDefaultNpcSheetData } from "./npc.schema";
 import { SymbaroumNpcSheetProvider, useSymbaroumNpcSheet } from "./SymbaroumNpcSheetContext";
 
-// IMPORTAÇÃO DE TODAS AS ABAS
 import { NpcDetailsTab } from "./tabs/NpcDetailsTab";
 import { NpcCombatEquipmentTab } from "./tabs/NpcCombatEquipmentTab";
 import { NpcAttributesTab } from "./tabs/NpcAttributesTab";
@@ -38,21 +37,11 @@ const NpcHeader = ({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { npc } = useSymbaroumNpcSheet();
 
-    // WATCH EM TEMPO REAL (Sem memo, sem lag)
-    const name = watch("name");
-    const race = watch("race");
-    const occupation = watch("occupation");
     const imageUrl = watch("image_url");
     const imageSettings = watch("image_settings") || { x: 50, y: 50, scale: 100 };
 
-    // LÓGICA DE VIDA SINCRONIZADA
     const currentHp = Number(watch("combat.toughness_current")) || 0;
-    const baseMax = Number(watch("combat.toughness_max")) || 10;
-    // Atenção: O nome aqui tem de bater com o schema (toughness_max_modifier)
-    const bonusMax = Number(watch("combat.toughness_max_modifier")) || 0;
-    const tempHp = Number(watch("combat.toughness_temp")) || 0;
-
-    const totalMax = baseMax + bonusMax;
+    const totalMax = Number(watch("combat.toughness_max")) || 10;
     const hpPercentage = Math.min(100, Math.max(0, (currentHp / (totalMax || 1)) * 100));
 
     const updateImageSettings = (key: string, value: number[]) => {
@@ -93,27 +82,20 @@ const NpcHeader = ({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
                         )}
                         {!isReadOnly && <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer flex items-center justify-center z-10"><Camera className="w-6 h-6 text-white/90" /></div>}
                     </div>
-                    {!isReadOnly && imageUrl && (
-                        <Popover>
-                            <PopoverTrigger asChild><Button size="icon" variant="secondary" className="absolute -bottom-2 -right-2 h-7 w-7 rounded-full shadow-md z-20 opacity-0 group-hover:opacity-100"><Settings2 className="w-3.5 h-3.5" /></Button></PopoverTrigger>
-                            <PopoverContent className="w-64 p-4" align="start">
-                                <div className="space-y-4">
-                                    <h4 className="font-medium leading-none flex items-center gap-2 text-xs uppercase tracking-wide"><Move className="w-3 h-3"/> Ajustar</h4>
-                                    <div className="space-y-1.5"><div className="flex justify-between text-xs"><Label>Zoom</Label><span>{imageSettings.scale}%</span></div><Slider value={[imageSettings.scale]} min={100} max={300} step={5} onValueChange={(val) => updateImageSettings("scale", val)} /></div>
-                                    <div className="space-y-1.5"><div className="flex justify-between text-xs"><Label>X</Label><span>{imageSettings.x}%</span></div><Slider value={[imageSettings.x]} min={0} max={100} step={1} onValueChange={(val) => updateImageSettings("x", val)} /></div>
-                                    <div className="space-y-1.5"><div className="flex justify-between text-xs"><Label>Y</Label><span>{imageSettings.y}%</span></div><Slider value={[imageSettings.y]} min={0} max={100} step={1} onValueChange={(val) => updateImageSettings("y", val)} /></div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
-                    )}
                 </div>
                 <div className="flex-1 w-full space-y-3">
                     <div className="flex flex-col md:flex-row justify-between items-start gap-2">
                         <div className="w-full">
-                            <Input {...register("name")} className="text-2xl font-black tracking-tight text-destructive border-none bg-transparent hover:bg-muted/30 px-0 h-auto focus-visible:ring-0 shadow-none p-0 uppercase" placeholder="NOME DO MONSTRO" readOnly={isReadOnly} />
-                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                                <Badge variant="outline" className="rounded-sm font-mono border-destructive/30 text-destructive/80">{race || "Raça"}</Badge>
-                                <span className="text-xs font-bold uppercase tracking-wide">{occupation || "Tipo"}</span>
+                            {/* AJUSTE: px-3 para evitar corte lateral e tracking-normal */}
+                            <Input 
+                                {...register("name")} 
+                                className="text-2xl md:text-3xl font-black tracking-normal text-destructive border-none bg-transparent hover:bg-muted/30 px-3 h-auto focus-visible:ring-0 shadow-none py-2 uppercase w-full" 
+                                placeholder="NOME DO MONSTRO" 
+                                readOnly={isReadOnly} 
+                            />
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1 px-3">
+                                <Badge variant="outline" className="rounded-sm font-mono border-destructive/30 text-destructive/80">{watch("race") || "Raça"}</Badge>
+                                <span className="text-xs font-bold uppercase tracking-wide">{watch("occupation") || "Tipo"}</span>
                             </div>
                         </div>
                         <div className="flex gap-2 shrink-0">
@@ -126,18 +108,16 @@ const NpcHeader = ({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
                             <Button size="sm" variant="ghost" onClick={onClose} disabled={isSaving}><X className="w-4 h-4" /></Button>
                         </div>
                     </div>
-                    {/* BARRA DE VIDA TOTALMENTE RESPONSIVA */}
-                    <div className="w-full p-3 bg-muted/30 rounded-lg border border-border/50">
+                    <div className="mx-3 p-3 bg-muted/30 rounded-lg border border-border/50">
                         <div className="flex items-center justify-between mb-1">
                              <div className="text-[10px] uppercase font-bold text-muted-foreground flex items-center gap-1">
                                 <Heart className="w-3 h-3 text-red-500 fill-red-500"/> Vitalidade
                              </div>
                              <div className="text-lg font-black text-red-600 leading-none">
                                 {currentHp} / {totalMax} 
-                                {tempHp > 0 && <span className="ml-2 text-xs text-blue-500 font-bold tracking-tight">(+{tempHp})</span>}
                              </div>
                         </div>
-                        <Progress value={hpPercentage} className="h-3 bg-red-950" indicatorClassName="bg-red-600 transition-all duration-300" />
+                        <Progress value={hpPercentage} className="h-2 bg-red-950" indicatorClassName="bg-red-600 transition-all duration-300" />
                     </div>
                 </div>
             </div>
@@ -145,13 +125,12 @@ const NpcHeader = ({ isReadOnly, onClose, onSave, isDirty, isSaving }: any) => {
     );
 };
 
-const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; onSave: (data: NpcSheetData) => Promise<void>; initialData: NpcSheetData; }) => {
+const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; initialData: NpcSheetData; }) => {
   const { form, isReadOnly, isDirty, isSaving, saveSheet, programmaticSave } = useSymbaroumNpcSheet();
   const { toast } = useToast();
   const [isCloseAlertOpen, setIsCloseAlertOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("combat_equip");
 
-  // Mantém os dados sincronizados apenas se o formulário não estiver 'sujo' (editado pelo usuário)
   useEffect(() => {
     if (!isDirty && initialData) {
       form.reset(initialData, { keepValues: true });
@@ -179,7 +158,7 @@ const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; onSave: 
 
   return (
     <>
-      <div className="flex flex-col h-full bg-background">
+      <div className="flex flex-col h-full bg-background overflow-hidden">
         <Form {...form}>
           <div className="flex flex-col h-full">
             <NpcHeader isReadOnly={isReadOnly} onClose={handleCloseClick} onSave={saveSheet} isDirty={isDirty} isSaving={isSaving} />
@@ -196,14 +175,12 @@ const NpcSheetInner = ({ onClose, initialData }: { onClose: () => void; onSave: 
                     </TabsList>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4">
-                    <div className={isReadOnly ? "pointer-events-none opacity-90 h-full" : "h-full"}>
-                        <TabsContent value="combat_equip" className="mt-0 h-full"><NpcCombatEquipmentTab /></TabsContent>
-                        <TabsContent value="attributes" className="mt-0 h-full"><NpcAttributesTab /></TabsContent>
-                        <TabsContent value="abilities_traits" className="mt-0 h-full"><NpcAbilitiesTraitsTab /></TabsContent>
-                        <TabsContent value="backpack" className="mt-0 h-full"><NpcInventoryTab /></TabsContent>
-                        <TabsContent value="details" className="mt-0 h-full"><NpcDetailsTab /></TabsContent>
-                        <TabsContent value="journal" className="mt-0 h-full"><NpcJournalTab /></TabsContent>
-                    </div>
+                    <TabsContent value="combat_equip" className="mt-0 h-full"><NpcCombatEquipmentTab /></TabsContent>
+                    <TabsContent value="attributes" className="mt-0 h-full"><NpcAttributesTab /></TabsContent>
+                    <TabsContent value="abilities_traits" className="mt-0 h-full"><NpcAbilitiesTraitsTab /></TabsContent>
+                    <TabsContent value="backpack" className="mt-0 h-full"><NpcInventoryTab /></TabsContent>
+                    <TabsContent value="details" className="mt-0 h-full"><NpcDetailsTab /></TabsContent>
+                    <TabsContent value="journal" className="mt-0 h-full"><NpcJournalTab /></TabsContent>
                 </div>
                 </Tabs>
             </form>
@@ -232,19 +209,17 @@ export const SymbaroumNpcSheet = ({ initialNpc, onClose }: { initialNpc: Npc, on
       const defaults = getDefaultNpcSheetData(initialNpc.name || "Novo NPC");
       const rawData = (initialNpc.data as any) || {};
       
-      // MERGE CRÍTICO: Garante que os campos novos EXISTAM mesmo que o banco não os tenha
       return {
         ...defaults,
         ...rawData,
         name: initialNpc.name,
         image_url: initialNpc.image_url, 
-        attributes: { ...defaults.attributes, ...(rawData?.attributes || {}) },
         combat: { 
             ...defaults.combat, 
             ...(rawData?.combat || {}),
-            // FORÇA A EXISTÊNCIA DOS CAMPOS para que o reset não os apague
-            toughness_max_modifier: Number(rawData?.combat?.toughness_max_modifier || 0),
-            toughness_temp: Number(rawData?.combat?.toughness_temp || 0)
+            toughness_max: Number(rawData?.combat?.toughness_max || defaults.combat.toughness_max),
+            toughness_max_modifier: 0,
+            toughness_temp: 0
         },
       };
   }, [initialNpc]); 
@@ -252,7 +227,6 @@ export const SymbaroumNpcSheet = ({ initialNpc, onClose }: { initialNpc: Npc, on
   if (!initialNpc || !validatedData) return null;
 
   const handleSave = async (data: NpcSheetData) => {
-    // SALVA TUDO, INCLUINDO MODIFICADORES
     const { error } = await supabase.from("npcs").update({ 
         name: data.name, 
         image_url: data.image_url, 
@@ -261,14 +235,13 @@ export const SymbaroumNpcSheet = ({ initialNpc, onClose }: { initialNpc: Npc, on
     
     if (error) throw new Error(error.message);
     
-    // Invalida o cache para atualizar a lista, mas o useEffect acima cuida do formulário local
     await queryClient.invalidateQueries({ queryKey: ['npcs', initialNpc.table_id] });
     await queryClient.invalidateQueries({ queryKey: ['npc', initialNpc.id] });
   };
 
   return (
     <SymbaroumNpcSheetProvider npc={initialNpc} onSave={handleSave}>
-      <NpcSheetInner onClose={onClose} onSave={handleSave} initialData={validatedData as NpcSheetData} />
+      <NpcSheetInner onClose={onClose} initialData={validatedData as NpcSheetData} />
     </SymbaroumNpcSheetProvider>
   );
 };

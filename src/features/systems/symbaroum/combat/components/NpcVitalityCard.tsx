@@ -1,188 +1,153 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Heart, Skull, Plus, AlertCircle } from "lucide-react";
-import { FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Heart, Skull, Plus, ShieldAlert, Activity } from "lucide-react";
+import { FormField, FormItem, FormLabel, FormControl } from "@/components/ui/form";
 import { UseFormReturn, useWatch } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-const QuickAction = ({ label, onApply, icon: Icon, variant, className, inputClassName }: any) => {
+// Caminho corrigido para o hook de cálculos
+import { useNpcCalculations } from "../../npc/hooks/useNpcCalculations"; 
+
+const QuickActionButton = ({ onApply, icon: Icon, colorClass, tooltip }: any) => {
   const [val, setVal] = useState("");
   return (
-    <div className="flex items-center gap-2 w-full h-9">
-      <Input 
-        type="number" 
-        placeholder="#" 
-        className={cn("w-14 h-full text-center px-1 font-mono font-bold bg-background", inputClassName)} 
-        value={val} 
-        onChange={e => setVal(e.target.value)} 
-      />
-      <Button 
-        size="sm" 
-        type="button" 
-        variant={variant || "outline"}
-        className={cn("flex-1 h-full text-[10px] font-black uppercase tracking-wider gap-2", className)}
-        onClick={() => { 
-          const num = parseInt(val);
-          if (!isNaN(num) && num > 0) {
-            onApply(num); 
-            setVal(""); 
-          }
-        }}
-        disabled={!val || parseInt(val) <= 0}
-      >
-        {Icon && <Icon className="w-3.5 h-3.5" />} {label}
-      </Button>
+    <div className="flex flex-col gap-1 flex-1">
+      <div className="flex h-10 w-full items-stretch rounded-lg border border-border/40 bg-black/40 overflow-hidden shadow-inner focus-within:ring-1 focus-within:ring-primary/40 transition-all">
+        <input 
+          type="number" 
+          placeholder="0" 
+          className="w-1/2 bg-transparent text-center font-mono text-sm font-bold focus:outline-none border-none p-0 appearance-none text-foreground placeholder:opacity-20" 
+          value={val} 
+          onChange={e => setVal(e.target.value)} 
+        />
+        <Button 
+          size="sm" 
+          type="button" 
+          variant="ghost"
+          className={cn("flex-1 h-full rounded-none border-l border-border/30 px-0 flex items-center justify-center transition-colors", colorClass)}
+          onClick={() => { 
+            const num = parseInt(val);
+            if (!isNaN(num) && num > 0) {
+              onApply(num); 
+              setVal(""); 
+            }
+          }}
+          disabled={!val || parseInt(val) <= 0}
+          title={tooltip}
+        >
+          <Icon className="w-5 h-5" />
+        </Button>
+      </div>
     </div>
   );
 };
 
-interface NpcVitalityCardProps {
-  form: UseFormReturn<any>;
-  onDamage?: (val: number) => void;
-  onHeal?: (val: number) => void;
-}
-
-export const NpcVitalityCard = ({ form, onDamage: externalOnDamage, onHeal: externalOnHeal }: NpcVitalityCardProps) => {
+export const NpcVitalityCard = ({ form, onDamage: extDamage, onHeal: extHeal }: { form: UseFormReturn<any>, onDamage?: any, onHeal?: any }) => {
   const { toast } = useToast();
+  const { damageReduction } = useNpcCalculations();
 
-  // "FONTE DA VERDADE" VISUAL: Estas variáveis são o que você vê na tela
   const current = Number(useWatch({ control: form.control, name: "combat.toughness_current" })) || 0;
-  const temp = Number(useWatch({ control: form.control, name: "combat.toughness_temp" })) || 0;
-  const maxBase = Number(useWatch({ control: form.control, name: "combat.toughness_max" })) || 10;
-  const maxMod = Number(useWatch({ control: form.control, name: "combat.toughness_max_modifier" })) || 0;
+  const totalMax = Number(useWatch({ control: form.control, name: "combat.toughness_max" })) || 10;
   const painThreshold = Number(useWatch({ control: form.control, name: "combat.pain_threshold" })) || 5;
-  
-  const totalMax = maxBase + maxMod;
 
-  // Segurança: Ajusta vida se o bônus cair
   useEffect(() => {
-    if (current > totalMax) {
-      form.setValue("combat.toughness_current", totalMax, { shouldDirty: true });
+    if (form.getValues("combat.toughness_temp") !== 0 || form.getValues("combat.toughness_max_modifier") !== 0) {
+      form.setValue("combat.toughness_temp", 0);
+      form.setValue("combat.toughness_max_modifier", 0);
     }
+  }, [form]);
+
+  useEffect(() => {
+    if (current > totalMax) form.setValue("combat.toughness_current", totalMax, { shouldDirty: true });
   }, [totalMax, current, form]);
 
-  const percent = Math.min(100, Math.max(0, (current / (totalMax || 1)) * 100));
-  
-  let barColor = "bg-emerald-500";
-  let containerColor = "bg-emerald-500/10 border-emerald-600/20";
-  
-  if (current <= 0) {
-    barColor = "bg-slate-900";
-    containerColor = "bg-red-950/20 border-red-900/50 text-red-600";
-  } else if (current <= painThreshold) {
-    barColor = "bg-orange-500";
-    containerColor = "bg-orange-500/10 border-orange-500/30 text-orange-600";
-  }
-
-  // --- LÓGICA DE DANO CORRIGIDA ---
   const handleApplyDamage = (amount: number) => {
-    if (externalOnDamage) { externalOnDamage(amount); return; }
-
-    // USAMOS AS VARIÁVEIS 'temp' e 'current' DO ESCOPO
-    // Isso garante que se você vê "+3", o código calcula com 3.
-    let damageRemaining = amount;
-    let newTemp = temp;
-    let newCurrent = current;
-
-    // 1. O Escudo (Temp) absorve o dano
-    if (newTemp > 0) {
-      if (newTemp >= damageRemaining) {
-        // Escudo absorve tudo
-        newTemp -= damageRemaining;
-        damageRemaining = 0;
-      } else {
-        // Escudo quebra, sobra dano
-        damageRemaining -= newTemp;
-        newTemp = 0;
-      }
-    }
-
-    // 2. Aplica o dano restante na vida
-    if (damageRemaining > 0) {
-      newCurrent = Math.max(0, current - damageRemaining);
-    }
-
-    // 3. Atualiza o formulário
-    form.setValue("combat.toughness_temp", newTemp, { shouldDirty: true, shouldTouch: true });
-    form.setValue("combat.toughness_current", newCurrent, { shouldDirty: true, shouldTouch: true });
-
+    if (extDamage) { extDamage(amount); return; }
+    
+    // REDUÇÃO AUTOMÁTICA (Invisível visualmente, mas ativa na matemática)
+    const finalDamage = Math.max(0, amount - damageReduction);
+    const newCurrent = Math.max(0, current - finalDamage);
+    
+    form.setValue("combat.toughness_current", newCurrent, { shouldDirty: true });
+    
     toast({
-        title: "Dano Aplicado",
-        description: `Dano: ${amount}. (Temp: ${temp} -> ${newTemp}, Vida: ${current} -> ${newCurrent})`,
-        variant: "destructive"
+      title: finalDamage === 0 ? "Ataque Bloqueado" : "Dano Aplicado",
+      description: `Original: ${amount} | Redução: ${damageReduction} | Final: ${finalDamage}`,
+      variant: finalDamage === 0 ? "default" : "destructive"
     });
   };
 
-  const handleApplyHeal = (amount: number) => {
-    if (externalOnHeal) { externalOnHeal(amount); return; }
-    
-    // Cura usando a mesma lógica de variáveis do escopo
-    const newCurrent = Math.min(totalMax, current + amount);
-    form.setValue("combat.toughness_current", newCurrent, { shouldDirty: true, shouldTouch: true });
-    
-    toast({
-        title: "Cura Aplicada",
-        description: `+${amount} HP (Atual: ${newCurrent}/${totalMax})`,
-        className: "bg-emerald-500/10 border-emerald-500/50 text-emerald-600"
-    });
-  };
+  const percent = Math.min(100, Math.max(0, (current / (totalMax || 1)) * 100));
+  const isWounded = current <= painThreshold && current > 0;
+  const isDead = current <= 0;
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden border-t-4 border-t-red-600 shadow-sm bg-gradient-to-br from-card to-red-500/5">
-      <CardHeader className="pb-2 pt-4 px-4 flex-row items-center justify-between space-y-0">
-        <span className="flex items-center gap-2 text-red-600 dark:text-red-400 font-bold uppercase text-xs tracking-wider">
-          <Heart className="w-4 h-4 fill-current" /> Vitalidade
-        </span>
-        
-        <div className="flex items-center gap-2 bg-background border rounded-md px-2 py-0.5 shadow-sm border-orange-500/30">
-          <AlertCircle className="w-3 h-3 text-orange-500" />
-          <span className="text-[10px] text-muted-foreground font-black uppercase">Dor:</span>
-          <FormField control={form.control} name="combat.pain_threshold" render={({ field }) => (
-            <Input 
-              {...field} 
-              type="number" 
-              className="h-5 w-8 p-0 text-center border-none bg-transparent font-black text-xs focus-visible:ring-0" 
-              onChange={e => field.onChange(Number(e.target.value))}
+    <Card className="h-full flex flex-col border border-border/60 bg-background/80 shadow-2xl backdrop-blur-xl overflow-hidden rounded-xl font-sans">
+      <div className={cn("h-1.5 w-full transition-all duration-500", isDead ? "bg-slate-900" : isWounded ? "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]" : "bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]")} />
+
+      <CardContent className="p-4 flex flex-col gap-4">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2 opacity-70">
+            <Activity className="w-4 h-4 text-red-500" />
+            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Vitalidade</span>
+          </div>
+          
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-500/10 border border-amber-500/20 text-amber-500">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            <input 
+                type="number" 
+                className="w-6 bg-transparent border-none text-[10px] font-mono font-black text-center focus:outline-none" 
+                {...form.register("combat.pain_threshold", { valueAsNumber: true })} 
+                title="Limiar de Dor"
             />
-          )} />
-        </div>
-      </CardHeader>
-      
-      <CardContent className="p-4 pt-2 space-y-4 flex-1 flex flex-col">
-        {/* VISUALIZADOR */}
-        <div className={cn("relative h-14 w-full rounded-xl overflow-hidden border-2 transition-colors duration-300", containerColor)}>
-          <div className={cn("h-full transition-all duration-500 ease-out opacity-20", barColor)} style={{ width: `${percent}%` }} />
-          <div className="absolute inset-0 flex items-center justify-center font-black text-2xl tracking-tighter tabular-nums drop-shadow-sm">
-            {current} <span className="text-sm opacity-50 mx-1">/</span> {totalMax}
-            {temp > 0 && <span className="ml-2 text-sm text-blue-600 dark:text-blue-400 font-bold">(+{temp})</span>}
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <FormField control={form.control} name="combat.toughness_max_modifier" render={({ field }) => (
-            <FormItem className="space-y-1">
-              <FormLabel className="text-[10px] uppercase font-black text-muted-foreground/80">Máx+</FormLabel>
-              <FormControl>
-                <Input type="number" {...field} value={field.value ?? 0} className="h-8 text-center font-bold bg-background/50 border-border/50" onChange={e => field.onChange(Number(e.target.value))} />
-              </FormControl>
-            </FormItem>
-          )} />
-          <FormField control={form.control} name="combat.toughness_temp" render={({ field }) => (
-            <FormItem className="space-y-1">
-              <FormLabel className="text-[10px] uppercase font-black text-blue-600">Temp</FormLabel>
-              <FormControl>
-                <Input type="number" {...field} value={field.value ?? 0} className="h-8 text-center font-bold bg-blue-500/5 border-blue-500/20 text-blue-600" onChange={e => field.onChange(Number(e.target.value))} />
-              </FormControl>
-            </FormItem>
-          )} />
+        <div className="relative h-20 w-full rounded-xl bg-black/40 border border-white/5 overflow-hidden flex flex-col items-center justify-center shadow-inner">
+          <div className={cn("absolute left-0 top-0 h-full transition-all duration-1000 ease-out opacity-25", isDead ? "bg-slate-950" : isWounded ? "bg-amber-700" : "bg-red-700")} style={{ width: `${percent}%` }} />
+          <div className="z-10 flex flex-col items-center leading-none">
+            <span className="text-4xl font-black font-mono tracking-tighter drop-shadow-md">{current}</span>
+            <span className="text-[10px] font-black uppercase text-white/30 tracking-widest mt-1">/ {totalMax}</span>
+          </div>
         </div>
 
-        <div className="mt-auto pt-4 border-t border-dashed border-red-500/10 flex flex-col gap-2">
-          <QuickAction label="Aplicar Dano" icon={Skull} onApply={handleApplyDamage} variant="destructive" className="bg-red-600 hover:bg-red-700" inputClassName="border-red-200" />
-          <QuickAction label="Curar" icon={Plus} onApply={handleApplyHeal} variant="outline" className="text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/10 border-emerald-500/30" inputClassName="border-emerald-200" />
+        <div className="space-y-4">
+          <FormField control={form.control} name="combat.toughness_max" render={({ field }) => (
+            <FormItem className="space-y-1.5">
+              <FormLabel className="text-[9px] font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2 ml-1">
+                <Heart className="w-2.5 h-2.5 text-red-500" /> HP Máximo
+              </FormLabel>
+              <FormControl>
+                <Input 
+                  type="number" 
+                  className="h-9 font-mono font-bold text-center text-sm bg-black/20 border-border/40 focus:ring-1 focus:ring-red-500/30" 
+                  {...field} 
+                  onChange={e => field.onChange(e.target.value === "" ? "" : e.target.value)} 
+                  onBlur={e => { 
+                    const val = parseInt(e.target.value);
+                    if (isNaN(val) || val < 10) field.onChange(10); 
+                  }} 
+                />
+              </FormControl>
+            </FormItem>
+          )} />
+          <div className="flex gap-3">
+            <QuickActionButton 
+                icon={Skull} 
+                colorClass="bg-red-500/20 text-red-400 hover:bg-red-500 hover:text-white" 
+                onApply={handleApplyDamage} 
+                tooltip="Aplicar Dano (Redução Automática)"
+            />
+            <QuickActionButton 
+                icon={Plus} 
+                colorClass="bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white" 
+                onApply={(v: number) => form.setValue("combat.toughness_current", Math.min(totalMax, current + v), { shouldDirty: true })} 
+                tooltip="Aplicar Cura"
+            />
+          </div>
         </div>
       </CardContent>
     </Card>
