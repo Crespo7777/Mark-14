@@ -10,7 +10,6 @@ import {
 import { useForm, UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Database } from "@/integrations/supabase/types";
-// CORREÇÃO: Importar npcSchema
 import { NpcSheetData, npcSchema } from "./npc.schema"; 
 import { useTableContext } from "@/features/table/TableContext";
 import { useToast } from "@/hooks/use-toast";
@@ -43,8 +42,18 @@ export const SymbaroumNpcSheetProvider = ({ children, npc, onSave }: ProviderPro
   const isSavingRef = useRef(isSaving);
   useEffect(() => { isSavingRef.current = isSaving; }, [isSaving]);
 
-  const { isMaster } = useTableContext();
-  const isReadOnly = !isMaster;
+  // CORREÇÃO: Pegamos o userId do contexto para verificar permissão
+  const { isMaster, userId } = useTableContext();
+
+  // LÓGICA DE PERMISSÃO:
+  // 1. Sou o Mestre? (Acesso Total)
+  // 2. Sou o Dono Original? (Criador do NPC)
+  // 3. Estou na lista de compartilhados? (Segundo Dono)
+  const isOwner = npc.player_id === userId;
+  const isSharedWithMe = npc.shared_with_players?.includes(userId || '');
+  
+  // Se qualquer uma for verdadeira, NÃO é ReadOnly
+  const isReadOnly = !isMaster && !isOwner && !isSharedWithMe;
 
   const getInitialValues = (npcRow: Npc): NpcSheetData => {
     const rawData = npcRow.data as any || {};
@@ -56,7 +65,7 @@ export const SymbaroumNpcSheetProvider = ({ children, npc, onSave }: ProviderPro
   };
 
   const form = useForm<NpcSheetData>({
-    resolver: zodResolver(npcSchema), // CORREÇÃO: Usar npcSchema
+    resolver: zodResolver(npcSchema),
     defaultValues: getInitialValues(npc),
   });
 
@@ -65,6 +74,7 @@ export const SymbaroumNpcSheetProvider = ({ children, npc, onSave }: ProviderPro
   useEffect(() => {
       if (npc) {
         const currentValues = form.getValues();
+        // Evita resetar se estiver editando (dirty) a menos que o ID mude
         if (npc.id !== (currentValues as any).id && !isDirty) {
             form.reset(getInitialValues(npc));
         }
@@ -72,19 +82,20 @@ export const SymbaroumNpcSheetProvider = ({ children, npc, onSave }: ProviderPro
   }, [npc, form, isDirty]);
 
   const handleSaveSuccess = useCallback((data: NpcSheetData) => {
+    // Mantém o formulário limpo após salvar com sucesso
     form.reset(data, { keepValues: true, keepDirty: false, keepErrors: true, keepTouched: true }); 
     setIsSaving(false);
   }, [form]);
 
   const handleSaveInvalid = useCallback((errors: any) => {
     console.error("NPC Validation Error:", errors);
-    toast({ title: "Erro de Validação", description: "Verifique os campos.", variant: "destructive" });
+    toast({ title: "Erro de Validação", description: "Verifique os campos em vermelho.", variant: "destructive" });
     setIsSaving(false);
   }, [toast]);
 
   const handleSaveError = useCallback((error: any) => {
     console.error("NPC Save Error:", error);
-    toast({ title: "Erro ao Salvar", description: "Falha ao salvar NPC.", variant: "destructive" });
+    toast({ title: "Erro ao Salvar", description: "Falha ao salvar alterações.", variant: "destructive" });
     setIsSaving(false);
   }, [toast]);
 
@@ -118,6 +129,7 @@ export const SymbaroumNpcSheetProvider = ({ children, npc, onSave }: ProviderPro
     [isReadOnly, form, onSave, handleSaveSuccess, handleSaveError, handleSaveInvalid, toast]
   );
 
+  // Auto-Save
   useEffect(() => {
     if (isReadOnly) return;
     const subscription = form.watch((value, { type }) => {

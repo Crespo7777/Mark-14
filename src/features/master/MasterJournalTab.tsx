@@ -1,49 +1,23 @@
-import { useState, lazy, Suspense, useEffect } from "react";
+import { useState, lazy, Suspense } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Card
-} from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Plus,
-  MoreVertical,
-  Edit,
-  Trash2,
-  Archive,
-  ArchiveRestore,
-  FolderOpen,
-  Share2,
-  Eye,
-  Book,
-  Image as ImageIcon,
-  Loader2 // Importado Loader2
+  Plus, MoreVertical, Edit, Trash2, Archive, ArchiveRestore, FolderOpen,
+  Share2, Eye, Book, Image as ImageIcon, Loader2, Users
 } from "lucide-react";
-import { ShareDialog } from "@/components/ShareDialog";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+  DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EntityListManager } from "@/components/EntityListManager";
@@ -53,6 +27,7 @@ import { useTableContext } from "@/features/table/TableContext";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useTableRealtime } from "@/hooks/useTableRealtime";
+import { JournalShareDialog } from "@/components/JournalShareDialog";
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -64,15 +39,11 @@ const SheetLoadingFallback = () => (
   </Card>
 );
 
-// --- 1. FETCH OTIMIZADO (SEM CONTENT) ---
 const fetchJournalEntries = async (tableId: string) => {
-  const startTime = performance.now();
-  
-  // Selecionamos colunas específicas EXCLUINDO 'content' para performance
   const { data, error } = await supabase
     .from("journal_entries")
     .select(`
-        id, title, created_at, is_shared, is_archived, is_hidden_on_sheet, 
+        id, title, created_at, is_shared_with_players, is_archived, is_hidden_on_sheet, 
         folder_id, data, table_id, player_id, character_id, npc_id, shared_with_players,
         player:profiles!journal_entries_player_id_fkey(display_name), 
         character:characters!journal_entries_character_id_fkey(name), 
@@ -81,17 +52,7 @@ const fetchJournalEntries = async (tableId: string) => {
     .eq("table_id", tableId)
     .order("created_at", { ascending: false });
 
-  const duration = (performance.now() - startTime).toFixed(2);
-
-  if (error) {
-    console.error("[JOURNAL] Erro no fetch:", error);
-    throw error;
-  }
-
-  // Logs de Performance (Agora devem ser sempre baixos)
-  const sizeKB = (new Blob([JSON.stringify(data)]).size / 1024).toFixed(2);
-  console.log(`[JOURNAL] Lista carregada em ${duration}ms. Tamanho: ${sizeKB} KB (Otimizado)`);
-
+  if (error) throw error;
   return data as JournalEntryWithRelations[];
 };
 
@@ -113,8 +74,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   const [showArchivedJournal, setShowArchivedJournal] = useState(false);
   const [entryToDelete, setEntryToDelete] = useState<JournalEntryWithRelations | null>(null);
   const [entryToRead, setEntryToRead] = useState<JournalEntryWithRelations | null>(null);
-  
-  // Estado para loading individual ao abrir
+  const [entryToShare, setEntryToShare] = useState<JournalEntryWithRelations | null>(null);
   const [isLoadingContent, setIsLoadingContent] = useState<string | null>(null);
 
   const { data: journalEntries = [], isLoading: isLoadingJournal } = useQuery({
@@ -128,18 +88,14 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
 
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
-  // --- 2. FUNÇÃO PARA CARREGAR CONTEÚDO SOB DEMANDA ---
   const handleReadEntry = async (entry: JournalEntryWithRelations, mode: 'read' | 'edit' = 'read') => {
-      // Se já tivermos o conteúdo (ex: acabou de ser criado), abrimos direto
       if (entry.content) {
           if(mode === 'read') setEntryToRead(entry);
-          // Para editar, a lógica é um pouco diferente com o Dialog, mas o princípio é o mesmo
           return;
       }
 
       setIsLoadingContent(entry.id);
       try {
-          const startTime = performance.now();
           const { data, error } = await supabase
               .from("journal_entries")
               .select("content")
@@ -148,17 +104,11 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
 
           if (error) throw error;
 
-          console.log(`[JOURNAL] Conteúdo carregado em ${(performance.now() - startTime).toFixed(2)}ms`);
-
-          // Cria um objeto completo com o conteúdo carregado
           const fullEntry = { ...entry, content: data.content };
 
           if (mode === 'read') {
               setEntryToRead(fullEntry);
           } else {
-              // Para edição, precisamos injetar este dado no Dialog. 
-              // Como o Dialog de edição usa o ID para buscar ou recebe o objeto, 
-              // podemos atualizar o cache local do React Query para que o Dialog o encontre.
               queryClient.setQueryData(['journal', tableId], (old: JournalEntryWithRelations[] | undefined) => {
                   return old?.map(e => e.id === entry.id ? fullEntry : e);
               });
@@ -166,7 +116,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
 
       } catch (err) {
           toast({ title: "Erro", description: "Falha ao carregar o conteúdo da nota.", variant: "destructive" });
-          console.error(err);
       } finally {
           setIsLoadingContent(null);
       }
@@ -189,14 +138,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
   const handleMoveItem = async (id: string, folderId: string | null) => {
     await supabase.from("journal_entries").update({ folder_id: folderId }).eq("id", id);
     toast({ title: "Movido com sucesso" });
-    invalidateJournal();
-  };
-
-  const handleUpdateSharing = async (id: string, players: string[]) => {
-    const allPlayerIds = members.filter(m => !m.isMaster).map(p => p.id);
-    const isShared = allPlayerIds.length > 0 && players.length === allPlayerIds.length;
-    await supabase.from("journal_entries").update({ shared_with_players: players, is_shared: isShared }).eq("id", id);
-    toast({ title: "Partilha atualizada" });
     invalidateJournal();
   };
 
@@ -230,11 +171,7 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
         >
             <div className="absolute inset-0 z-0 bg-muted">
                 {coverUrl ? (
-                    <img 
-                        src={coverUrl} 
-                        alt={entry.title} 
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                    />
+                    <img src={coverUrl} alt={entry.title} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted/50 to-background">
                         <Book className="w-12 h-12 text-muted-foreground/10 group-hover:text-primary/20 transition-colors" />
@@ -243,7 +180,6 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
             </div>
 
-            {/* Spinner de Loading ao abrir */}
             {isThisLoading && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                     <Loader2 className="w-8 h-8 text-white animate-spin" />
@@ -258,31 +194,29 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48">
-                         <DropdownMenuItem onClick={() => handleReadEntry(entry, 'read')}>
+                          <DropdownMenuItem onClick={() => handleReadEntry(entry, 'read')}>
                              <Eye className="w-4 h-4 mr-2" /> Ler Entrada
-                         </DropdownMenuItem>
-                         
-                         <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
-                             {/* O Dialog de edição vai buscar os dados completos se necessário via cache update ou prop */}
+                          </DropdownMenuItem>
+                          
+                          <Suspense fallback={<DropdownMenuItem disabled>Carregando...</DropdownMenuItem>}>
                              <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} entry={entry} isPlayerNote={!!entry.player_id} characterId={entry.character_id || undefined} npcId={entry.npc_id || undefined}>
                                 <DropdownMenuItem onSelect={(e) => {
-                                    e.preventDefault(); // Impede fechar o dropdown antes de abrir o dialog
-                                    // Se não tiver content, carregamos antes de abrir o dialog completamente (opcional, o dialog também pode carregar)
+                                    e.preventDefault(); 
                                     if(!entry.content) handleReadEntry(entry, 'edit'); 
                                 }}>
                                     <Edit className="w-4 h-4 mr-2" /> Editar
                                 </DropdownMenuItem>
                              </JournalEntryDialog>
-                         </Suspense>
+                          </Suspense>
 
-                         <DropdownMenuSeparator />
-                         
-                         <DropdownMenuItem onClick={() => handleArchiveItem(entry.id, !!entry.is_archived)}>
+                          <DropdownMenuSeparator />
+                          
+                          <DropdownMenuItem onClick={() => handleArchiveItem(entry.id, !!entry.is_archived)}>
                             {entry.is_archived ? <ArchiveRestore className="w-4 h-4 mr-2" /> : <Archive className="w-4 h-4 mr-2" />}
                             {entry.is_archived ? "Restaurar" : "Arquivar"}
-                         </DropdownMenuItem>
+                          </DropdownMenuItem>
 
-                         {canShare && (
+                          {canShare && (
                             <DropdownMenuSub>
                                 <DropdownMenuSubTrigger><FolderOpen className="w-4 h-4 mr-2" /> Mover</DropdownMenuSubTrigger>
                                 <DropdownMenuSubContent>
@@ -292,21 +226,24 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                                     </DropdownMenuRadioGroup>
                                 </DropdownMenuSubContent>
                              </DropdownMenuSub>
-                         )}
+                          )}
 
-                         <DropdownMenuSeparator />
-                         <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setEntryToDelete(entry)}>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setEntryToDelete(entry)}>
                             <Trash2 className="w-4 h-4 mr-2" /> Excluir
-                         </DropdownMenuItem>
+                          </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
 
-            <div className="absolute top-2 left-2 z-20 flex flex-col gap-1">
-                 {entry.is_shared && (
-                    <Badge variant="secondary" className="bg-primary/20 text-primary-foreground text-[10px] h-5 px-1.5 backdrop-blur-md border border-primary/30 shadow-sm">
-                        <Share2 className="w-3 h-3 mr-1" /> Público
-                    </Badge>
+            <div className="absolute top-2 left-2 z-20 flex flex-col gap-1 items-start">
+                 {/* CORREÇÃO: Badge clicável para o mestre */}
+                 {entry.is_shared_with_players && (
+                    <div onClick={(e) => { e.stopPropagation(); setEntryToShare(entry); }} className="cursor-pointer hover:opacity-90 active:scale-95 transition-transform">
+                        <Badge variant="secondary" className="bg-primary/80 text-primary-foreground text-[10px] h-5 px-1.5 backdrop-blur-md border border-primary/30 shadow-sm flex items-center">
+                            <Users className="w-3 h-3 mr-1" /> Público
+                        </Badge>
+                    </div>
                  )}
                  {sourceLabel && (
                     <Badge variant="outline" className="bg-black/40 text-white border-white/20 text-[10px] h-5 px-1.5 backdrop-blur-md">
@@ -326,12 +263,10 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
                     </span>
                     
                     {canShare && (
-                        <div onClick={(e) => e.stopPropagation()}>
-                            <ShareDialog itemTitle={entry.title} currentSharedWith={entry.shared_with_players || []} onSave={(ids) => handleUpdateSharing(entry.id, ids)}>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10 rounded-full">
-                                    <Share2 className="w-3 h-3" />
-                                </Button>
-                            </ShareDialog>
+                        <div onClick={(e) => { e.stopPropagation(); setEntryToShare(entry); }}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-400 hover:text-white hover:bg-white/10 rounded-full" title="Partilhar">
+                                <Share2 className="w-3 h-3" />
+                            </Button>
                         </div>
                     )}
                  </div>
@@ -387,6 +322,15 @@ export const MasterJournalTab = ({ tableId }: { tableId: string }) => {
         </AlertDialog>
 
         <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
+
+        {entryToShare && (
+            <JournalShareDialog 
+                entry={entryToShare} 
+                open={!!entryToShare} 
+                onOpenChange={(open) => !open && setEntryToShare(null)} 
+                onSaved={invalidateJournal} 
+            />
+        )}
     </>
   );
 };

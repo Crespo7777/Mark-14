@@ -20,7 +20,8 @@ import { EntityListManager } from "@/components/EntityListManager";
 import { NpcWithRelations, FolderType } from "@/types/app-types";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { ShareDialog } from "@/components/ShareDialog";
+// IMPORTANTE: Importamos o novo componente dedicado
+import { NpcShareDialog } from "@/features/systems/symbaroum/npc/components/NpcShareDialog";
 import { useTableContext } from "@/features/table/TableContext";
 
 const NpcSheetSheet = lazy(() =>
@@ -105,16 +106,6 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
     invalidateNpcs();
   };
 
-  const handleUpdateSharing = async (ids: string[]) => {
-    if(!itemToShare) return;
-    const allPlayerIds = members.filter(m => !m.isMaster).map(p => p.id);
-    const isShared = allPlayerIds.length > 0 && ids.length === allPlayerIds.length;
-    await supabase.from("npcs").update({ shared_with_players: ids, is_shared: isShared }).eq("id", itemToShare.id);
-    toast({ title: "Partilha atualizada" });
-    invalidateNpcs();
-    setItemToShare(null);
-  };
-
   const displayedNpcs = npcs
     .filter(npc => showArchivedNpcs ? npc.is_archived : !npc.is_archived)
     .filter(npc => {
@@ -194,16 +185,14 @@ export const MasterNpcsTab = ({ tableId }: { tableId: string }) => {
             </Suspense>
         )}
 
+        {/* NOVO DIÁLOGO DE PARTILHA */}
         {itemToShare && (
-          <ShareDialog 
-            itemTitle={itemToShare.name} 
-            currentSharedWith={itemToShare.shared_with_players || []} 
-            onSave={handleUpdateSharing}
+          <NpcShareDialog 
+            npc={itemToShare}
             open={!!itemToShare} 
             onOpenChange={(open) => !open && setItemToShare(null)}
-          >
-             <span className="hidden"></span>
-          </ShareDialog>
+            onSaved={invalidateNpcs}
+          />
         )}
 
         <AlertDialog open={!!npcToDelete} onOpenChange={(open) => !open && setNpcToDelete(null)}>

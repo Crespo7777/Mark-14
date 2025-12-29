@@ -12,13 +12,13 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Form } from "@/components/ui/form";       
 
 import { useToast } from "@/hooks/use-toast";
-import { ShareDialog } from "@/components/ShareDialog"; 
+import { CharacterShareDialog } from "@/features/character/components/CharacterShareDialog"; 
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
+import { useTableContext } from "@/features/table/TableContext"; 
 
-// IMPORTAÇÕES ATUALIZADAS (APONTAM PARA DENTRO DA PASTA SYMBAROUM)
 import { defaultCharacterData, characterSheetSchema, CharacterSheetData } from "./utils/symbaroum.schema";
 import { useCharacterStore } from "@/stores/character-store"; 
 
@@ -37,9 +37,10 @@ interface CharacterSheetProps {
 }
 
 // --- HEADER ---
-const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, sharedWith }: any) => {
+const CharacterHeader = memo(({ isReadOnly, onBack, character, onShareSaved, isMaster }: any) => {
     const { register, watch, setValue, formState: { isDirty } } = useFormContext();
     const { toast } = useToast();
+    const [openShare, setOpenShare] = useState(false);
     
     // Hook atualizado
     const calculations = useSymbaroumCalculations(); 
@@ -72,7 +73,7 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
         setIsUploading(true);
         try {
           const fileExt = file.name.split('.').pop();
-          const fileName = `${characterId}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+          const fileName = `${character.id}-${Math.random().toString(36).substring(2)}.${fileExt}`;
           const filePath = `character-portraits/${fileName}`;
     
           const { error: uploadError } = await supabase.storage.from('campaign-images').upload(filePath, file, { upsert: true });
@@ -137,11 +138,12 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
                             
                             {!isReadOnly && (
                                 <>
-                                    <ShareDialog itemTitle={characterName} currentSharedWith={sharedWith || []} onSave={async () => {}}> 
-                                        <Button variant="ghost" size="icon" type="button" title="Partilhar">
+                                    {/* Botão de Partilha: Visível APENAS para o Mestre */}
+                                    {isMaster && (
+                                        <Button variant="ghost" size="icon" type="button" title="Partilhar" onClick={() => setOpenShare(true)}>
                                             <Share2 className="w-4 h-4"/>
                                         </Button>
-                                    </ShareDialog>
+                                    )}
                                     
                                     <Button type="button" onClick={() => saveSheet({ silent: false })} disabled={!isDirty || isSaving} variant={isDirty ? "default" : "secondary"} size="sm" className="min-w-[90px] transition-all font-semibold">
                                         {isSaving ? <Loader2 className="w-3 h-3 animate-spin mr-2"/> : <Save className="w-3 h-3 mr-2"/>} {isDirty ? "Salvar" : "Salvo"}
@@ -162,14 +164,26 @@ const CharacterHeader = memo(({ isReadOnly, onBack, characterName, characterId, 
                     </div>
                 </div>
             </div>
+
+            {/* Novo Modal de Partilha */}
+            {character && openShare && (
+                <CharacterShareDialog 
+                    character={character}
+                    open={openShare}
+                    onOpenChange={setOpenShare}
+                    onSaved={onShareSaved}
+                />
+            )}
         </Card>
     );
 });
 CharacterHeader.displayName = "CharacterHeader";
 
 // --- FICHA PRINCIPAL ---
-export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBack }: CharacterSheetProps) => {
+export const SymbaroumCharacterSheet = ({ characterId, isReadOnly: propIsReadOnly = false, onBack }: CharacterSheetProps) => {
   const { toast } = useToast();
+  const { userId, isMaster } = useTableContext(); 
+  
   const [activeTab, setActiveTab] = useState("details");
   const [loading, setLoading] = useState(true);
   const [characterData, setCharacterData] = useState<any>(null);
@@ -185,9 +199,13 @@ export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBac
     mode: "onChange" 
   });
 
-  // 1. Carregar
-  useEffect(() => {
-    const loadChar = async () => {
+  const isSharedWithMe = (characterData?.shared_with_players || []).includes(userId);
+  const isOwner = characterData?.player_id === userId;
+  
+  const hasEditPermission = isMaster || isOwner || isSharedWithMe;
+  const isReadOnly = !hasEditPermission || (propIsReadOnly && !hasEditPermission);
+
+  const loadChar = useCallback(async () => {
       if (!characterId) return;
       setLoading(true);
       const { data, error } = await supabase.from("characters").select("*").eq("id", characterId).single();
@@ -203,11 +221,12 @@ export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBac
         form.reset(mergedData);
       }
       setLoading(false);
-    };
-    loadChar();
   }, [characterId, form, initializeStore, toast]);
 
-  // 2. Salvar
+  useEffect(() => {
+    loadChar();
+  }, [loadChar]);
+
   const saveSheet = useCallback(async (options = { silent: false }) => {
       if (isReadOnly) return;
       setIsSaving(true);
@@ -233,7 +252,6 @@ export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBac
       }
   }, [characterId, form, isReadOnly, toast]);
 
-  // 3. AUTO-SAVE INTELIGENTE
   useEffect(() => {
       const subscription = form.watch((value) => {
           if (value) updateStore((draft) => { Object.assign(draft, value); });
@@ -272,7 +290,13 @@ export const SymbaroumCharacterSheet = ({ characterId, isReadOnly = false, onBac
             className="h-full flex flex-col bg-background"
           >
             
-            <CharacterHeader isReadOnly={isReadOnly} onBack={onBack} characterName={characterData?.name} characterId={characterId} sharedWith={characterData?.shared_with_players} />
+            <CharacterHeader 
+                isReadOnly={isReadOnly} 
+                onBack={onBack} 
+                character={characterData} 
+                onShareSaved={loadChar}
+                isMaster={isMaster} // Passando a prop
+            />
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
                 <div className="px-4 border-b bg-muted/20">

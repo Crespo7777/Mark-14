@@ -21,7 +21,6 @@ import {
   Eye,
   Loader2
 } from "lucide-react";
-// Removido ShareDialog e Share2
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -47,10 +46,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { JournalRenderer } from "@/components/JournalRenderer";
 import { EntityListManager } from "@/components/EntityListManager";
 import { JournalEntryWithRelations, FolderType } from "@/types/app-types";
 import { JournalReadDialog } from "@/components/JournalReadDialog";
+import { useTableRealtime } from "@/hooks/useTableRealtime"; // IMPORTADO
 
 const JournalEntryDialog = lazy(() =>
   import("@/components/JournalEntryDialog").then(module => ({ default: module.JournalEntryDialog }))
@@ -63,7 +62,6 @@ const SheetLoadingFallback = () => (
   </Card>
 );
 
-// --- OTIMIZAÇÃO: Select leve sem 'content' ---
 const fetchPlayerJournal = async (tableId: string) => {
   const { data, error } = await supabase
     .from("journal_entries")
@@ -72,6 +70,7 @@ const fetchPlayerJournal = async (tableId: string) => {
       title, 
       created_at,
       is_shared,
+      is_shared_with_players, 
       is_archived,
       is_hidden_on_sheet,
       folder_id,
@@ -83,7 +82,7 @@ const fetchPlayerJournal = async (tableId: string) => {
       player:profiles!journal_entries_player_id_fkey(display_name), 
       character:characters!journal_entries_character_id_fkey(name), 
       npc:npcs!journal_entries_npc_id_fkey(name)
-    `) // SEM 'content'
+    `)
     .eq("table_id", tableId)
     .order("created_at", { ascending: false });
   if (error) throw error;
@@ -99,6 +98,10 @@ const fetchFolders = async (tableId: string) => {
 export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId: string }) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // --- REALTIME ATIVADO ---
+  useTableRealtime(tableId, "journal_entries", ["journal", tableId]);
+  useTableRealtime(tableId, "journal_folders", ["journal_folders", tableId]);
 
   const [journalSearch, setJournalSearch] = useState("");
   const [showArchivedJournal, setShowArchivedJournal] = useState(false);
@@ -120,7 +123,6 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
 
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
 
-  // --- OTIMIZAÇÃO: Carregar conteúdo sob demanda ---
   const handleReadEntry = async (entry: JournalEntryWithRelations, mode: 'read' | 'edit' = 'read') => {
     setIsLoadingContent(entry.id);
     try {
@@ -175,7 +177,10 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
 
   const filteredEntries = journalEntries.filter(e => {
     const isSharedWithMe = (e.shared_with_players || []).includes(userId!);
-    const canSee = e.player_id === userId || (e.character && e.character_id) || isSharedWithMe || e.is_shared;
+    // Verifica is_shared (legado) ou is_shared_with_players (novo padrão)
+    const isPublic = e.is_shared || e.is_shared_with_players;
+    
+    const canSee = e.player_id === userId || (e.character && e.character_id) || isSharedWithMe || isPublic;
     if (!canSee) return false;
 
     const name = e.title || "";
@@ -193,7 +198,7 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
     if (entry.player_id === userId) { description = "Sua Anotação"; isMyEntry = true; } 
     else if (entry.character) { description = `Diário: ${entry.character.name}`; isMyEntry = true; }
     else if (isSharedWithMe) { description = "Partilhado com você"; }
-    else if (entry.is_shared) { description = "Público"; }
+    else if (entry.is_shared || entry.is_shared_with_players) { description = "Público"; }
 
     const canEdit = isMyEntry || isSharedWithMe;
 
@@ -231,8 +236,6 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
         <CardFooter className="flex justify-end items-center pt-0 pb-3 px-4 gap-2 h-12" onClick={e => e.stopPropagation()}>
              {isMyEntry && (
                  <div className="flex gap-1">
-                     {/* BOTÃO DE PARTILHA REMOVIDO DAQUI */}
-
                      <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="w-4 h-4" /></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -284,9 +287,9 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
                <>
                    <ManageFoldersDialog tableId={tableId} folders={folders} tableName="journal_folders" title="Minhas Pastas" />
                    <Suspense fallback={<Button size="sm" disabled>...</Button>}>
-                        <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} isPlayerNote={true}>
-                            <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Anotação</Button>
-                        </JournalEntryDialog>
+                       <JournalEntryDialog tableId={tableId} onEntrySaved={invalidateJournal} isPlayerNote={true}>
+                           <Button size="sm"><Plus className="w-4 h-4 mr-2" /> Nova Anotação</Button>
+                       </JournalEntryDialog>
                    </Suspense>
                </>
             }
@@ -301,7 +304,6 @@ export const PlayerJournalTab = ({ tableId, userId }: { tableId: string, userId:
 
         <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
 
-        {/* Diálogo de Edição para Players */}
         {entryToEdit && (
             <Suspense fallback={null}>
                 <JournalEntryDialog 

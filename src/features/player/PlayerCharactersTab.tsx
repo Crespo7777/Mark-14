@@ -2,9 +2,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Plus,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import { ManageFoldersDialog } from "@/components/ManageFoldersDialog";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -23,6 +21,8 @@ import { CharacterWithRelations, FolderType } from "@/types/app-types";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+// IMPORTANTE: O ingrediente mágico para funcionar em tempo real
+import { useTableRealtime } from "@/hooks/useTableRealtime";
 
 const fetchPlayerCharacters = async (tableId: string) => {
   const { data, error } = await supabase
@@ -44,6 +44,11 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // --- OTIMIZAÇÃO REALTIME ---
+  // Isso garante que se o Mestre compartilhar, aparece aqui NA HORA.
+  useTableRealtime(tableId, "characters", ["characters", tableId]);
+  useTableRealtime(tableId, "character_folders", ["character_folders", tableId]);
+
   const [showArchivedChars, setShowArchivedChars] = useState(false);
   const [characterToDelete, setCharacterToDelete] = useState<CharacterWithRelations | null>(null);
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
@@ -60,7 +65,12 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
     enabled: !!userId,
   });
 
-  const myCharacters = allCharacters.filter(c => c.player_id === userId);
+  // Filtra personagens que sou dono OU que foram compartilhados comigo
+  const myCharacters = allCharacters.filter(c => {
+      const isOwner = c.player_id === userId;
+      const isSharedWithMe = (c.shared_with_players as any[] || []).includes(userId);
+      return isOwner || isSharedWithMe;
+  });
 
   const invalidateCharacters = () => queryClient.invalidateQueries({ queryKey: ['characters', tableId] });
   const invalidateJournal = () => queryClient.invalidateQueries({ queryKey: ['journal', tableId] });
@@ -68,6 +78,8 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
   const handleArchiveItem = async (id: string, currentValue: boolean) => {
     const { error } = await supabase.from("characters").update({ is_archived: !currentValue }).eq("id", id);
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
+    // Não precisamos chamar invalidateCharacters aqui manualmente se o Realtime estiver rápido,
+    // mas deixamos por segurança para feedback instantâneo na UI do próprio usuário.
     else {
         toast({ title: !currentValue ? "Arquivado" : "Restaurado" });
         invalidateCharacters();
@@ -85,6 +97,17 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
 
   const handleDeleteCharacter = async () => {
     if (!characterToDelete) return;
+
+    if (characterToDelete.player_id !== userId) {
+        toast({ 
+            title: "Acesso Negado", 
+            description: "Você não tem permissão para excluir a ficha de outro jogador.", 
+            variant: "destructive" 
+        });
+        setCharacterToDelete(null);
+        return;
+    }
+
     await supabase.from("journal_entries").update({ character_id: null }).eq("character_id", characterToDelete.id);
     const { error } = await supabase.from("characters").delete().eq("id", characterToDelete.id);
     if (error) toast({ title: "Erro", description: error.message, variant: "destructive" });
@@ -165,11 +188,7 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
                 onDuplicate={handleDuplicateCharacter}
                 onArchive={handleArchiveItem}
                 onMove={handleMoveItem}
-                
-                // --- CORREÇÃO CRÍTICA: Força onShare a undefined ---
-                // Isto garante que o EntityCard NÃO mostra o botão de partilhar
                 onShare={undefined} 
-                
                 actions={null}
             />
         </div>
@@ -184,11 +203,19 @@ export const PlayerCharactersTab = ({ tableId, userId }: { tableId: string, user
             <AlertDialogContent>
                 <AlertDialogHeader>
                     <AlertDialogTitle>Excluir esta Ficha?</AlertDialogTitle>
-                    <AlertDialogDescription>Ação irreversível.</AlertDialogDescription>
+                    <AlertDialogDescription>
+                       {characterToDelete?.player_id === userId 
+                         ? "Ação irreversível. Tem certeza?" 
+                         : "Você não é o dono desta ficha, portanto não pode excluí-la."}
+                    </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>Excluir</AlertDialogAction>
+                    {characterToDelete?.player_id === userId && (
+                        <AlertDialogAction onClick={handleDeleteCharacter} className={buttonVariants({ variant: "destructive" })}>
+                            Excluir
+                        </AlertDialogAction>
+                    )}
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>

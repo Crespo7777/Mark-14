@@ -6,6 +6,7 @@ import { NpcWithRelations } from "@/types/app-types";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Archive, ArchiveRestore } from "lucide-react";
+import { useTableRealtime } from "@/hooks/useTableRealtime"; // IMPORTADO
 
 // Lazy load da ficha
 const NpcSheetSheet = lazy(() =>
@@ -25,9 +26,11 @@ const fetchSharedNpcs = async (tableId: string) => {
 
 export const PlayerNpcsTab = ({ tableId }: { tableId: string }) => {
   const [showArchived, setShowArchived] = useState(false);
-  
-  // Estado para controlar qual ficha está aberta
   const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
+
+  // --- REALTIME ATIVADO ---
+  // Assim que o mestre partilhar/atualizar um NPC, aparece aqui.
+  useTableRealtime(tableId, "npcs", ['npcs', tableId]);
 
   const { data: sharedNpcs = [], isLoading: isLoadingNpcs } = useQuery({
     queryKey: ['npcs', tableId],
@@ -38,7 +41,6 @@ export const PlayerNpcsTab = ({ tableId }: { tableId: string }) => {
       showArchived ? true : !npc.is_archived
   );
 
-  // Achatamento da lista para o jogador (remove pastas visualmente)
   const flatNpcs = useMemo(() => {
       return displayedNpcs.map(npc => ({
           ...npc,
@@ -67,18 +69,13 @@ export const PlayerNpcsTab = ({ tableId }: { tableId: string }) => {
                 items={flatNpcs}      
                 folders={[]}          
                 isLoading={isLoadingNpcs}
-                
-                // CORREÇÃO: Passar onEdit para abrir a ficha ao clicar
                 onEdit={(id) => setSelectedNpcId(id)}
-                
-                // Jogadores geralmente não apagam NPCs partilhados, passamos função vazia para não quebrar
                 onDelete={() => {}} 
-                
                 emptyMessage="Nenhum NPC partilhado encontrado."
             />
         </div>
 
-        {/* FICHA DE NPC (Carregada sob demanda) */}
+        {/* FICHA DE NPC */}
         {selectedNpcId && (
             <Suspense fallback={null}>
                 <NpcSheetSheet 

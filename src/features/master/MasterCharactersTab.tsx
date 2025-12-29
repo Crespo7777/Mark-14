@@ -20,7 +20,8 @@ import { CreateCharacterDialog } from "@/components/CreateCharacterDialog";
 import { EntityListManager } from "@/components/EntityListManager";
 import { CharacterWithRelations, FolderType } from "@/types/app-types";
 import { CharacterSheetSheet } from "@/components/CharacterSheetSheet";
-import { ShareDialog } from "@/components/ShareDialog";
+// IMPORTANTE: Novo componente
+import { CharacterShareDialog } from "@/features/character/components/CharacterShareDialog";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
@@ -105,25 +106,15 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
     invalidateCharacters();
   };
 
-  const handleUpdateSharing = async (ids: string[]) => {
-    if(!itemToShare) return;
-    const allPlayerIds = members.filter(m => !m.isMaster).map(p => p.id);
-    const isShared = allPlayerIds.length > 0 && ids.length === allPlayerIds.length;
-    await supabase.from("characters").update({ shared_with_players: ids, is_shared: isShared }).eq("id", itemToShare.id);
-    toast({ title: "Partilha atualizada" });
-    invalidateCharacters();
-    setItemToShare(null);
-  };
-
   const displayedCharacters = characters
     .filter(char => showArchivedChars ? char.is_archived : !char.is_archived)
     .filter(char => {
       if (isMaster) return true;
       if (isHelper) {
-         const isOwner = char.player_id === userId;
-         const isSharedWithMe = char.shared_with_players?.includes(userId || '');
-         const isGloballyShared = char.is_shared;
-         return isOwner || isSharedWithMe || isGloballyShared;
+          const isOwner = char.player_id === userId;
+          const isSharedWithMe = char.shared_with_players?.includes(userId || '');
+          const isGloballyShared = char.is_shared;
+          return isOwner || isSharedWithMe || isGloballyShared;
       }
       return false; 
     });
@@ -180,16 +171,14 @@ export const MasterCharactersTab = ({ tableId }: { tableId: string }) => {
         onOpenChange={(open) => !open && setSelectedCharId(null)} 
       />
 
+      {/* NOVO DIÁLOGO DE PARTILHA */}
       {itemToShare && (
-          <ShareDialog 
-            itemTitle={itemToShare.name} 
-            currentSharedWith={itemToShare.shared_with_players || []} 
-            onSave={handleUpdateSharing}
+          <CharacterShareDialog 
+            character={itemToShare}
             open={!!itemToShare} 
             onOpenChange={(open) => !open && setItemToShare(null)}
-          >
-             <span className="hidden"></span>
-          </ShareDialog>
+            onSaved={invalidateCharacters}
+          />
       )}
 
       <AlertDialog open={!!characterToDelete} onOpenChange={(open) => !open && setCharacterToDelete(null)}>
