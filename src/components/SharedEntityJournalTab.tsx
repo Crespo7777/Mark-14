@@ -340,7 +340,6 @@ export const SharedEntityJournalTab = ({ entityId, entityType, tableId, isReadOn
 
       <JournalReadDialog open={!!entryToRead} onOpenChange={(open) => !open && setEntryToRead(null)} entry={entryToRead} />
 
-      // ... no final do arquivo SharedEntityJournalTab.tsx
       {/* Diálogo de Edição agora CONTROLADO pelo estado do pai */}
       {entryToEdit && (
         <Suspense fallback={null}>

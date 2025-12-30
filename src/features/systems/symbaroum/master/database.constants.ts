@@ -4,7 +4,6 @@ import {
   Sparkles, Music, Gem, Star 
 } from "lucide-react";
 
-// CORREÇÃO CRÍTICA: Mapeamento Chave (Sistema) <-> Nome (Visual)
 export const RPG_ATTRIBUTES = [
     { key: "cunning", label: "Astuto" },
     { key: "discreet", label: "Discreto" },
@@ -13,7 +12,7 @@ export const RPG_ATTRIBUTES = [
     { key: "quick", label: "Rápido" },
     { key: "resolute", label: "Resoluto" },
     { key: "vigilant", label: "Vigilante" },
-    { key: "vigorous", label: "Vigoroso" } // ou 'strong' se preferires manter compatibilidade total
+    { key: "strong", label: "Vigoroso" }
 ];
 
 export const WEAPON_SUBCATEGORIES = ["Arma de uma Mão", "Arma Curta", "Arma Longa", "Arma Pesada", "Arma de Arremesso", "Arma de Projétil", "Ataque Desarmado", "Escudo", "Armas de Cerco"];
@@ -21,14 +20,20 @@ export const ARMOR_SUBCATEGORIES = ["Leve", "Média", "Pesada"];
 export const FOOD_SUBCATEGORIES = ["Bebidas", "Carne", "Chás", "Ensopados", "Mingau", "Peixe", "Sobremesas", "Sopas", "Tortas"];
 
 export const CATEGORIES = [
+  // Mecânicas
   { id: 'quality', label: 'Qualidades', icon: Star },
+  { id: 'ability', label: 'Habilidades, Poderes & Rituais', icon: Zap }, // UNIFICADO
+  { id: 'trait', label: 'Traços, Dádivas e Fardos', icon: Dna }, // CORRIGIDO
+  
+  // Combate
   { id: 'weapon', label: 'Armas', icon: Sword },
   { id: 'armor', label: 'Armaduras', icon: Shield },
-  { id: 'ability', label: 'Habilidades', icon: Zap },
-  { id: 'trait', label: 'Traços & Dádivas', icon: Dna },
-  { id: 'consumable', label: 'Elixires', icon: FlaskConical },
-  { id: 'ammunition', label: 'Munições', icon: CircleDot }, 
   { id: 'artifact', label: 'Artefatos', icon: Sparkles },
+  { id: 'consumable', label: 'Alquimia & Elixires', icon: FlaskConical },
+  { id: 'ammunition', label: 'Munições', icon: CircleDot }, 
+  { id: 'trap', label: 'Armadilhas', icon: Skull }, // ADICIONADO (Essencial para o Mestre)
+
+  // Mundano
   { id: 'general', label: 'Equipamentos', icon: Backpack },
   { id: 'container', label: 'Recipientes', icon: Box },
   { id: 'tool', label: 'Ferramenta', icon: Hammer },
@@ -38,7 +43,6 @@ export const CATEGORIES = [
   { id: 'mount', label: 'Transporte', icon: PawPrint },
   { id: 'animal', label: 'Animais', icon: Wheat },
   { id: 'construction', label: 'Construções', icon: Castle },
-  { id: 'trap', label: 'Armadilhas', icon: Skull },
   { id: 'musical', label: 'Instrumentos', icon: Music },
   { id: 'material', label: 'Materiais', icon: Gem },
 ];
